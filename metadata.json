@@ -1,0 +1,6 @@
+{
+  "name": "قرآن مبین | قرائت، تفسیر و دستیار هوشمند",
+  "description": "اپلیکیشن جامع قرآن کریم با قابلیت مطالعه آفلاین، تفاسیر، مقایسه ترجمه‌ها و دستیار هوشمند تدبر بر مدار قرآن نور",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

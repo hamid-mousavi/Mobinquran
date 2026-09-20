@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+/* فونت رسمی عثمان طه مجمع ملک فهد (KFGQPC Hafs Smart) */
+@font-face {
+  font-family: 'UthmanTaha';
+  src: url('/fonts/uthman-taha.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/gh/thetruetruth/quran-data-kfgqpc@main/hafs-smart/font/hafssmart.8.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* فونت رسمی مجمع ملک فهد مدینه منوره (KFGQPC Uthmanic Script Hafs) */
+@font-face {
+  font-family: 'KFGQPC-Hafs';
+  src: url('/fonts/kfgqpc-hafs.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/gh/thetruetruth/quran-data-kfgqpc@main/hafs/font/hafs.18.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}

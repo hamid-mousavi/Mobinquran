@@ -1,0 +1,41 @@
+{
+  "id": "/",
+  "name": "قرآن مبین | قرائت، تفسیر و دستیار هوشمند",
+  "short_name": "قرآن مبین",
+  "description": "اپلیکیشن جامع قرآنی با مطالعه آفلاین، تفاسیر معتبر نمونه و المیزان، مقایسه ۳ ترجمه، ترتیل صوتی و هوش مصنوعی تدبّر",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#134e4a",
+  "orientation": "portrait-primary",
+  "dir": "rtl",
+  "lang": "fa",
+  "categories": ["books", "education"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
