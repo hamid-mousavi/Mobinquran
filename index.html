@@ -20,9 +20,21 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Amiri:ital,wght@0,400;0,700;1,400&family=Scheherazade+New:wght@400;700&family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   </head>
-  <body class="bg-[#faf8f5] text-slate-800 antialiased selection:bg-teal-200 selection:text-teal-900">
+  <body class="text-slate-800 antialiased selection:bg-teal-200 selection:text-teal-900">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // اعمال زودهنگام پوسته (تیره پیش‌فرض) برای جلوگیری از چشمک سفید هنگام بارگذاری
+      try {
+        var saved = JSON.parse(localStorage.getItem('quran_settings') || '{}');
+        var isDark = saved.darkMode !== false;
+        if (isDark) document.documentElement.classList.add('dark');
+        document.body.style.backgroundColor = isDark ? '#0b1120' : '#faf8f5';
+      } catch (e) {
+        document.documentElement.classList.add('dark');
+        document.body.style.backgroundColor = '#0b1120';
+      }
+    </script>
   </body>
 </html>
 

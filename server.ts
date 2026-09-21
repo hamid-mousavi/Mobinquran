@@ -1,18 +1,114 @@
 import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
-import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
+dotenv.config({ path: '.env.local' });
 
-let aiClient: GoogleGenAI | null = null;
-function getAIClient(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY || '';
-    aiClient = new GoogleGenAI({ apiKey });
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+function getEnvKey(name: string): string {
+  return (process.env[name] || '').trim();
+}
+
+async function callOpenRouter(apiKey: string, model: string, systemInstruction: string, userPrompt: string): Promise<string> {
+  const response = await fetch(OPENROUTER_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      // اطلاعات نمایشی برای توسعه‌دهندگان OpenRouter (اختیاری - فقط ASCII)
+      'HTTP-Referer': 'https://quran-mobin.app',
+      'X-Title': 'QuranMobinApp',
+    },
+    body: JSON.stringify({
+      model: model || 'deepseek/deepseek-chat-v3-0324',
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.65,
+      // محدودسازی سقف پاسخ تا هزینه هر درخواست پایین و مقرون‌به‌صرفه بماند
+      max_tokens: 1500,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`OpenRouter API responded with status ${response.status}: ${errText.slice(0, 300)}`);
   }
-  return aiClient;
+
+  const json = await response.json();
+  const content = json?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('OpenRouter API returned an empty response.');
+  }
+  return content;
+}
+
+async function callDeepSeek(apiKey: string, systemInstruction: string, userPrompt: string): Promise<string> {
+  const response = await fetch(DEEPSEEK_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.65,
+      max_tokens: 1500,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`DeepSeek API responded with status ${response.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const json = await response.json();
+  const content = json?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('DeepSeek API returned an empty response.');
+  }
+  return content;
+}
+
+async function callGroq(apiKey: string, model: string, systemInstruction: string, userPrompt: string): Promise<string> {
+  const response = await fetch(GROQ_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: model || 'openai/gpt-oss-120b',
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.65,
+      max_tokens: 1500,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`Groq API responded with status ${response.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const json = await response.json();
+  const content = json?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('Groq API returned an empty response.');
+  }
+  return content;
 }
 
 async function startServer() {
@@ -24,6 +120,17 @@ async function startServer() {
   // اندپوینت سلامتی سرور
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // وضعیت سرویس‌های هوش مصنوعی (وجود کلید سرور برای هر سرویس)
+  app.get('/api/ai/status', (req, res) => {
+    res.json({
+      providers: {
+        openrouter: { hasServerKey: !!getEnvKey('OPENROUTER_API_KEY') },
+        deepseek: { hasServerKey: !!getEnvKey('DEEPSEEK_API_KEY') },
+        groq: { hasServerKey: !!getEnvKey('GROQ_API_KEY') },
+      },
+    });
   });
 
   // حافظه موقت کش سوره‌ها در سرور
@@ -287,7 +394,7 @@ async function startServer() {
     }
   });
 
-  // اندپوینت تخصصی تدبّر هوشمند قرآنی با پشتیبانی از چند ایجنت تخصصی
+  // اندپوینت تخصصی تدبّر هوشمند قرآنی (OpenRouter پیش‌فرض / DeepSeek / Groq)
   app.post('/api/ai/tadabbur', async (req, res) => {
     try {
       const {
@@ -297,11 +404,24 @@ async function startServer() {
         translation,
         userQuestion,
         mode,
-        agentId = 'nemoneh'
+        agentId = 'nemoneh',
+        provider = 'groq',
+        apiKey = '',
+        model = 'deepseek/deepseek-chat-v3-0324'
       } = req.body;
 
+      const normalizedProvider = provider === 'deepseek' || provider === 'groq' ? provider : 'openrouter';
+      const personalKey = typeof apiKey === 'string' ? apiKey.trim() : '';
+      const serverKey = normalizedProvider === 'deepseek'
+        ? getEnvKey('DEEPSEEK_API_KEY')
+        : normalizedProvider === 'groq'
+        ? getEnvKey('GROQ_API_KEY')
+        : getEnvKey('OPENROUTER_API_KEY');
+      const effectiveKey = personalKey || serverKey;
+      const safeModel = typeof model === 'string' && model.trim() ? model.trim().slice(0, 120) : 'deepseek/deepseek-chat-v3-0324';
+
       // پاسخ‌های پیش‌فرض و جامع بر اساس ایجنت انتخابی در حالت آفلاین یا ایجنت دانشنامه درون‌برنامه
-      if (agentId === 'offline_knowledge' || !process.env.GEMINI_API_KEY) {
+      if (agentId === 'offline_knowledge' || !effectiveKey) {
         let offlineReply = '';
         if (agentId === 'allameh') {
           offlineReply = `[دیدگاه ایجنت علامه - مبتنی بر تفسیر المیزان]:\n\nدر تدبر آیه شریفه «${arabicText || 'آیه مبارکه'}» (سوره ${surahName || ''}، آیه ${verseNumber || ''}):\n\nعلامه طباطبایی (ره) در تبیین این آیه بر بطون توحیدی، حقیقت اخلاص و اتصال وجودی انسان با مبدأ آفرینش تأکید می‌فرمایند. در روش «تفسیر قرآن به قرآن»، این مفهوم هم‌افق با آیات دیگری است که اصالت را به تقوا و طهارت باطن می‌دهند. پیام محوری آیه، زدودن غبار غفلت و بازگشت به فطرت توحیدی است.`;
@@ -317,11 +437,10 @@ async function startServer() {
         return res.json({
           reply: offlineReply,
           agentId,
+          provider: normalizedProvider,
           isOfflineKnowledge: true
         });
       }
-
-      const ai = getAIClient();
 
       // ساخت پرامپت سیستمی متناسب با ایجنت انتخاب‌شده
       let systemInstruction = '';
@@ -381,19 +500,15 @@ ${userQuestion ? `پرسش خاص کاربر: ${userQuestion}` : ''}`;
         userPrompt = userQuestion || `درباره آیه ${verseNumber} سوره ${surahName} تحلیل خود را به عنوان ${agentTitle} ارائه دهید.`;
       }
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: userPrompt,
-        config: {
-          systemInstruction: systemInstruction,
-          temperature: 0.65,
-        }
-      });
+      const replyText = normalizedProvider === 'deepseek'
+        ? await callDeepSeek(effectiveKey, systemInstruction, userPrompt)
+        : normalizedProvider === 'groq'
+        ? await callGroq(effectiveKey, 'openai/gpt-oss-120b', systemInstruction, userPrompt)
+        : await callOpenRouter(effectiveKey, safeModel, systemInstruction, userPrompt);
 
-      const replyText = response.text || 'پاسخی دریافت نشد.';
-      return res.json({ reply: replyText, agentId, agentTitle });
+      return res.json({ reply: replyText, agentId, agentTitle, provider: normalizedProvider, model: safeModel, usedPersonalKey: !!personalKey });
     } catch (error: any) {
-      console.error('Gemini Tadabbur API Error:', error);
+      console.error('AI Tadabbur API Error:', error);
       return res.status(500).json({
         error: 'خطا در برقراری ارتباط با سرویس تدبّر هوشمند.',
         details: error?.message || String(error)

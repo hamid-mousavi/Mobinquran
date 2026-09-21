@@ -44,6 +44,16 @@ export interface ReadingState {
 
 export type ViewMode = 'verse-by-verse' | 'mushaf-page';
 export type Translator = 'makarem' | 'fooladvand' | 'ansarian';
+
+export type AIProvider = 'openrouter' | 'deepseek' | 'groq';
+
+export interface AISettings {
+  provider: AIProvider;
+  openrouterKey: string;
+  deepseekKey: string;
+  groqKey: string;
+  model: string; // فقط برای OpenRouter استفاده می‌شود
+}
 export type ArabicFont =
   | 'uthman-taha'
   | 'kfgqpc-hafs'

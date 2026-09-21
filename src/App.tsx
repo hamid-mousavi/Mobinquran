@@ -14,8 +14,9 @@ import { OfflineDownloadModal } from './components/OfflineDownloadModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { AutoScrollControls } from './components/AutoScrollControls';
 import { QuranService } from './services/quranService';
+import { getAISettings, saveAISettings } from './services/aiSettings';
 import { ALL_SURAHS } from './data/surahs';
-import { Surah, Verse, AppSettings, ViewMode } from './types';
+import { Surah, Verse, AppSettings, ViewMode, AISettings } from './types';
 
 const DEFAULT_SETTINGS: AppSettings = {
   arabicFontSize: 28,
@@ -23,7 +24,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   showTranslation: true,
   activeTranslator: 'makarem',
   arabicFont: 'uthman-taha',
-  darkMode: false,
+  darkMode: true,
   themeColor: 'emerald',
   defaultViewMode: 'verse-by-verse',
   lineHeight: 'relaxed',
@@ -64,6 +65,14 @@ export default function App() {
   // مودال دستیار هوش مصنوعی
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [aiContextVerse, setAiContextVerse] = useState<Verse | null>(null);
+
+  // تنظیمات سرویس هوش مصنوعی (DeepSeek پیش‌فرض / Gemini جایگزین + کلید شخصی کاربر)
+  const [aiSettings, setAiSettings] = useState<AISettings>(() => getAISettings());
+
+  const handleUpdateAISettings = (next: AISettings) => {
+    setAiSettings(next);
+    saveAISettings(next);
+  };
 
   // مودال نشانه‌گذاری‌ها
   const [isBookmarksModalOpen, setIsBookmarksModalOpen] = useState(false);
@@ -255,6 +264,7 @@ export default function App() {
         onToggleDarkMode={handleToggleDarkMode}
         isAutoScrollActive={isAutoScrollActive}
         onToggleAutoScroll={() => setIsAutoScrollActive((prev) => !prev)}
+        aiProvider={aiSettings.provider}
       />
 
       {/* ناحیه نمایش اصلی: سوئیچ بین حالت آیه به آیه و مصحف ۶۰۴ صفحه‌ای */}
@@ -361,7 +371,7 @@ export default function App() {
         onSaveNote={handleSaveNote}
       />
 
-      {/* دستیار هوشمند تدبّر قرآنی (Gemini) */}
+      {/* دستیار هوشمند تدبّر قرآنی (DeepSeek / Gemini) */}
       <AIAssistantModal
         isOpen={isAIModalOpen}
         onClose={() => {
@@ -371,6 +381,8 @@ export default function App() {
         currentVerse={aiContextVerse}
         currentSurah={currentSurah}
         darkMode={settings.darkMode}
+        aiSettings={aiSettings}
+        onUpdateAISettings={handleUpdateAISettings}
       />
 
       {/* مودال جستجوی پیشرفته متنی و ترجمه */}

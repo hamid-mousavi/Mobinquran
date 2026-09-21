@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, Sparkles, Send, BookOpen, Heart, RefreshCw, Languages, ShieldCheck, Database, Bot } from 'lucide-react';
-import { Verse, Surah } from '../types';
+import React, { useState, useEffect } from 'react';
+import { X, Sparkles, Send, BookOpen, Heart, RefreshCw, Languages, ShieldCheck, Database, Bot, KeyRound, Eye, EyeOff, Save, Trash2, CheckCircle2, Server, WifiOff } from 'lucide-react';
+import { Verse, Surah, AISettings, AIProvider } from '../types';
+import { OPENROUTER_MODELS } from '../services/aiSettings';
 
 interface AIAssistantModalProps {
   isOpen: boolean;
@@ -8,6 +9,8 @@ interface AIAssistantModalProps {
   currentVerse?: Verse | null;
   currentSurah?: Surah | null;
   darkMode: boolean;
+  aiSettings: AISettings;
+  onUpdateAISettings: (settings: AISettings) => void;
 }
 
 export type AIAgentId = 'nemoneh' | 'allameh' | 'adib' | 'kalam' | 'offline_knowledge';
@@ -84,6 +87,8 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   currentVerse,
   currentSurah,
   darkMode,
+  aiSettings,
+  onUpdateAISettings,
 }) => {
   const [selectedAgentId, setSelectedAgentId] = useState<AIAgentId>('nemoneh');
   const [showAgentList, setShowAgentList] = useState(false);
@@ -99,10 +104,75 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // تنظیمات سرویس هوش مصنوعی
+  const [showKeyInput, setShowKeyInput] = useState(false);
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const [showKeyChar, setShowKeyChar] = useState(false);
+  const [serverStatus, setServerStatus] = useState<{ openrouter: boolean; deepseek: boolean; groq: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setApiKeyDraft('');
+    fetch('/api/ai/status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.providers) {
+          setServerStatus({
+            openrouter: !!data.providers.openrouter?.hasServerKey,
+            deepseek: !!data.providers.deepseek?.hasServerKey,
+            groq: !!data.providers.groq?.hasServerKey,
+          });
+        }
+      })
+      .catch(() => setServerStatus(null));
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const activeAgent = AI_AGENTS.find((a) => a.id === selectedAgentId) || AI_AGENTS[0];
   const ActiveAgentIcon = activeAgent.icon;
+
+  const activeProvider = aiSettings.provider;
+  const providerLabel = activeProvider === 'deepseek' ? 'DeepSeek' : activeProvider === 'groq' ? 'Groq' : 'OpenRouter';
+  const currentKey = activeProvider === 'deepseek'
+    ? aiSettings.deepseekKey
+    : activeProvider === 'groq'
+    ? aiSettings.groqKey
+    : aiSettings.openrouterKey;
+  const hasPersonalKey = typeof currentKey === 'string' && currentKey.trim().length > 0;
+  const hasServerKey = serverStatus
+    ? activeProvider === 'deepseek'
+      ? serverStatus.deepseek
+      : activeProvider === 'groq'
+      ? serverStatus.groq
+      : serverStatus.openrouter
+    : false;
+
+  const currentModel = aiSettings.model || 'deepseek/deepseek-chat-v3-0324';
+
+  const setProvider = (provider: AIProvider) => {
+    onUpdateAISettings({ ...aiSettings, provider });
+  };
+
+  const withProviderKey = (key: string): AISettings =>
+    activeProvider === 'deepseek'
+      ? { ...aiSettings, deepseekKey: key }
+      : activeProvider === 'groq'
+      ? { ...aiSettings, groqKey: key }
+      : { ...aiSettings, openrouterKey: key };
+
+  const saveApiKey = () => {
+    const key = apiKeyDraft.trim();
+    onUpdateAISettings(withProviderKey(key));
+    setApiKeyDraft('');
+    setShowKeyInput(false);
+  };
+
+  const clearApiKey = () => {
+    onUpdateAISettings(withProviderKey(''));
+    setApiKeyDraft('');
+    setShowKeyInput(false);
+  };
 
   const handleSendMessage = async (customPrompt?: string) => {
     const textToSend = customPrompt || inputText.trim();
@@ -122,29 +192,42 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         userQuestion: textToSend,
         mode: currentVerse ? 'verse_reflection' : 'topic_guidance',
         agentId: selectedAgentId,
+        provider: aiSettings.provider,
+        model: currentModel,
+        apiKey: currentKey,
       };
 
-      const response = await fetch('/api/ai/tadabbur', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let replyText = '';
+      try {
+        const response = await fetch('/api/ai/tadabbur', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      if (!response.ok) {
-        throw new Error('خطا در ارتباط با سرور');
+        const body = await response.json().catch(() => null);
+
+        if (!response.ok || !body) {
+          const detail = body?.details || body?.error || `خطای غیرمنتظره سرور (${response.status})`;
+          throw new Error(detail);
+        }
+
+        replyText = body.reply || 'پاسخی دریافت نشد.';
+      } catch (err: any) {
+        const rawDetail = err?.message || String(err);
+        console.error('AI request failed:', err);
+        setMessages([
+          ...newMessages,
+          {
+            role: 'assistant',
+            agentId: selectedAgentId,
+            content: `اتصال به دستیار هوش مصنوعی ناموفق بود:\n«${rawDetail}»\n\nنکته: در صورت نامعتبر بودن کلید، رفع انقضا یا عدم موجودی حساب ${providerLabel}، می‌توانید از ایجنت «دانا (دانشنامه آفلاین)» بدون اینترنت استفاده فرمایید.`,
+          },
+        ]);
+        return;
       }
 
-      const data = await response.json();
-      setMessages([...newMessages, { role: 'assistant', content: data.reply, agentId: selectedAgentId }]);
-    } catch (err: any) {
-      setMessages([
-        ...newMessages,
-        {
-          role: 'assistant',
-          agentId: selectedAgentId,
-          content: 'متأسفانه در ارتباط اینترنتی مشکلی رخ داد. می‌توانید از ایجنت «دانا (دانشنامه آفلاین)» استفاده فرمایید که بدون نیاز به اینترنت پاسخ می‌دهد.',
-        },
-      ]);
+      setMessages([...newMessages, { role: 'assistant', content: replyText, agentId: selectedAgentId }]);
     } finally {
       setIsLoading(false);
     }
@@ -242,6 +325,160 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
               );
             })}
           </div>
+        </div>
+
+        {/* نوار تنظیمات سرویس هوش مصنوعی (انتخاب سرویس، مدل و کلید شخصی) */}
+        <div className={`border-b px-3 py-2 space-y-2 ${
+          darkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-stone-50/80 border-stone-200'
+        }`}>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>سرویس هوش مصنوعی</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {(['openrouter', 'deepseek', 'groq'] as AIProvider[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setProvider(p)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    aiSettings.provider === p
+                      ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                      : darkMode
+                      ? 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700'
+                      : 'bg-white hover:bg-stone-100 text-slate-700 border-stone-200'
+                  }`}
+                >
+                  {p === 'deepseek' ? 'DeepSeek' : p === 'groq' ? 'Groq' : 'OpenRouter'}
+                </button>
+              ))}
+              {aiSettings.provider === 'openrouter' && (
+                <>
+                  <label htmlFor="or-model-input" className="text-[10px] font-semibold text-slate-400 shrink-0">
+                    مدل:
+                  </label>
+                  <input
+                    id="or-model-input"
+                    list="or-models-list"
+                    value={currentModel}
+                    onChange={(e) => onUpdateAISettings({ ...aiSettings, model: e.target.value })}
+                    placeholder="deepseek/deepseek-chat-v3-0324"
+                    className={`w-52 px-2.5 py-1 text-[11px] rounded-lg outline-none border transition-all ${
+                      darkMode
+                        ? 'bg-slate-800 border-slate-700 focus:border-teal-500 text-white placeholder-slate-500'
+                        : 'bg-white border-slate-200 focus:border-teal-600 text-slate-900 placeholder-slate-400'
+                    }`}
+                    title="تایپ یا انتخاب نام مدل OpenRouter (مثال: deepseek/deepseek-r1)"
+                  />
+                  <datalist id="or-models-list">
+                    {OPENROUTER_MODELS.map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setShowKeyInput((prev) => !prev);
+                if (!showKeyInput) setApiKeyDraft('');
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                hasPersonalKey
+                  ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                  : darkMode
+                  ? 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700'
+                  : 'bg-white hover:bg-stone-100 text-slate-700 border-stone-200'
+              }`}
+              title={`وارد کردن کلید API شخصی ${providerLabel}`}
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>{hasPersonalKey ? 'کلید شخصی فعال' : 'کلید API شخصی'}</span>
+            </button>
+
+            <div className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg ${
+              hasPersonalKey
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                : hasServerKey
+                ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+            }`}>
+              {hasPersonalKey ? (
+                <>
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>در حال استفاده از کلید شخصی شما</span>
+                </>
+              ) : hasServerKey ? (
+                <>
+                  <Server className="w-3 h-3" />
+                  <span>استفاده از کلید سرور برنامه</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-3 h-3" />
+                  <span>بدون کلید → پاسخ از دانشنامه آفلاین</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {showKeyInput && (
+            <div className={`p-2 rounded-xl border ${
+              darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-stone-200'
+            }`}>
+              <div className="flex items-center gap-1.5 mb-1.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                <KeyRound className="w-3 h-3" />
+                <span>کلید API {providerLabel} ({activeProvider === 'deepseek' ? 'از platform.deepseek.com' : activeProvider === 'groq' ? 'از console.groq.com' : 'از openrouter.ai/keys'})</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1">
+                  <input
+                    type={showKeyChar ? 'text' : 'password'}
+                    value={apiKeyDraft}
+                    onChange={(e) => setApiKeyDraft(e.target.value)}
+                    placeholder={hasPersonalKey ? `در حال استفاده از کلید ذخیره‌شده (...${currentKey.slice(-4)})` : activeProvider === 'deepseek' ? 'sk-...' : 'gsk_...'}
+                    className={`w-full px-3 py-1.5 text-xs rounded-lg outline-none border transition-all ${
+                      darkMode
+                        ? 'bg-slate-800 border-slate-700 focus:border-teal-500 text-white placeholder-slate-500'
+                        : 'bg-slate-50 border-slate-200 focus:border-teal-600 text-slate-900 placeholder-slate-400'
+                    }`}
+                  />
+                  <button
+                    onClick={() => setShowKeyChar((prev) => !prev)}
+                    className="absolute inset-y-0 left-2 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    title={showKeyChar ? 'پنهان کردن' : 'نمایش'}
+                  >
+                    {showKeyChar ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <button
+                  onClick={saveApiKey}
+                  disabled={!apiKeyDraft.trim()}
+                  className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-[11px] font-bold transition-all flex items-center gap-1"
+                >
+                  <Save className="w-3 h-3" />
+                  <span>ذخیره</span>
+                </button>
+                {hasPersonalKey && (
+                  <button
+                    onClick={clearApiKey}
+                    className="px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all flex items-center gap-1 border border-red-500/30"
+                    title="حذف کلید ذخیره‌شده"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span className="hidden sm:inline">حذف</span>
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+                کلید شما فقط روی همین دستگاه (مرورگر) ذخیره می‌شود و برای پاسخ‌گویی به سرور ارسال می‌گردد.
+                در صورت خالی بودن، از کلید سرور برنامه یا حالت آفلاین استفاده می‌شود.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* برچسب آیه انتخابی اگر وجود دارد */}

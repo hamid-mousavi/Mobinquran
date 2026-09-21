@@ -18,7 +18,7 @@ import {
   Layers,
   Sparkle
 } from 'lucide-react';
-import { Surah, ViewMode } from '../types';
+import { Surah, ViewMode, AIProvider } from '../types';
 
 interface HeaderProps {
   currentSurah: Surah;
@@ -35,6 +35,7 @@ interface HeaderProps {
   onToggleDarkMode: () => void;
   isAutoScrollActive: boolean;
   onToggleAutoScroll: () => void;
+  aiProvider?: AIProvider;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -52,6 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleDarkMode,
   isAutoScrollActive,
   onToggleAutoScroll,
+  aiProvider = 'groq',
 }) => {
   const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -331,7 +333,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <div className="text-[10px] text-slate-400">تحلیل چندایجنتی (نمونه، علامه، ادیب)</div>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">Gemini</span>
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{aiProvider === 'deepseek' ? 'DeepSeek' : aiProvider === 'groq' ? 'Groq' : 'OpenRouter'}</span>
                   </button>
                 </div>
 

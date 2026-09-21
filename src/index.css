@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* استفاده از کلاس .dark برای کنترل کامل حالت شب (به‌جای تنظیمات سیستم‌عامل) */
+@custom-variant dark (&:is(.dark *));
+
 /* فونت رسمی عثمان طه مجمع ملک فهد (KFGQPC Hafs Smart) */
 @font-face {
   font-family: 'UthmanTaha';
