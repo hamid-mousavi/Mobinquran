@@ -510,5 +510,17 @@ ${userQuestion ? `پرسش خاص کاربر: ${userQuestion}` : ''}`;
     }
   });
 
+  // مدیریت خطاهای پیش‌بینی‌نشده به‌صورت JSON تا جزئیات واقعی برای کلاینت قابل نمایش باشد
+  app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('Unhandled API Error:', err);
+    if (res.headersSent) {
+      return;
+    }
+    res.status(err?.statusCode || 500).json({
+      error: 'خطا در پردازش درخواست.',
+      details: err?.message || String(err)
+    });
+  });
+
   return app;
 }
