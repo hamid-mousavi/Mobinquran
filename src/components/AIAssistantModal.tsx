@@ -205,10 +205,23 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           body: JSON.stringify(payload),
         });
 
-        const body = await response.json().catch(() => null);
+        // A Vercel Function that fails before Express starts can return HTML/text,
+        // so retain it for diagnosis instead of collapsing every failure to 500.
+        const rawBody = await response.text();
+        let body: { reply?: string; details?: string; error?: string } | null = null;
+        try {
+          body = rawBody ? JSON.parse(rawBody) : null;
+        } catch {
+          // Non-JSON Vercel error response.
+        }
 
         if (!response.ok || !body) {
-          const detail = body?.details || body?.error || `خطای غیرمنتظره سرور (${response.status})`;
+          const plainTextDetail = rawBody
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 300);
+          const detail = body?.details || body?.error || plainTextDetail || `خطای غیرمنتظره سرور (${response.status})`;
           throw new Error(detail);
         }
 

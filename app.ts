@@ -4,6 +4,13 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
+class UpstreamApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'UpstreamApiError';
+  }
+}
+
 function getEnvKey(name: string): string {
   return (process.env[name] || '').trim();
 }
@@ -32,7 +39,7 @@ async function callOpenRouter(apiKey: string, model: string, systemInstruction: 
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    throw new Error(`OpenRouter API responded with status ${response.status}: ${errText.slice(0, 300)}`);
+    throw new UpstreamApiError(`OpenRouter API responded with status ${response.status}: ${errText.slice(0, 300)}`, response.status);
   }
 
   const json = await response.json();
@@ -63,7 +70,7 @@ async function callDeepSeek(apiKey: string, systemInstruction: string, userPromp
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    throw new Error(`DeepSeek API responded with status ${response.status}: ${errText.slice(0, 300)}`);
+    throw new UpstreamApiError(`DeepSeek API responded with status ${response.status}: ${errText.slice(0, 300)}`, response.status);
   }
 
   const json = await response.json();
@@ -94,7 +101,7 @@ async function callGroq(apiKey: string, model: string, systemInstruction: string
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    throw new Error(`Groq API responded with status ${response.status}: ${errText.slice(0, 300)}`);
+    throw new UpstreamApiError(`Groq API responded with status ${response.status}: ${errText.slice(0, 300)}`, response.status);
   }
 
   const json = await response.json();
@@ -503,7 +510,8 @@ ${userQuestion ? `پرسش خاص کاربر: ${userQuestion}` : ''}`;
       return res.json({ reply: replyText, agentId, agentTitle, provider: normalizedProvider, model: safeModel, usedPersonalKey: !!personalKey });
     } catch (error: any) {
       console.error('AI Tadabbur API Error:', error);
-      return res.status(500).json({
+      const status = error instanceof UpstreamApiError ? error.status : 502;
+      return res.status(status).json({
         error: 'خطا در برقراری ارتباط با سرویس تدبّر هوشمند.',
         details: error?.message || String(error)
       });
