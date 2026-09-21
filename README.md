@@ -23,3 +23,16 @@ View your app in AI Studio: https://ai.studio/apps/19772b4f-bc6b-4d10-b101-596b7
    کاربران همچنین می‌توانند کلید شخصی خودشان را از داخل برنامه، در مودال «دستیار هوشمند تدبّر» وارد کنند (روی همین دستگاه ذخیره می‌شود).
 3. Run the app:
    `npm run dev`
+
+## Deploy on Vercel
+
+پروژه برای Vercel سازگار شده است: سایت (خروجی `vite build` در `dist/`) بهصورت استاتیک و اندپوینتهای `/api/*` بهصورت تابع سرورلس (`api/index.ts`) استقرار مییابند.
+
+1. پروژه را به Git و سپس به Vercel وصل کنید (Framework Preset: **Vite**؛ نیازی به تنظیم `buildCommand` و `outputDirectory` نیست چون در `vercel.json` تعریف شده).
+2. در Vercel: **Project → Settings → Environment Variables** برای هر محیط (Production/Preview) اضافه کنید:
+   - `GROQ_API_KEY` (پیشفرض)
+   - `OPENROUTER_API_KEY` (اختیاری)
+   - `DEEPSEEK_API_KEY` (اختیاری)
+3. Deploy کنید. متغیرها هنگام اجرا در `process.env` تابع سرورلس قرار میگیرند (فایل `.env.local` فقط برای اجرای محلی است و هرگز به Vercel فرستاده نمیشود).
+
+نکته: در `vercel.json` بازنویسی SPA تعریف شده (`/(.*)` → `/index.html`) و پیش از آن `/api/*` به تابع سرورلس هدایت میشود.
