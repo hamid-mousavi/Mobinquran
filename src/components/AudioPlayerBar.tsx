@@ -20,7 +20,6 @@ interface Reciter {
   bio: string;
   initials: string;
   avatarColor: string;
-  photoUrl: string;
   getUrl: (surahId: number, verseNumber: number) => string;
 }
 
@@ -32,7 +31,6 @@ const RECITERS: Reciter[] = [
     bio: 'قاری بین‌المللی و حافظ کل قرآن کریم از ایران؛ دارنده رتبه اول مسابقات جهانی و استانداردترین دوره ترتیل آموزشی جهت یادگیری روخوانی و حفظ.',
     initials: 'ش‌پ',
     avatarColor: 'bg-emerald-700 text-white',
-    photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop&crop=face',
     getUrl: (s, v) => {
       const sPad = String(s).padStart(3, '0');
       const vPad = String(v).padStart(3, '0');
@@ -46,7 +44,6 @@ const RECITERS: Reciter[] = [
     bio: 'ملقب به «صوت مکه»؛ یکی از بزرگ‌ترین و نامدارترین قاریان تاریخ جهان اسلام از مصر با لحنی دلنشین، عمیق و پرصلابت.',
     initials: 'ع‌ب',
     avatarColor: 'bg-amber-700 text-white',
-    photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop&crop=face',
     getUrl: (s, v) => {
       const sPad = String(s).padStart(3, '0');
       const vPad = String(v).padStart(3, '0');
@@ -60,7 +57,6 @@ const RECITERS: Reciter[] = [
     bio: 'ملقب به «شهید القراء»؛ دارای سبک ترتیل بی‌نظیر حزن‌آلود و خاشعانه با کامل‌ترین قواعد تجوید و وقف و ابتدا.',
     initials: 'م‌ص',
     avatarColor: 'bg-blue-700 text-white',
-    photoUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop&crop=face',
     getUrl: (s, v) => {
       const sPad = String(s).padStart(3, '0');
       const vPad = String(v).padStart(3, '0');
@@ -74,7 +70,6 @@ const RECITERS: Reciter[] = [
     bio: 'امام جماعت مسجد کبیر کویت و قاری سرشناس معاصر با ضبط‌های صوتی دیجیتال باکیفیت و صوت رسا.',
     initials: 'م‌ع',
     avatarColor: 'bg-teal-700 text-white',
-    photoUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=120&h=120&fit=crop&crop=face',
     getUrl: (s, v) => {
       const sPad = String(s).padStart(3, '0');
       const vPad = String(v).padStart(3, '0');
@@ -223,27 +218,14 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
         <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2 flex items-center justify-between gap-1.5 sm:gap-2">
           {/* سمت راست: عکس قاری (آواتار جمع‌وجور) + اطلاعات آیه */}
           <div className="flex items-center gap-2 min-w-0">
-            {/* دکمه تصویر/آواتار قاری با قابلیت کلیک جهت نمایش مشخصات */}
+            {/* دکمه آواتار قاری با قابلیت کلیک جهت نمایش مشخصات */}
             <button
               onClick={() => setShowReciterModal(true)}
               className="relative group shrink-0"
               title={`قاری: ${currentReciter.name} (کلیک جهت مشاهده اطلاعات یا تغییر)`}
             >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden border-2 border-teal-600/70 p-0.5 shadow-sm group-hover:scale-105 group-hover:border-teal-500 transition-all">
-                <img
-                  src={currentReciter.photoUrl}
-                  alt={currentReciter.name}
-                  className="w-full h-full object-cover rounded-full"
-                  onError={(e) => {
-                    // در صورت خطای لود عکس، به آواتار با حروف اختصاری تغییر دهد
-                    (e.currentTarget as HTMLElement).style.display = 'none';
-                  }}
-                />
-                <div
-                  className={`w-full h-full rounded-full flex items-center justify-center font-bold text-xs ${currentReciter.avatarColor}`}
-                >
-                  {currentReciter.initials}
-                </div>
+              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm border-2 border-teal-600/70 shadow-sm group-hover:scale-105 group-hover:border-teal-500 transition-all ${currentReciter.avatarColor}`}>
+                {currentReciter.initials}
               </div>
               <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-teal-600 border-2 border-white dark:border-slate-900 rounded-full flex items-center justify-center text-white text-[8px]">
                 <Info className="w-2 h-2" />
@@ -433,12 +415,8 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
             {/* کارت قاری فعال کنونی */}
             <div className="p-4 rounded-2xl bg-teal-500/10 border border-teal-600/30 mb-4 flex items-start gap-3">
-              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-teal-600 shrink-0 shadow">
-                <img
-                  src={currentReciter.photoUrl}
-                  alt={currentReciter.name}
-                  className="w-full h-full object-cover"
-                />
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-sm border-2 border-teal-600 shrink-0 shadow ${currentReciter.avatarColor}`}>
+                {currentReciter.initials}
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -482,12 +460,8 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full overflow-hidden border shrink-0">
-                          <img
-                            src={r.photoUrl}
-                            alt={r.name}
-                            className="w-full h-full object-cover"
-                          />
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs border shrink-0 ${r.avatarColor}`}>
+                          {r.initials}
                         </div>
                         <div>
                           <div className="text-xs font-bold">{r.name}</div>

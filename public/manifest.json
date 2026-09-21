@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "قرآن مبین | قرائت، تفسیر و دستیار هوشمند",
+  "name": "قرآن مبین | قرائت، ترجمه و تدبّر",
   "short_name": "قرآن مبین",
-  "description": "اپلیکیشن جامع قرآنی با مطالعه آفلاین، تفاسیر معتبر نمونه و المیزان، مقایسه ۳ ترجمه، ترتیل صوتی و هوش مصنوعی تدبّر",
+  "description": "اپلیکیشن جامع قرآن کریم با امکان قرائت متن، ۳ ترجمه، جستجوی آفلاین و تدبّر قرآنی",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -20,7 +20,7 @@
       "purpose": "any"
     },
     {
-      "src": "/icon-192.png",
+      "src": "/icon-maskable-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
@@ -32,10 +32,33 @@
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "فهرست سوره‌ها",
+      "short_name": "سوره‌ها",
+      "description": "مشاهده فهرست ۱۱۴ سوره قرآن کریم",
+      "url": "/?view=surahs",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "ادامه آخرین قرائت",
+      "short_name": "آخرین مطالعه",
+      "description": "رفتن به آخرین آیه یا صفحه خوانده‌شده",
+      "url": "/?action=last-read",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "جستجوی قرآن",
+      "short_name": "جستجو",
+      "description": "جستجوی واژگان و آیات در قرآن کریم",
+      "url": "/?action=search",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

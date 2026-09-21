@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, BookOpen, Loader2, ChevronLeft, Sparkles, Filter, Database, Globe, WifiOff } from 'lucide-react';
+import { Search, X, BookOpen, Loader2, ChevronLeft, Sparkles, Filter, Zap } from 'lucide-react';
 import { Surah, SearchResultItem } from '../types';
 import { QuranService } from '../services/quranService';
 
@@ -24,6 +24,10 @@ const POPULAR_SEARCH_KEYWORDS = [
   'اخلاص',
   'رحمت',
   'هدایت',
+  'موسی',
+  'ابراهیم',
+  'الصلاة',
+  'القرآن',
 ];
 
 export const SearchModal: React.FC<SearchModalProps> = ({
@@ -35,15 +39,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<'all' | 'arabic' | 'translation'>('all');
-  const [searchSource, setSearchSource] = useState<'auto' | 'offline' | 'online'>('auto');
   const [selectedSurahFilter, setSelectedSurahFilter] = useState<number | 0>(0);
-  const [results, setResults] = useState<(SearchResultItem & { isOfflineResult?: boolean })[]>([]);
+  const [selectedJuzFilter, setSelectedJuzFilter] = useState<number | 0>(0);
+  const [results, setResults] = useState<SearchResultItem[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [searchTimeMs, setSearchTimeMs] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [actualSourceUsed, setActualSourceUsed] = useState<'online' | 'offline' | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -53,103 +59,99 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     } else {
       setQuery('');
       setResults([]);
+      setTotalCount(0);
+      setSearchTimeMs(0);
       setHasSearched(false);
       setError(null);
-      setActualSourceUsed(null);
     }
   }, [isOpen]);
 
-  const handleSearch = async (searchTerm?: string) => {
-    const q = (searchTerm !== undefined ? searchTerm : query).trim();
-    if (q.length < 2) return;
+  const executeSearch = async (targetQuery: string, currentScope = scope, currentSurah = selectedSurahFilter, currentJuz = selectedJuzFilter) => {
+    const clean = targetQuery.trim();
+    if (clean.length < 2) {
+      setResults([]);
+      setTotalCount(0);
+      setSearchTimeMs(0);
+      setHasSearched(false);
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
     setHasSearched(true);
-    setActualSourceUsed(null);
 
-    // حالت ۱: کاربر صراحتاً جستجوی آفلاین را خواسته است
-    if (searchSource === 'offline') {
-      try {
-        const offlineData = await QuranService.searchOffline(
-          q,
-          scope,
-          selectedSurahFilter > 0 ? selectedSurahFilter : undefined
-        );
-        setResults(offlineData.results || []);
-        setActualSourceUsed('offline');
-      } catch (err: any) {
-        console.error('Offline search failed:', err);
-        setError('خطا در جستجو در دیتابیس آفلاین محلی.');
-      } finally {
-        setIsLoading(false);
-      }
-      return;
-    }
-
-    // حالت ۲: حالت خودکار (تلاش آنلاین، و در صورت قطعی یا خطا فال‌بک آفلاین) یا آنلاین صِرف
     try {
-      let url = `/api/quran/search?q=${encodeURIComponent(q)}&scope=${scope}`;
-      if (selectedSurahFilter > 0) {
-        url += `&surahId=${selectedSurahFilter}`;
-      }
+      const response = await QuranService.searchOffline(
+        clean,
+        currentScope,
+        currentSurah > 0 ? currentSurah : undefined,
+        currentJuz > 0 ? currentJuz : undefined
+      );
 
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error('خطا در ارتباط با سرور آنلاین');
-      }
-
-      const data = await res.json();
-      const onlineResults = (data.results || []).map((r: any) => ({ ...r, isOfflineResult: false }));
-
-      // اگر در حالت auto نتیجه آنلاین کم بود یا خالی بود، با آفلاین هم ترکیب کنیم
-      if (searchSource === 'auto' && onlineResults.length === 0) {
-        const offlineData = await QuranService.searchOffline(
-          q,
-          scope,
-          selectedSurahFilter > 0 ? selectedSurahFilter : undefined
-        );
-        if (offlineData.results && offlineData.results.length > 0) {
-          setResults(offlineData.results);
-          setActualSourceUsed('offline');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      setResults(onlineResults);
-      setActualSourceUsed('online');
+      setResults(response.results);
+      setTotalCount(response.totalMatches);
+      setSearchTimeMs(response.searchDurationMs);
     } catch (err: any) {
-      console.warn('Online search failed, checking offline database fallback:', err);
-      // فال‌بک خودکار به دیتابیس آفلاین محلی
-      try {
-        const offlineData = await QuranService.searchOffline(
-          q,
-          scope,
-          selectedSurahFilter > 0 ? selectedSurahFilter : undefined
-        );
-        setResults(offlineData.results || []);
-        setActualSourceUsed('offline');
-      } catch (offlineErr) {
-        setError('ارتباط با سرور برقرار نشد و جستجوی آفلاین نیز با خطا مواجه شد.');
-      }
+      console.error('Search error:', err);
+      setError('خطا در انجام جستجو در پایگاه داده قرآن.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
+  // جستجوی لحظه‌ای با تایپ کاربر (Debounce ۱۸۰ میلی‌ثانیه)
+  const handleQueryChange = (val: string) => {
+    setQuery(val);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    if (val.trim().length >= 2) {
+      debounceTimerRef.current = setTimeout(() => {
+        executeSearch(val, scope, selectedSurahFilter, selectedJuzFilter);
+      }, 180);
+    } else {
+      setResults([]);
+      setTotalCount(0);
+      setHasSearched(false);
+    }
+  };
+
+  const handleScopeChange = (newScope: 'all' | 'arabic' | 'translation') => {
+    setScope(newScope);
+    if (query.trim().length >= 2) {
+      executeSearch(query, newScope, selectedSurahFilter, selectedJuzFilter);
+    }
+  };
+
+  const handleSurahFilterChange = (surahId: number) => {
+    setSelectedSurahFilter(surahId);
+    if (query.trim().length >= 2) {
+      executeSearch(query, scope, surahId, selectedJuzFilter);
+    }
+  };
+
+  const handleJuzFilterChange = (juz: number) => {
+    setSelectedJuzFilter(juz);
+    if (query.trim().length >= 2) {
+      executeSearch(query, scope, selectedSurahFilter, juz);
     }
   };
 
   const highlightMatch = (text: string, keyword: string) => {
     if (!text || !keyword) return text;
-    const parts = text.split(new RegExp(`(${keyword})`, 'gi'));
+    // حذف علائم اضافی از کلمه جستجو برای ساخت ریجکس امن
+    const cleanKw = keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!cleanKw) return text;
+
+    const parts = text.split(new RegExp(`(${cleanKw})`, 'gi'));
     return parts.map((part, i) =>
-      part.toLowerCase() === keyword.toLowerCase() ? (
-        <mark key={i} className="bg-amber-300 dark:bg-amber-600/60 text-slate-950 dark:text-white px-1 py-0.5 rounded font-bold">
+      part.toLowerCase() === cleanKw.toLowerCase() ? (
+        <mark
+          key={i}
+          className="bg-amber-300/80 dark:bg-amber-600/70 text-slate-950 dark:text-white px-1 py-0.5 rounded font-bold"
+        >
           {part}
         </mark>
       ) : (
@@ -184,8 +186,16 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 <Search className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base sm:text-lg font-bold">جستجوی قرآن کریم</h2>
-                <p className="text-[11px] text-slate-400">جستجوی هوشمند آنلاین و دیتابیس آفلاین محلی دستگاه</p>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-bold">جستجوی هوشمند قرآن کریم</h2>
+                  <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-400 font-semibold border border-teal-500/20">
+                    <Zap className="w-3 h-3 text-amber-500" />
+                    ۱۰۰٪ آفلاین و آنی
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  جستجوی بی‌درنگ در رسم‌الخط عثمانی، متن ساده و ۳ ترجمه معتبر فارسی
+                </p>
               </div>
             </div>
             <button
@@ -203,127 +213,106 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               ref={inputRef}
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="جستجوی کلمه، عبارت قرآنی یا مفاهیم فارسی (صبر، تقوا، انفاق)..."
-              className={`w-full pr-11 pl-24 py-3 rounded-2xl text-sm font-medium border transition-all outline-none ${
+              onChange={(e) => handleQueryChange(e.target.value)}
+              placeholder="جستجوی کلمه، عبارت قرآنی یا مفاهیم فارسی (صبر، تقوا، انفاق، الصلاة)..."
+              className={`w-full pr-11 pl-20 py-3 rounded-2xl text-sm font-medium border transition-all outline-none ${
                 darkMode
                   ? 'bg-slate-800/80 border-slate-700 text-slate-100 focus:border-teal-500 focus:bg-slate-800'
                   : 'bg-white border-stone-300 text-slate-900 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/10'
               }`}
             />
             <Search className="w-5 h-5 absolute right-3.5 top-3.5 text-slate-400" />
-            
+
             <div className="absolute left-2 top-2 flex items-center gap-1">
               {query && (
                 <button
-                  onClick={() => setQuery('')}
+                  onClick={() => {
+                    setQuery('');
+                    setResults([]);
+                    setTotalCount(0);
+                    setHasSearched(false);
+                  }}
                   className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title="پاک کردن"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
-              <button
-                onClick={() => handleSearch()}
-                disabled={isLoading || query.trim().length < 2}
-                className="px-3 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs disabled:opacity-50 transition-all"
-              >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'بیاب'}
-              </button>
+              {isLoading && <Loader2 className="w-5 h-5 animate-spin text-teal-600 mx-1" />}
             </div>
           </div>
 
-          {/* انتخاب منبع جستجو (آفلاین / خودکار / آنلاین) و دامنه */}
+          {/* فیلترها: دامنه جستجو، سوره و جزء */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
-            {/* کلیدهای انتخاب منبع داده: دیتابیس آفلاین یا آنلاین */}
+            {/* دامنه جستجو (عربی / ترجمه / همه) */}
             <div className="flex items-center gap-1 bg-stone-200/70 dark:bg-slate-800 p-1 rounded-xl">
               <button
-                onClick={() => setSearchSource('auto')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-semibold ${
-                  searchSource === 'auto'
-                    ? 'bg-teal-700 text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                }`}
-                title="جستجوی همگام آنلاین و آفلاین"
-              >
-                <span>خودکار</span>
-              </button>
-              <button
-                onClick={() => setSearchSource('offline')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-semibold ${
-                  searchSource === 'offline'
-                    ? 'bg-amber-600 text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                }`}
-                title="جستجوی بدون اینترنت از حافظه داخلی و دیتابیس دستگاه"
-              >
-                <Database className="w-3 h-3" />
-                <span>دیتابیس آفلاین</span>
-              </button>
-              <button
-                onClick={() => setSearchSource('online')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-semibold ${
-                  searchSource === 'online'
-                    ? 'bg-teal-700 text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                }`}
-                title="جستجو از سرور ابری"
-              >
-                <Globe className="w-3 h-3" />
-                <span>آنلاین</span>
-              </button>
-            </div>
-
-            {/* دامنه جستجو (عربی / ترجمه / همه) */}
-            <div className="flex items-center gap-1 bg-stone-100 dark:bg-slate-800/60 p-1 rounded-xl">
-              <button
-                onClick={() => setScope('all')}
-                className={`px-2 py-0.5 rounded-lg transition-all font-medium ${
+                onClick={() => handleScopeChange('all')}
+                className={`px-3 py-1 rounded-lg transition-all font-semibold ${
                   scope === 'all'
-                    ? 'bg-white dark:bg-slate-700 text-teal-800 dark:text-teal-300 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-teal-700 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
                 }`}
               >
                 همه
               </button>
               <button
-                onClick={() => setScope('arabic')}
-                className={`px-2 py-0.5 rounded-lg transition-all font-medium ${
+                onClick={() => handleScopeChange('arabic')}
+                className={`px-3 py-1 rounded-lg transition-all font-semibold ${
                   scope === 'arabic'
-                    ? 'bg-white dark:bg-slate-700 text-teal-800 dark:text-teal-300 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-teal-700 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
                 }`}
               >
-                عربی
+                متن عربی
               </button>
               <button
-                onClick={() => setScope('translation')}
-                className={`px-2 py-0.5 rounded-lg transition-all font-medium ${
+                onClick={() => handleScopeChange('translation')}
+                className={`px-3 py-1 rounded-lg transition-all font-semibold ${
                   scope === 'translation'
-                    ? 'bg-white dark:bg-slate-700 text-teal-800 dark:text-teal-300 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-teal-700 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
                 }`}
               >
-                ترجمه
+                ترجمه فارسی
               </button>
             </div>
 
-            {/* فیلتر سوره */}
-            <div className="flex items-center gap-1.5">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
+            {/* فیلتر سوره و جزء */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={selectedSurahFilter}
+                  onChange={(e) => handleSurahFilterChange(Number(e.target.value))}
+                  className={`py-1 px-2 rounded-xl text-xs border outline-none font-medium ${
+                    darkMode
+                      ? 'bg-slate-800 border-slate-700 text-slate-200'
+                      : 'bg-white border-stone-300 text-slate-700'
+                  }`}
+                >
+                  <option value={0}>تمام سوره‌ها</option>
+                  {surahs.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.id}. سوره {s.nameArabic} ({s.namePersian})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <select
-                value={selectedSurahFilter}
-                onChange={(e) => setSelectedSurahFilter(Number(e.target.value))}
-                className={`py-1 px-2.5 rounded-xl text-xs border outline-none font-medium ${
+                value={selectedJuzFilter}
+                onChange={(e) => handleJuzFilterChange(Number(e.target.value))}
+                className={`py-1 px-2 rounded-xl text-xs border outline-none font-medium ${
                   darkMode
                     ? 'bg-slate-800 border-slate-700 text-slate-200'
                     : 'bg-white border-stone-300 text-slate-700'
                 }`}
               >
-                <option value={0}>تمام ۱۱۴ سوره</option>
-                {surahs.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.id}. سوره {s.nameArabic} ({s.namePersian})
+                <option value={0}>تمام اجزاء</option>
+                {Array.from({ length: 30 }, (_, i) => i + 1).map((j) => (
+                  <option key={j} value={j}>
+                    جزء {j}
                   </option>
                 ))}
               </select>
@@ -343,7 +332,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     key={kw}
                     onClick={() => {
                       setQuery(kw);
-                      handleSearch(kw);
+                      executeSearch(kw);
                     }}
                     className="px-2.5 py-1 rounded-lg text-xs bg-white dark:bg-slate-800 border border-stone-200 dark:border-slate-700 hover:border-teal-500 dark:hover:border-teal-400 transition-all"
                   >
@@ -361,13 +350,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             <div className="py-12 text-center space-y-3">
               <Loader2 className="w-8 h-8 mx-auto animate-spin text-teal-600 dark:text-teal-400" />
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                در حال جستجوی کلمه «{query}» {searchSource === 'offline' ? 'در دیتابیس آفلاین محلی...' : 'در قرآن کریم...'}
+                در حال جستجوی آنی در پایگاه داده قرآن...
               </p>
             </div>
           ) : error ? (
-            <div className="py-8 text-center text-sm text-red-500 font-medium">
-              {error}
-            </div>
+            <div className="py-8 text-center text-sm text-red-500 font-medium">{error}</div>
           ) : hasSearched && results.length === 0 ? (
             <div className="py-12 text-center space-y-2">
               <BookOpen className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
@@ -375,30 +362,22 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 نتیجه‌ای برای «{query}» یافت نشد.
               </h3>
               <p className="text-xs text-slate-400">
-                {searchSource === 'offline'
-                  ? 'می‌توانید منبع را روی حالت «خودکار» قرار دهید تا در صورت نیاز سرور آنلاین نیز بررسی شود.'
-                  : 'لطفاً املای کلمه را بررسی فرمایید یا با کلمه هم‌ریشه دیگری جستجو کنید.'}
+                لطفاً املای کلمه را بررسی فرمایید یا با کلمه هم‌ریشه دیگری جستجو کنید.
               </p>
             </div>
           ) : results.length > 0 ? (
             <>
               <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
                 <div className="flex items-center gap-2">
-                  <span>{results.length} آیه مرتبط یافت شد</span>
-                  {actualSourceUsed === 'offline' && (
-                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold border border-amber-500/30">
-                      <Database className="w-3 h-3" />
-                      استخراج از دیتابیس آفلاین
-                    </span>
-                  )}
-                  {actualSourceUsed === 'online' && (
-                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-400 font-semibold border border-teal-500/30">
-                      <Globe className="w-3 h-3" />
-                      سرور آنلاین
-                    </span>
-                  )}
+                  <span>
+                    {totalCount} آیه یافت شد
+                    {results.length < totalCount ? ` (نمایش ${results.length} مورد برتر)` : ''}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-100 dark:bg-slate-800 text-slate-500">
+                    زمان جستجو: {searchTimeMs} میلی‌ثانیه
+                  </span>
                 </div>
-                <span>کلیک روی هر آیه جهت انتقال به مصحف</span>
+                <span>کلیک روی هر آیه جهت باز کردن در مصحف</span>
               </div>
 
               {results.map((item) => {
@@ -428,11 +407,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         <span className="text-[11px] text-slate-400">
                           جزء {item.juzNumber} • صفحه {item.pageNumber}
                         </span>
-                        {item.isOfflineResult && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                            آفلاین
-                          </span>
-                        )}
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                          {item.matchedIn === 'arabic' ? 'متن قرآن' : 'ترجمه'}
+                        </span>
                       </div>
                       <span className="text-xs text-teal-600 dark:text-teal-400 flex items-center gap-0.5 group-hover:translate-x-[-2px] transition-transform">
                         <span>مشاهده در مصحف</span>
@@ -440,7 +417,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       </span>
                     </div>
 
-                    {/* متن آیه عربی یا ترجمه */}
+                    {/* متن آیه عربی */}
                     {item.textArabic && (
                       <p
                         className="text-base font-['Amiri_Quran'] leading-relaxed text-slate-800 dark:text-slate-100 mb-1"
@@ -450,6 +427,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       </p>
                     )}
 
+                    {/* ترجمه آیه */}
                     {item.translation && (
                       <p className="text-xs text-slate-600 dark:text-slate-400 leading-normal">
                         {highlightMatch(item.translation, query)}
@@ -461,8 +439,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             </>
           ) : (
             <div className="py-12 text-center text-xs text-slate-400 space-y-1">
-              <p>کلمه مورد نظر خود را در کادر بالا وارد کرده و کلید جستجو را لمس فرمایید.</p>
-              <p className="text-[11px]">جستجوی عربی مجهز به اعراب‌زدایی هوشمند، یکسان‌سازی الف و ی، و جستجوی آفلاین در پایگاه داده داخلی می‌باشد.</p>
+              <p>کلمه مورد نظر خود را در کادر بالا وارد فرمایید.</p>
+              <p className="text-[11px]">
+                موتور جستجو مجهز به اعراب‌زدایی هوشمند، یکسان‌سازی الف/ی، همپوشانی رسم‌الخط عثمانی و املایی، و جستجوی آفلاین در پایگاه داده داخلی می‌باشد.
+              </p>
             </div>
           )}
         </div>

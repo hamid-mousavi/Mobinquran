@@ -12,6 +12,8 @@ import { SearchModal } from './components/SearchModal';
 import { KhatmModal } from './components/KhatmModal';
 import { OfflineDownloadModal } from './components/OfflineDownloadModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { PWAUpdateBanner } from './components/PWAUpdateBanner';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { AutoScrollControls } from './components/AutoScrollControls';
 import { QuranService } from './services/quranService';
 import { getAISettings, saveAISettings } from './services/aiSettings';
@@ -448,6 +450,12 @@ export default function App() {
         onUpdateSettings={handleUpdateSettings}
         darkMode={settings.darkMode}
       />
+
+      {/* بنر به‌روزرسانی نسخه جدید با تأیید کاربر (P2-T2) */}
+      <PWAUpdateBanner isAudioPlaying={isAudioPlayerOpen && activePlayingVerseNumber !== null} />
+
+      {/* نشانگر وضعیت آفلاین در صورت قطع اتصال شبکه */}
+      <OfflineIndicator />
     </div>
   );
 }

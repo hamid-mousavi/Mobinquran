@@ -1,7 +1,6 @@
 import Dexie, { Table } from 'dexie';
 import { Surah, Verse, UserBookmark, ReadingState, ContentMetadata } from '../types';
 import { ALL_SURAHS } from '../data/surahs';
-import { INITIAL_VERSES } from '../data/initialVerses';
 
 export class QuranDatabase extends Dexie {
   surahs!: Table<Surah, number>;
@@ -12,18 +11,29 @@ export class QuranDatabase extends Dexie {
 
   constructor() {
     super('QuranMobinDB');
+
     this.version(1).stores({
       surahs: 'id, nameArabic, namePersian, revelationType, juzNumber, startPage',
       verses: 'id, surahId, [surahId+verseNumber], juzNumber, pageNumber',
       bookmarks: '++id, surahId, verseNumber, createdAt',
-      readingState: 'id'
+      readingState: 'id',
     });
+
     this.version(2).stores({
       surahs: 'id, nameArabic, namePersian, revelationType, juzNumber, startPage',
       verses: 'id, surahId, [surahId+verseNumber], juzNumber, pageNumber',
       bookmarks: '++id, surahId, verseNumber, createdAt',
       readingState: 'id',
-      contentMetadata: 'id, lastSyncedAt'
+      contentMetadata: 'id, lastSyncedAt',
+    });
+
+    // Version 3: افزودن ایندکس یکتا بر روی بوکمارک‌ها و ایندکس‌های تکمیلی آیات
+    this.version(3).stores({
+      surahs: 'id, nameArabic, namePersian, revelationType, juzNumber, startPage',
+      verses: 'id, surahId, [surahId+verseNumber], juzNumber, pageNumber, hizbQuarter',
+      bookmarks: '++id, [surahId+verseNumber], surahId, verseNumber, createdAt',
+      readingState: 'id',
+      contentMetadata: 'id, lastSyncedAt, schemaVersion',
     });
   }
 
@@ -32,17 +42,12 @@ export class QuranDatabase extends Dexie {
     if (surahsCount === 0) {
       await this.surahs.bulkAdd(ALL_SURAHS);
     }
-
-    const versesCount = await this.verses.count();
-    if (versesCount === 0) {
-      await this.verses.bulkAdd(INITIAL_VERSES);
-    }
   }
 }
 
 export const db = new QuranDatabase();
 
-// Seed data immediately in background on app load
+// Seed surahs immediately in background on app load
 db.on('ready', () => {
   return db.populateInitialData();
 });

@@ -3,11 +3,29 @@
 /* استفاده از کلاس .dark برای کنترل کامل حالت شب (به‌جای تنظیمات سیستم‌عامل) */
 @custom-variant dark (&:is(.dark *));
 
+/* فونت پایه واسط کاربری و متون فارسی (Vazirmatn - کاملاً خودمیزبان و بهینه) */
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/vazirmatn-arabic.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+FB50-FDFF, U+FE70-FEFC;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/vazirmatn-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122;
+}
+
 /* فونت رسمی عثمان طه مجمع ملک فهد (KFGQPC Hafs Smart) */
 @font-face {
   font-family: 'UthmanTaha';
-  src: url('/fonts/uthman-taha.woff2') format('woff2'),
-       url('https://cdn.jsdelivr.net/gh/thetruetruth/quran-data-kfgqpc@main/hafs-smart/font/hafssmart.8.woff2') format('woff2');
+  src: url('/fonts/uthman-taha.woff2') format('woff2');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -16,8 +34,16 @@
 /* فونت رسمی مجمع ملک فهد مدینه منوره (KFGQPC Uthmanic Script Hafs) */
 @font-face {
   font-family: 'KFGQPC-Hafs';
-  src: url('/fonts/kfgqpc-hafs.woff2') format('woff2'),
-       url('https://cdn.jsdelivr.net/gh/thetruetruth/quran-data-kfgqpc@main/hafs/font/hafs.18.woff2') format('woff2');
+  src: url('/fonts/kfgqpc-hafs.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* فونت امیری مصحفی سنتی (Amiri Quran - خودمیزبان) */
+@font-face {
+  font-family: 'Amiri Quran';
+  src: url('/fonts/amiri-quran.woff2') format('woff2');
   font-weight: normal;
   font-style: normal;
   font-display: swap;

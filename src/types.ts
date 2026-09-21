@@ -9,13 +9,24 @@ export interface Surah {
   juzNumber: number;
 }
 
+export interface SajdaInfo {
+  id: number;
+  recommended: boolean;
+  obligatory: boolean;
+}
+
 export interface Verse {
   id: number;
   surahId: number;
   verseNumber: number;
   juzNumber: number;
   pageNumber: number;
+  hizbQuarter?: number;
+  ruku?: number;
+  manzil?: number;
+  sajda?: SajdaInfo;
   textArabic: string;
+  textSimple?: string;
   translationMakarem: string;
   translationFooladvand: string;
   translationAnsarian: string;
@@ -63,6 +74,8 @@ export interface ContentMetadata {
   datasetVersion: string;
   licenseStatus: 'pending_review';
   lastSyncedAt: number;
+  schemaVersion?: number;
+  integrityHash?: string;
 }
 
 export interface ContentReference {
@@ -77,13 +90,14 @@ export interface ContentReference {
 export type ViewMode = 'verse-by-verse' | 'mushaf-page';
 export type Translator = 'makarem' | 'fooladvand' | 'ansarian';
 
-export type AIProvider = 'openrouter' | 'deepseek' | 'groq';
+export type AIProvider = 'openrouter' | 'deepseek' | 'groq' | 'gemini';
 
 export interface AISettings {
   provider: AIProvider;
   openrouterKey: string;
   deepseekKey: string;
   groqKey: string;
+  geminiKey?: string;
   model: string; // فقط برای OpenRouter استفاده می‌شود
 }
 export type ArabicFont =

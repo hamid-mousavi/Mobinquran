@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Type, Eye, Palette, Maximize2, Minimize2, AlignJustify, Check } from 'lucide-react';
+import { X, Type, Eye, Palette, Maximize2, Minimize2, AlignJustify, Check, HardDrive, ShieldCheck, ShieldAlert, Smartphone } from 'lucide-react';
 import { AppSettings, Translator, ArabicFont, LineHeight } from '../types';
 import { getArabicFontFamily, ARABIC_FONT_OPTIONS } from '../utils/fontHelper';
+import { getStorageStatus, requestStoragePersistence, StorageStatus } from '../services/pwaManager';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -19,6 +21,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   darkMode,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
+  const [requestingPersist, setRequestingPersist] = useState(false);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -27,6 +31,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      getStorageStatus().then(setStorageStatus).catch(() => {});
+    }
+  }, [isOpen]);
+
+  const handleRequestPersistence = async () => {
+    setRequestingPersist(true);
+    await requestStoragePersistence();
+    const updated = await getStorageStatus();
+    setStorageStatus(updated);
+    setRequestingPersist(false);
+  };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -250,6 +268,54 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </div>
           )}
+
+          {/* ماندگاری داده‌ها و نصب وب‌اپ (PWA & Storage Persistence) */}
+          <div className="space-y-3 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                <span>فضای آفلاین و ماندگاری حافظه</span>
+              </label>
+              <PWAInstallButton />
+            </div>
+
+            {storageStatus && (
+              <div className={`p-3 rounded-xl border text-xs space-y-2 ${
+                darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'
+              }`}>
+                <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                  <span>میزان فضای مصرفی در مرورگر:</span>
+                  <span className="font-mono font-bold text-teal-600 dark:text-teal-400">
+                    {storageStatus.usageMB} MB {Number(storageStatus.quotaMB) > 0 && ` / ${storageStatus.quotaMB} MB`}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    {storageStatus.isPersisted ? (
+                      <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                    ) : (
+                      <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+                    )}
+                    <span>
+                      {storageStatus.isPersisted
+                        ? 'ماندگاری دائم فعال است'
+                        : 'ذخیره موقت مرورگر'}
+                    </span>
+                  </div>
+                  {!storageStatus.isPersisted && (
+                    <button
+                      onClick={handleRequestPersistence}
+                      disabled={requestingPersist}
+                      className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] shadow-sm transition disabled:opacity-50"
+                    >
+                      {requestingPersist ? 'در حال ثبت...' : 'فعال‌سازی ماندگاری دائم'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 text-center">

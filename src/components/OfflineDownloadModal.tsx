@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { DownloadCloud, CheckCircle, Database, Trash2, X, AlertTriangle, Loader2 } from 'lucide-react';
+import { DownloadCloud, CheckCircle, Database, Trash2, X, AlertTriangle, Loader2, HardDrive, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { ALL_SURAHS } from '../data/surahs';
 import { QuranService } from '../services/quranService';
 import { ContentMetadata } from '../types';
+import { getStorageStatus, requestStoragePersistence, StorageStatus } from '../services/pwaManager';
 
 interface OfflineDownloadModalProps {
   isOpen: boolean;
@@ -23,6 +24,8 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
   const [isDownloading, setIsDownloading] = useState(false);
   const [failedSurahIds, setFailedSurahIds] = useState<number[]>([]);
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
+  const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
+  const [requestingPersist, setRequestingPersist] = useState(false);
   const cancelDownloadRef = useRef(false);
   const [downloadProgress, setDownloadProgress] = useState<{ current: number; total: number; surahName: string }>({
     current: 0,
@@ -37,12 +40,22 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
       setTotalVersesCount(status.downloadedVerses);
       setCachedSurahIds(surahIds);
       setContentMetadata(await QuranService.getContentMetadata());
+      const storage = await getStorageStatus();
+      setStorageStatus(storage);
       if (onDownloadedCountChange) {
         onDownloadedCountChange(surahIds.size);
       }
     } catch (err) {
       console.error('Error checking db cache:', err);
     }
+  };
+
+  const handleRequestPersistence = async () => {
+    setRequestingPersist(true);
+    await requestStoragePersistence();
+    const storage = await getStorageStatus();
+    setStorageStatus(storage);
+    setRequestingPersist(false);
   };
 
   useEffect(() => {
@@ -185,6 +198,52 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
+
+          {/* وضعیت سهمیه حافظه و ماندگاری دائمی مرورگر (P2-T5) */}
+          {storageStatus && (
+            <div
+              className={`p-3.5 rounded-2xl border text-xs space-y-2.5 ${
+                darkMode
+                  ? 'bg-slate-800/40 border-slate-700 text-slate-300'
+                  : 'bg-teal-50/50 border-teal-100 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold">
+                  <HardDrive className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  <span>فضای ذخیره‌سازی مرورگر</span>
+                </div>
+                <span className="font-mono text-[11px] text-teal-700 dark:text-teal-300">
+                  {storageStatus.usageMB} مگابایت مصرف‌شده
+                  {Number(storageStatus.quotaMB) > 0 && ` از ${storageStatus.quotaMB} MB`}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                <div className="flex items-center gap-1.5">
+                  {storageStatus.isPersisted ? (
+                    <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                  ) : (
+                    <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+                  )}
+                  <span className="text-[11px]">
+                    {storageStatus.isPersisted
+                      ? 'ماندگاری دائم فعال است (داده‌ها در پاکسازی مرورگر حذف نمی‌شوند)'
+                      : 'ماندگاری موقت است (مرورگر ممکن است در کمبود فضا پاک کند)'}
+                  </span>
+                </div>
+                {!storageStatus.isPersisted && (
+                  <button
+                    onClick={handleRequestPersistence}
+                    disabled={requestingPersist}
+                    className="px-2 py-1 rounded-lg bg-teal-600 text-white font-bold text-[10px] hover:bg-teal-700 transition disabled:opacity-50 shrink-0 mr-2"
+                  >
+                    {requestingPersist ? 'در حال ثبت...' : 'دائمی کردن'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className={`p-3.5 rounded-2xl border text-xs leading-relaxed ${
             darkMode ? 'bg-slate-800/40 border-slate-700 text-slate-300' : 'bg-stone-50 border-stone-200 text-slate-600'

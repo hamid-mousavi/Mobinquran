@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "generate:quran-core": "node scripts/generate-quran-core.mjs",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -35,6 +36,8 @@
     "esbuild": "^0.28.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.20.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^5.0.1"
   }
 }

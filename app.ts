@@ -1,4 +1,5 @@
 import express from 'express';
+import { GoogleGenAI } from '@google/genai';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
@@ -18,10 +19,11 @@ function getEnvKey(name: string): string {
 async function callOpenRouter(apiKey: string, model: string, systemInstruction: string, userPrompt: string): Promise<string> {
   const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
+    signal: AbortSignal.timeout(20000),
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
-      // اطلاعات نمایشی برای توسعه‌دهندگان OpenRouter (اختیاری - فقط ASCII)
+      // اطلاعات نمایشی برای توسعه‌دهندگان OpenRouter (فقط ASCII)
       'HTTP-Referer': 'https://quran-mobin.app',
       'X-Title': 'QuranMobinApp',
     },
@@ -32,14 +34,13 @@ async function callOpenRouter(apiKey: string, model: string, systemInstruction: 
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.65,
-      // محدودسازی سقف پاسخ تا هزینه هر درخواست پایین و مقرون‌به‌صرفه بماند
       max_tokens: 1500,
     }),
   });
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    throw new UpstreamApiError(`OpenRouter API responded with status ${response.status}: ${errText.slice(0, 300)}`, response.status);
+    throw new UpstreamApiError(`OpenRouter API responded with status ${response.status}`, response.status);
   }
 
   const json = await response.json();
@@ -53,6 +54,7 @@ async function callOpenRouter(apiKey: string, model: string, systemInstruction: 
 async function callDeepSeek(apiKey: string, systemInstruction: string, userPrompt: string): Promise<string> {
   const response = await fetch(DEEPSEEK_API_URL, {
     method: 'POST',
+    signal: AbortSignal.timeout(20000),
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
@@ -69,8 +71,7 @@ async function callDeepSeek(apiKey: string, systemInstruction: string, userPromp
   });
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    throw new UpstreamApiError(`DeepSeek API responded with status ${response.status}: ${errText.slice(0, 300)}`, response.status);
+    throw new UpstreamApiError(`DeepSeek API responded with status ${response.status}`, response.status);
   }
 
   const json = await response.json();
@@ -84,6 +85,7 @@ async function callDeepSeek(apiKey: string, systemInstruction: string, userPromp
 async function callGroq(apiKey: string, model: string, systemInstruction: string, userPrompt: string): Promise<string> {
   const response = await fetch(GROQ_API_URL, {
     method: 'POST',
+    signal: AbortSignal.timeout(20000),
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
@@ -100,8 +102,7 @@ async function callGroq(apiKey: string, model: string, systemInstruction: string
   });
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    throw new UpstreamApiError(`Groq API responded with status ${response.status}: ${errText.slice(0, 300)}`, response.status);
+    throw new UpstreamApiError(`Groq API responded with status ${response.status}`, response.status);
   }
 
   const json = await response.json();
@@ -112,25 +113,58 @@ async function callGroq(apiKey: string, model: string, systemInstruction: string
   return content;
 }
 
+let geminiClient: GoogleGenAI | null = null;
+function getGeminiClient(apiKey?: string): GoogleGenAI {
+  const key = (apiKey || getEnvKey('GEMINI_API_KEY')).trim();
+  if (apiKey || !geminiClient) {
+    const client = new GoogleGenAI(key ? { apiKey: key } : {});
+    if (!apiKey) geminiClient = client;
+    return client;
+  }
+  return geminiClient;
+}
+
+async function callGemini(apiKey: string, systemInstruction: string, userPrompt: string): Promise<string> {
+  const ai = getGeminiClient(apiKey);
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: userPrompt,
+    config: {
+      systemInstruction,
+      temperature: 0.65,
+      maxOutputTokens: 1500,
+    },
+  });
+
+  const content = response.text;
+  if (!content) {
+    throw new Error('Gemini API returned an empty response.');
+  }
+  return content;
+}
+
 // ساخت اپلیکیشن Express با تمام اندپوینت‌های API (برای اجرای محلی و تابع سرورلس Vercel مشترک است)
 export function createApp() {
   const app = express();
 
-  app.use(express.json());
+  app.use(express.json({ limit: '16kb' }));
 
   // اندپوینت سلامتی سرور
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // وضعیت سرویس‌های هوش مصنوعی (وجود کلید سرور برای هر سرویس)
+  // وضعیت سرویس‌های هوش مصنوعی (بر اساس P0-T5 فقط اعلام فعال بودن کلی)
   app.get('/api/ai/status', (req, res) => {
+    const isAiEnabled = getEnvKey('AI_ENABLED') !== 'false';
+    const hasAnyKey = !!(
+      getEnvKey('GEMINI_API_KEY') ||
+      getEnvKey('OPENROUTER_API_KEY') ||
+      getEnvKey('DEEPSEEK_API_KEY') ||
+      getEnvKey('GROQ_API_KEY')
+    );
     res.json({
-      providers: {
-        openrouter: { hasServerKey: !!getEnvKey('OPENROUTER_API_KEY') },
-        deepseek: { hasServerKey: !!getEnvKey('DEEPSEEK_API_KEY') },
-        groq: { hasServerKey: !!getEnvKey('GROQ_API_KEY') },
-      },
+      enabled: isAiEnabled && hasAnyKey,
     });
   });
 
@@ -145,6 +179,7 @@ export function createApp() {
     }
 
     // اگر در حافظه کش سرور موجود است، فوری تحویل می‌دهیم
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     if (surahCache.has(surahId)) {
       const cached = surahCache.get(surahId)!;
       return res.json({
@@ -330,6 +365,7 @@ export function createApp() {
       return res.status(400).json({ error: 'شماره صفحه مصحف باید بین ۱ تا ۶۰۴ باشد.' });
     }
 
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     if (pageCache.has(pageNumber)) {
       return res.json(pageCache.get(pageNumber));
     }
@@ -395,138 +431,165 @@ export function createApp() {
     }
   });
 
-  // اندپوینت تخصصی تدبّر هوشمند قرآنی (OpenRouter پیش‌فرض / DeepSeek / Groq)
+  // اندپوینت تخصصی تدبّر هوشمند قرآنی (سخت‌سازی کامل، بدون نشت کلید یا انتساب دروغین)
   app.post('/api/ai/tadabbur', async (req, res) => {
     try {
-      const {
-        surahName,
-        verseNumber,
-        arabicText,
-        translation,
-        userQuestion,
-        mode,
-        agentId = 'nemoneh',
-        provider = 'groq',
-        apiKey = '',
-        model = 'deepseek/deepseek-chat-v3-0324'
-      } = req.body;
-
-      const normalizedProvider = provider === 'deepseek' || provider === 'groq' ? provider : 'openrouter';
-      const personalKey = typeof apiKey === 'string' ? apiKey.trim() : '';
-      const serverKey = normalizedProvider === 'deepseek'
-        ? getEnvKey('DEEPSEEK_API_KEY')
-        : normalizedProvider === 'groq'
-        ? getEnvKey('GROQ_API_KEY')
-        : getEnvKey('OPENROUTER_API_KEY');
-      const effectiveKey = personalKey || serverKey;
-      const safeModel = typeof model === 'string' && model.trim() ? model.trim().slice(0, 120) : 'deepseek/deepseek-chat-v3-0324';
-
-      // پاسخ‌های پیش‌فرض و جامع بر اساس ایجنت انتخابی در حالت آفلاین یا ایجنت دانشنامه درون‌برنامه
-      if (agentId === 'offline_knowledge' || !effectiveKey) {
-        let offlineReply = '';
-        if (agentId === 'allameh') {
-          offlineReply = `[دیدگاه ایجنت علامه - مبتنی بر تفسیر المیزان]:\n\nدر تدبر آیه شریفه «${arabicText || 'آیه مبارکه'}» (سوره ${surahName || ''}، آیه ${verseNumber || ''}):\n\nعلامه طباطبایی (ره) در تبیین این آیه بر بطون توحیدی، حقیقت اخلاص و اتصال وجودی انسان با مبدأ آفرینش تأکید می‌فرمایند. در روش «تفسیر قرآن به قرآن»، این مفهوم هم‌افق با آیات دیگری است که اصالت را به تقوا و طهارت باطن می‌دهند. پیام محوری آیه، زدودن غبار غفلت و بازگشت به فطرت توحیدی است.`;
-        } else if (agentId === 'adib') {
-          offlineReply = `[دیدگاه ایجنت ادیب - پژوهشگر لغوی و اعجاز بیانی]:\n\nتحلیل لغوی و بلاغی آیه «${arabicText || ''}»:\n\n۱. ساختار واژگان: گزینش کلمات در این آیه دارای تناسب آوایی و هماهنگی موسیقیایی شگفت‌انگیزی است.\n۲. فصاحت و بلاغت: ایجاز و اختصار در بیان، در عین انتقال عمیق‌ترین مفاهیم معنوی، از نشانه‌های روشن اعجاز کلام الهی در این آیه است.\n۳. بار معنایی: ریشه کلمات نشان می‌دهد که هدایت الهی پیوسته و فزاینده است و هر واژه نقشی بی‌بدیل در فهم سیاق دارد.`;
-        } else if (agentId === 'kalam') {
-          offlineReply = `[دیدگاه ایجنت پژوهش - مباحث کلامی و پاسخ به شبهات]:\n\nپاسخ مستدل و تبیین عقلی پیرامون آیه «${arabicText || ''}»:\n\nاین آیه شریف پاسخی قاطع به تردیدها درباره حکمت و عدل الهی است. عقل سلیم درمی‌یابد که نظام تکوین و تشریع بر مقتضای رحمت و آزمون سرشته شده است. آیات هم‌افق تصریح دارند که هیچ بنده‌ای فراتر از وسعش مکلف نبوده و هدایت برای جویندگان حقیقت تضمین شده است.`;
-        } else {
-          // nemoneh or default
-          offlineReply = `[دیدگاه ایجنت نمونه - هدایت اخلاقی و آرامش زندگی]:\n\nنکات کاربردی و پیام‌های آیه «${arabicText || ''}» برای زندگی امروز:\n\n۱. آرامش در طوفان‌ها: یاد خداوند و توکل بر او، اضطراب‌های روزمره را به اطمینان بدل می‌سازد.\n۲. راهکار عملی: در مواجهه با چالش‌ها، صبوری همراه با عمل صالح و پرهیز از شتابزدگی توصیه شده است.\n۳. نگاه امیدوارانه: در تفسیر نمونه تصریح شده که درهای رحمت پروردگار همواره باز است و بن‌بستی در مدار توحید وجود ندارد.`;
-        }
-
-        return res.json({
-          reply: offlineReply,
-          agentId,
-          provider: normalizedProvider,
-          isOfflineKnowledge: true
+      const isAiEnabled = getEnvKey('AI_ENABLED') !== 'false';
+      if (!isAiEnabled) {
+        return res.status(503).json({
+          error: 'سرویس هوش مصنوعی در حال حاضر غیرفعال است.',
+          code: 'ai_unavailable'
         });
       }
 
-      // ساخت پرامپت سیستمی متناسب با ایجنت انتخاب‌شده
+      const rawUserQuestion = typeof req.body?.userQuestion === 'string' ? req.body.userQuestion.trim() : '';
+      const rawArabicText = typeof req.body?.arabicText === 'string' ? req.body.arabicText.trim() : '';
+      const rawTranslation = typeof req.body?.translation === 'string' ? req.body.translation.trim() : '';
+      const surahName = typeof req.body?.surahName === 'string' ? req.body.surahName.trim().slice(0, 50) : '';
+      const verseNumber = typeof req.body?.verseNumber === 'number' ? req.body.verseNumber : 0;
+      const mode = req.body?.mode;
+      const agentId = typeof req.body?.agentId === 'string' ? req.body.agentId.trim() : 'moral';
+
+      // سقف طول ورودی‌ها بر اساس P0-T5
+      if (rawUserQuestion.length > 500) {
+        return res.status(400).json({ error: 'طول پرسش نباید بیش از ۵۰۰ نویسه باشد.' });
+      }
+      if (rawArabicText.length > 1500) {
+        return res.status(400).json({ error: 'طول متن عربی نباید بیش از ۱۵۰۰ نویسه باشد.' });
+      }
+      if (rawTranslation.length > 1000) {
+        return res.status(400).json({ error: 'طول ترجمه نباید بیش از ۱۰۰۰ نویسه باشد.' });
+      }
+
+      // تعیین ارائه‌دهنده و کلید معتبر سمت سرور (کلید کلاینت پذیرفته نمی‌شود)
+      const requestedProvider = typeof req.body?.provider === 'string' ? req.body.provider.trim() : '';
+      let effectiveProvider: 'gemini' | 'groq' | 'deepseek' | 'openrouter' = 'gemini';
+
+      if (requestedProvider === 'groq' && getEnvKey('GROQ_API_KEY')) {
+        effectiveProvider = 'groq';
+      } else if (requestedProvider === 'deepseek' && getEnvKey('DEEPSEEK_API_KEY')) {
+        effectiveProvider = 'deepseek';
+      } else if (requestedProvider === 'openrouter' && getEnvKey('OPENROUTER_API_KEY')) {
+        effectiveProvider = 'openrouter';
+      } else if (getEnvKey('GEMINI_API_KEY')) {
+        effectiveProvider = 'gemini';
+      } else if (getEnvKey('GROQ_API_KEY')) {
+        effectiveProvider = 'groq';
+      } else if (getEnvKey('OPENROUTER_API_KEY')) {
+        effectiveProvider = 'openrouter';
+      } else if (getEnvKey('DEEPSEEK_API_KEY')) {
+        effectiveProvider = 'deepseek';
+      }
+
+      const serverKey = effectiveProvider === 'gemini'
+        ? getEnvKey('GEMINI_API_KEY')
+        : effectiveProvider === 'deepseek'
+        ? getEnvKey('DEEPSEEK_API_KEY')
+        : effectiveProvider === 'groq'
+        ? getEnvKey('GROQ_API_KEY')
+        : getEnvKey('OPENROUTER_API_KEY');
+
+      if (!serverKey) {
+        return res.status(503).json({
+          error: 'سرویس هوش مصنوعی در دسترس نیست (کلید معتبر در سرور تنظیم نشده است).',
+          code: 'ai_unavailable'
+        });
+      }
+
+      // رویکردهای تدبر بدون انتساب ناروا به مؤلفان خاص (بر اساس P0-T2)
       let systemInstruction = '';
-      let agentTitle = '';
+      let approachTitle = '';
 
       switch (agentId) {
+        case 'conceptual':
         case 'allameh':
-          agentTitle = 'علامه (مفسر المیزان)';
-          systemInstruction = `شما «ایجنت علامه»، متخصص در مکتب تفسیری علامه طباطبایی و رویکرد «تفسیر قرآن به قرآن» و مباحث عمیق فلسفی، باطنی و معرفتی هستید.
-وظیفه شما:
-۱. تبیین بطون عمیق آیات، غایات توحیدی و پیوند این آیه با سایر آیات قرآن کریم.
-۲. استفاده از نثری فاخر، عمیق، محققانه و مستدل.
-۳. پرهیز از سطحی‌نگری و پرداختن به ریشه‌های وجودی و اخلاص در بندگی.`;
+          approachTitle = 'رویکرد تدبّر مفهومی و معارفی';
+          systemInstruction = `شما دستیار تدبّر قرآنی با رویکرد تأمل مفهومی، معارفی و توحیدی هستید.
+وظایف:
+۱. تبیین پیام‌های معنوی، توحیدی و پیوند مفهومی این آیه با آموزه‌های کلی قرآن کریم.
+۲. کمک به تعمیق اندیشه و افق‌گشایی برای مخاطب.
+۳. پرهیز از ادعای کشف قطعی بطون یا انتساب نامعتبر به تفاسیر خاص.`;
           break;
 
+        case 'literary':
         case 'adib':
-          agentTitle = 'ادیب (پژوهشگر لغوی و صرف و نحو)';
-          systemInstruction = `شما «ایجنت ادیب»، پژوهشگر فصاحت، بلاغت، ریشه‌شناسی واژگان قرآنی و وجوه اعجاز بیانی الفاظ وحی هستید.
-وظیفه شما:
-۱. تحلیل ریشه لغوی واژگان کلیدی آیه، اشتقاق و دلالت‌های معنایی دقیق آن‌ها.
-۲. اشاره به نکات صرفی، نحوی و زیبایی‌های استعاره و بلاغت قرآنی.
-۳. پاسخ با دقتی ادیبانه و آموزشی در قالب بخش‌های منظم.`;
+          approachTitle = 'رویکرد ادبی و واژه‌شناسی';
+          systemInstruction = `شما دستیار تدبّر قرآنی با رویکرد واژه‌شناسی و ظرافت‌های ادبی هستید.
+وظایف:
+۱. تحلیل ریشه‌شناسی واژگان کلیدی آیه، اشتقاق و معانی لغوی.
+۲. بیان تناسب واژه‌ها و ساختار بیانی آیه شریفه.
+۳. نگارش با لحنی علمی، آموزشی و ساختاریافته.`;
           break;
 
+        case 'rational':
         case 'kalam':
-          agentTitle = 'پژوهش (پاسخ به سوالات کلامی و شبهات)';
-          systemInstruction = `شما «ایجنت پژوهش»، متکلم و پاسخ‌دهنده به پرسش‌های فکری، فلسفی، شبهات پیرامون عدل الهی، قضا و قدر و معارف اسلامی هستید.
-وظیفه شما:
-۱. پاسخ عقلانی، متقن، صبورانه و منطقی با اتکا به براهین روشن قرآنی و عقلی.
-۲. تشریح سوءتفاهم‌ها با لحنی علمی، احترام‌آمیز و اقناع‌کننده.`;
+          approachTitle = 'رویکرد عقلی و استدلالی';
+          systemInstruction = `شما دستیار تدبّر قرآنی با رویکرد عقلانی و استدلالی هستید.
+وظایف:
+۱. پاسخ عقلانی، متقن، صبورانه و منطقی به پرسش‌های فکری و اعتقادی در سیاق آیه.
+۲. پرهیز از تعصب و مجادله؛ تکیه بر استدلال متین و مشترکات توحیدی.`;
           break;
 
+        case 'moral':
         case 'nemoneh':
         default:
-          agentTitle = 'نمونه (هدایت اخلاقی و سبک زندگی)';
-          systemInstruction = `شما «ایجنت نمونه»، متخصص در مکتب تفسیری تفسیر نمونه و راهکارهای عملی زندگی امروز هستید.
-وظیفه شما:
-۱. تطبیق آموزه‌های آیه بر زندگی روزمره، رهایی از اضطراب، روابط انسانی و تربیت اخلاقی.
-۲. ارائه پاسخ با لحنی گرم، صمیمی، امیدبخش، سرشار از آرامش و نثر فارسی بسیار روان.
-۳. ارائه راهکارهای گام‌به‌گام و ملموس قرآنی برای پرسش‌های کاربر.`;
+          approachTitle = 'رویکرد اخلاقی، تربیتی و کاربردی';
+          systemInstruction = `شما دستیار تدبّر قرآنی با رویکرد اخلاقی، تربیتی و سبک زندگی هستید.
+وظایف:
+۱. استخراج نکات کاربردی آیه برای زندگی امروز، امیدبخشی و آرامش خاطر.
+۲. پرهیز مطلق از صدور فتوای فقهی یا ادعای نقل متن از کتابی خاص بدون استناد.
+۳. نگارش با لحنی گرم، محترمانه، صمیمی و فارسی سلیس.`;
           break;
       }
 
       let userPrompt = '';
       if (mode === 'verse_reflection') {
-        userPrompt = `لطفاً از دیدگاه تخصصی خود (${agentTitle}) پیرامون این آیه مبارکه تدبّر و راهنمایی فرمایید:
+        userPrompt = `با رویکرد «${approachTitle}» پیرامون آیه مبارکه زیر تدبّر و راهنمایی فرمایید:
 سوره: ${surahName}
 شماره آیه: ${verseNumber}
-متن عربی: ${arabicText}
-ترجمه: ${translation}
-${userQuestion ? `پرسش خاص کاربر: ${userQuestion}` : ''}`;
+متن عربی: ${rawArabicText}
+ترجمه: ${rawTranslation}
+${rawUserQuestion ? `پرسش خاص کاربر: ${rawUserQuestion}` : ''}`;
       } else if (mode === 'topic_guidance') {
-        userPrompt = `کاربر در خصوص این موضوع از شما (${agentTitle}) هدایت و بینش قرآنی می‌طلبد:
-«${userQuestion}»
-لطفاً با استناد به آیات و رویکرد تخصصی خود تبیین فرمایید.`;
+        userPrompt = `پرسش یا موضوع کاربر:
+«${rawUserQuestion}»
+لطفاً با رویکرد «${approachTitle}» و بر مدار هدایت‌های قرآنی پاسخ دهید.`;
       } else {
-        userPrompt = userQuestion || `درباره آیه ${verseNumber} سوره ${surahName} تحلیل خود را به عنوان ${agentTitle} ارائه دهید.`;
+        userPrompt = rawUserQuestion || `درباره آیه ${verseNumber} سوره ${surahName} با رویکرد «${approachTitle}» تحلیل خود را ارائه دهید.`;
       }
 
-      const replyText = normalizedProvider === 'deepseek'
-        ? await callDeepSeek(effectiveKey, systemInstruction, userPrompt)
-        : normalizedProvider === 'groq'
-        ? await callGroq(effectiveKey, 'openai/gpt-oss-120b', systemInstruction, userPrompt)
-        : await callOpenRouter(effectiveKey, safeModel, systemInstruction, userPrompt);
+      // مدل‌های مجاز سمت سرور (فهرست مجاز سخت‌گیرانه)
+      const replyText = effectiveProvider === 'gemini'
+        ? await callGemini(serverKey, systemInstruction, userPrompt)
+        : effectiveProvider === 'deepseek'
+        ? await callDeepSeek(serverKey, systemInstruction, userPrompt)
+        : effectiveProvider === 'groq'
+        ? await callGroq(serverKey, 'openai/gpt-oss-120b', systemInstruction, userPrompt)
+        : await callOpenRouter(serverKey, 'deepseek/deepseek-chat-v3-0324', systemInstruction, userPrompt);
 
-      return res.json({ reply: replyText, agentId, agentTitle, provider: normalizedProvider, model: safeModel, usedPersonalKey: !!personalKey });
+      return res.json({
+        reply: replyText,
+        approachTitle,
+        provider: effectiveProvider,
+      });
     } catch (error: any) {
       console.error('AI Tadabbur API Error:', error);
       const status = error instanceof UpstreamApiError ? error.status : 502;
       return res.status(status).json({
         error: 'خطا در برقراری ارتباط با سرویس تدبّر هوشمند.',
-        details: error?.message || String(error)
+        code: 'upstream_error'
       });
     }
   });
 
-  // مدیریت خطاهای پیش‌بینی‌نشده به‌صورت JSON تا جزئیات واقعی برای کلاینت قابل نمایش باشد
+  // مدیریت خطاهای پیش‌بینی‌نشده به‌صورت امن و بدون نشت اطلاعات داخلی
   app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Unhandled API Error:', err);
     if (res.headersSent) {
       return;
     }
     res.status(err?.statusCode || 500).json({
-      error: 'خطا در پردازش درخواست.',
-      details: err?.message || String(err)
+      error: 'خطا در پردازش درخواست.'
     });
   });
 

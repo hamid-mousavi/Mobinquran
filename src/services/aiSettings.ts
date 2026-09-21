@@ -19,6 +19,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   openrouterKey: '',
   deepseekKey: '',
   groqKey: '',
+  geminiKey: '',
   model: DEFAULT_AI_MODEL,
 };
 
@@ -43,7 +44,9 @@ export function saveAISettings(settings: AISettings): void {
 }
 
 export function hasPersonalKey(settings: AISettings, provider: AIProvider): boolean {
-  const key = provider === 'deepseek'
+  const key = provider === 'gemini'
+    ? settings.geminiKey
+    : provider === 'deepseek'
     ? settings.deepseekKey
     : provider === 'groq'
     ? settings.groqKey
