@@ -21,6 +21,7 @@ export interface Verse {
   translationAnsarian: string;
   tafsirNemoneh?: string;
   tafsirMizan?: string;
+  references?: ContentReference[];
   rootWords?: string[];
   audioUrl?: string;
 }
@@ -40,6 +41,37 @@ export interface ReadingState {
   verseNumber: number;
   pageNumber: number;
   updatedAt: number;
+}
+
+export interface OfflineContentStatus {
+  downloadedSurahIds: number[];
+  downloadedVerses: number;
+  totalVerses: number;
+  isComplete: boolean;
+}
+
+export interface OfflineDownloadResult {
+  downloadedSurahIds: number[];
+  failedSurahIds: number[];
+  cancelled: boolean;
+}
+
+export interface ContentMetadata {
+  id: string;
+  sourceName: string;
+  sourceUrl: string;
+  datasetVersion: string;
+  licenseStatus: 'pending_review';
+  lastSyncedAt: number;
+}
+
+export interface ContentReference {
+  sourceTitle: string;
+  sourceUrl?: string;
+  volume?: string;
+  page?: string;
+  section?: string;
+  licenseStatus: 'pending_review' | 'verified';
 }
 
 export type ViewMode = 'verse-by-verse' | 'mushaf-page';

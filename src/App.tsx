@@ -34,6 +34,7 @@ export default function App() {
   const [surahs, setSurahs] = useState<Surah[]>(ALL_SURAHS);
   const [currentSurah, setCurrentSurah] = useState<Surah>(ALL_SURAHS[0]); // سوره حمد به عنوان پیش‌فرض
   const [verses, setVerses] = useState<Verse[]>([]);
+  const [isCorePackageReady, setIsCorePackageReady] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('verse-by-verse');
   const [currentMushafPage, setCurrentMushafPage] = useState<number>(1);
 
@@ -110,8 +111,16 @@ export default function App() {
     loadData();
   }, []);
 
+  // بستهٔ محلی نسخه‌دار متن و ترجمه‌ها را پیش از درخواست شبکه نصب می‌کنیم.
+  useEffect(() => {
+    QuranService.ensureBundledCorePackage()
+      .catch(() => false)
+      .finally(() => setIsCorePackageReady(true));
+  }, []);
+
   // بارگذاری آیات سوره انتخابی (آفلاین یا آنلاین با کش ماندگار)
   useEffect(() => {
+    if (!isCorePackageReady) return;
     let isCancelled = false;
     async function loadVerses() {
       setIsLoadingVerses(true);
@@ -151,7 +160,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [currentSurah.id, retryTrigger]);
+  }, [currentSurah.id, retryTrigger, isCorePackageReady]);
 
   const handleRetryLoading = () => {
     setRetryTrigger((prev) => prev + 1);

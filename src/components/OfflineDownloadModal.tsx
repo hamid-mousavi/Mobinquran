@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DownloadCloud, CheckCircle, Database, Trash2, X, AlertTriangle, Loader2 } from 'lucide-react';
-import { db } from '../db/quranDb';
 import { ALL_SURAHS } from '../data/surahs';
 import { QuranService } from '../services/quranService';
+import { ContentMetadata } from '../types';
 
 interface OfflineDownloadModalProps {
   isOpen: boolean;
@@ -19,7 +19,11 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
 }) => {
   const [cachedSurahIds, setCachedSurahIds] = useState<Set<number>>(new Set());
   const [totalVersesCount, setTotalVersesCount] = useState<number>(0);
+  const [contentMetadata, setContentMetadata] = useState<ContentMetadata | undefined>();
   const [isDownloading, setIsDownloading] = useState(false);
+  const [failedSurahIds, setFailedSurahIds] = useState<number[]>([]);
+  const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
+  const cancelDownloadRef = useRef(false);
   const [downloadProgress, setDownloadProgress] = useState<{ current: number; total: number; surahName: string }>({
     current: 0,
     total: 0,
@@ -28,11 +32,11 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
 
   const checkStorage = async () => {
     try {
-      const allVerses = await db.verses.toArray();
-      setTotalVersesCount(allVerses.length);
-      const surahIds = new Set<number>();
-      allVerses.forEach((v) => surahIds.add(v.surahId));
+      const status = await QuranService.getOfflineContentStatus();
+      const surahIds = new Set(status.downloadedSurahIds);
+      setTotalVersesCount(status.downloadedVerses);
       setCachedSurahIds(surahIds);
+      setContentMetadata(await QuranService.getContentMetadata());
       if (onDownloadedCountChange) {
         onDownloadedCountChange(surahIds.size);
       }
@@ -51,6 +55,9 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
 
   const handleDownloadBatch = async (surahList: number[]) => {
     setIsDownloading(true);
+    cancelDownloadRef.current = false;
+    setFailedSurahIds([]);
+    setDownloadNotice(null);
     const needed = surahList.filter((id) => !cachedSurahIds.has(id));
 
     if (needed.length === 0) {
@@ -60,28 +67,22 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
     }
 
     setDownloadProgress({ current: 0, total: needed.length, surahName: '' });
-
-    for (let i = 0; i < needed.length; i++) {
-      const sId = needed[i];
-      const sMeta = ALL_SURAHS.find((s) => s.id === sId);
-      setDownloadProgress({
-        current: i + 1,
-        total: needed.length,
-        surahName: sMeta ? `سوره ${sMeta.nameArabic}` : `سوره شماره ${sId}`,
-      });
-
-      try {
-        await QuranService.getVersesBySurah(sId);
-      } catch (e) {
-        console.warn(`Failed downloading surah ${sId}:`, e);
-      }
-
-      // توقف کوتاه برای جلوگیری از فشار روی سرور
-      await new Promise((r) => setTimeout(r, 60));
-    }
+    const result = await QuranService.downloadSurahs(
+      needed,
+      (current, total, surah) => setDownloadProgress({ current, total, surahName: `سوره ${surah.nameArabic}` }),
+      () => cancelDownloadRef.current,
+    );
 
     await checkStorage();
     setIsDownloading(false);
+    setFailedSurahIds(result.failedSurahIds);
+    if (result.cancelled) {
+      setDownloadNotice('دانلود متوقف شد؛ می‌توانید بعداً از همان بسته ادامه دهید.');
+    } else if (result.failedSurahIds.length > 0) {
+      setDownloadNotice(`${result.failedSurahIds.length} سوره کامل دریافت نشد. اتصال را بررسی و دوباره تلاش کنید.`);
+    } else {
+      setDownloadNotice('دانلود و بررسی کامل بودن داده‌ها با موفقیت انجام شد.');
+    }
   };
 
   const handleDownloadJuz30 = () => {
@@ -102,9 +103,13 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
     handleDownloadBatch(allIds);
   };
 
+  const handleRetryFailed = () => {
+    if (failedSurahIds.length > 0) handleDownloadBatch(failedSurahIds);
+  };
+
   const handleClearCache = async () => {
     if (window.confirm('آیا از پاکسازی تمام سوره‌ها و آیات ذخیره‌شده آفلاین اطمینان دارید؟ (تنظیمات و نشانه‌گذاری‌ها محفوظ خواهند ماند)')) {
-      await db.verses.clear();
+      await QuranService.clearOfflineContent();
       await checkStorage();
     }
   };
@@ -181,6 +186,22 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
             </button>
           </div>
 
+          <div className={`p-3.5 rounded-2xl border text-xs leading-relaxed ${
+            darkMode ? 'bg-slate-800/40 border-slate-700 text-slate-300' : 'bg-stone-50 border-stone-200 text-slate-600'
+          }`}>
+            <div className="font-bold text-slate-800 dark:text-slate-100 mb-1">منبع دادهٔ فعلی</div>
+            <p>
+              {contentMetadata
+                ? `${contentMetadata.sourceName} • ${contentMetadata.datasetVersion}`
+                : 'پس از نخستین دریافت کامل آیات، منبع و زمان همگام‌سازی اینجا ثبت می‌شود.'}
+            </p>
+            {contentMetadata && (
+              <p className="mt-1 text-[11px] text-slate-400">
+                آخرین همگام‌سازی: {new Date(contentMetadata.lastSyncedAt).toLocaleString('fa-IR')} • وضعیت مجوز: در حال بررسی
+              </p>
+            )}
+          </div>
+
           {/* نوار پیشرفت در حین دانلود */}
           {isDownloading && (
             <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 space-y-2.5">
@@ -199,6 +220,27 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
                   style={{ width: `${percent}%` }}
                 />
               </div>
+              <button
+                onClick={() => { cancelDownloadRef.current = true; }}
+                className="text-xs font-bold text-teal-700 dark:text-teal-300 hover:underline"
+              >
+                توقف پس از پایان سورهٔ جاری
+              </button>
+            </div>
+          )}
+
+          {downloadNotice && (
+            <div className={`p-3 rounded-xl text-xs leading-relaxed border ${
+              failedSurahIds.length > 0
+                ? 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'
+                : 'bg-teal-50 border-teal-200 text-teal-900 dark:bg-teal-950/30 dark:border-teal-800 dark:text-teal-200'
+            }`}>
+              <p>{downloadNotice}</p>
+              {failedSurahIds.length > 0 && (
+                <button onClick={handleRetryFailed} className="mt-2 font-bold underline">
+                  تلاش مجدد برای {failedSurahIds.length} سوره
+                </button>
+              )}
             </div>
           )}
 
@@ -278,14 +320,14 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
               </div>
               <button
                 onClick={handleDownloadAllQuran}
-                disabled={isDownloading || cachedSurahIds.size === 114}
+                disabled={isDownloading || (cachedSurahIds.size === 114 && totalVersesCount >= 6236)}
                 className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold text-xs transition-all active:scale-95 ${
-                  cachedSurahIds.size === 114
+                  cachedSurahIds.size === 114 && totalVersesCount >= 6236
                     ? 'bg-stone-100 dark:bg-slate-800 text-slate-400 cursor-default'
                     : 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
                 }`}
               >
-                {cachedSurahIds.size === 114 ? (
+                {cachedSurahIds.size === 114 && totalVersesCount >= 6236 ? (
                   <>
                     <CheckCircle className="w-3.5 h-3.5 text-teal-500" />
                     <span>کامل ذخیره شد</span>
@@ -301,7 +343,7 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
           </div>
 
           <p className="text-[11px] text-slate-400 leading-normal pt-1">
-            * با دانلود هر بسته، نیازی به اینترنت نخواهید داشت و برنامه به صورت کاملاً آفلاین در حالت پرواز نیز کار می‌کند.
+            * فقط سوره‌هایی که شمار کامل آیاتشان ذخیره شده باشد «دانلودشده» محسوب می‌شوند. صوت و پاسخ هوش مصنوعی همچنان به اینترنت نیاز دارند.
           </p>
         </div>
       </div>

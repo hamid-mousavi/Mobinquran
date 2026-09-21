@@ -494,6 +494,12 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           )}
         </div>
 
+        <div className={`px-3 py-2 text-[10px] leading-relaxed border-b ${
+          darkMode ? 'bg-amber-950/20 border-amber-900/50 text-amber-200' : 'bg-amber-50 border-amber-100 text-amber-900'
+        }`}>
+          پاسخ‌ها با هوش مصنوعی تولید می‌شوند و ممکن است خطا داشته باشند. برای پژوهش، فتوا یا تصمیم‌های مهم به منابع معتبر و اهل‌نظر مراجعه کنید.
+        </div>
+
         {/* برچسب آیه انتخابی اگر وجود دارد */}
         {currentVerse && (
           <div

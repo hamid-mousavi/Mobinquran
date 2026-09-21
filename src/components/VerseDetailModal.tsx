@@ -125,7 +125,7 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            <span>تفاسیر معتبر</span>
+            <span>راهنمای تدبّر</span>
           </button>
 
           <button
@@ -166,9 +166,14 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
 
         {/* محتوای تب فعال */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {/* ۱. تب تفاسیر معتبر */}
+          {/* این داده‌ها تا زمان اتصال به منبع دارای ارجاع، تفسیرِ قابل استناد نیستند. */}
           {activeTab === 'tafsir' && (
             <div className="space-y-4">
+              <div className={`p-3 rounded-xl text-xs leading-relaxed border ${
+                darkMode ? 'bg-amber-950/30 border-amber-800/60 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'
+              }`}>
+                این بخش فعلاً یادداشت راهنمای تدبّر است، نه متن یا چکیدهٔ مستندِ تفسیر. برای استناد پژوهشی، منبع و ارجاع صفحه را بررسی کنید.
+              </div>
               {/* تفسیر نمونه */}
               <div className={`p-4 rounded-2xl border space-y-2 ${
                 darkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-white border-stone-200 shadow-sm'
@@ -177,13 +182,13 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
                     <h4 className="font-bold text-sm text-teal-700 dark:text-teal-300">
-                      چکیده تفسیر نمونه (آیت‌الله مکارم شیرازی)
+                      راهنمای تدبّر اخلاقی
                     </h4>
                   </div>
                   <button
                     onClick={() => handleCopyText('nemoneh', verse.tafsirNemoneh || '')}
                     className="text-slate-400 hover:text-teal-600 p-1 rounded"
-                    title="کپی متن تفسیر"
+                    title="کپی متن راهنما"
                   >
                     {copiedKey === 'nemoneh' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                   </button>
@@ -201,19 +206,19 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-600" />
                     <h4 className="font-bold text-sm text-amber-700 dark:text-amber-300">
-                      نکات تحلیلی از تفسیر المیزان (علامه طباطبایی)
+                      راهنمای تدبّر مفهومی
                     </h4>
                   </div>
                   <button
                     onClick={() => handleCopyText('mizan', verse.tafsirMizan || '')}
                     className="text-slate-400 hover:text-amber-600 p-1 rounded"
-                    title="کپی متن تفسیر"
+                    title="کپی متن راهنما"
                   >
                     {copiedKey === 'mizan' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
                 <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 text-justify">
-                  {verse.tafsirMizan || 'تبیین توحیدی و فلسفی آیه در المیزان تأکید بر حقیقت باطنی و مقام اخلاص دارد.'}
+                  {verse.tafsirMizan || 'برای این آیه هنوز راهنمای تدبّر افزوده نشده است.'}
                 </p>
               </div>
             </div>
@@ -280,7 +285,7 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
                       </span>
                     ))
                   ) : (
-                    <span className="text-xs text-slate-400">ریشه‌یابی واژگان این آیه ثبت شده است.</span>
+                    <span className="text-xs text-slate-400">دادهٔ ریشه‌شناسی این آیه هنوز افزوده نشده است.</span>
                   )}
                 </div>
               </div>
@@ -292,7 +297,7 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
                   راهنمای ادبی و صرفی:
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  الفاظ این آیه متضمن لطایف بلاغی قرآن کریم در ایجاز و حسن تعبیر است. برای تحلیل کامل اعرابی هر کلمه می‌توانید روی دکمه «تدبّر هوشمند» کلیک نمایید.
+                  تحلیل صرفی و نحویِ مستند برای این آیه هنوز افزوده نشده است. پاسخ هوش مصنوعی جایگزین منبع تخصصی یا پژوهش معتبر نیست.
                 </p>
               </div>
             </div>

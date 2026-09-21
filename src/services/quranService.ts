@@ -1,9 +1,127 @@
 import { db } from '../db/quranDb';
-import { Surah, Verse, ReadingState, UserBookmark } from '../types';
+import { Surah, Verse, ReadingState, UserBookmark, OfflineContentStatus, OfflineDownloadResult, ContentMetadata } from '../types';
 import { ALL_SURAHS } from '../data/surahs';
 import { INITIAL_VERSES } from '../data/initialVerses';
 
+const CORE_PACK_URL = '/data/quran-core-v1.json';
+
+interface BundledCorePack {
+  id: string;
+  version: string;
+  sourceName: string;
+  sourceUrl: string;
+  datasetVersion: string;
+  licenseStatus: 'pending_review';
+  generatedAt: string;
+  verses: Verse[];
+}
+
 export const QuranService = {
+  async ensureBundledCorePackage(): Promise<boolean> {
+    const currentStatus = await this.getOfflineContentStatus();
+    if (currentStatus.isComplete) return true;
+
+    try {
+      const response = await fetch(CORE_PACK_URL);
+      if (!response.ok) return false;
+      const contentPack = await response.json() as BundledCorePack;
+      if (contentPack.id !== 'quran-core' || contentPack.verses?.length !== 6236) return false;
+
+      await db.transaction('rw', db.verses, db.contentMetadata, async () => {
+        await db.verses.bulkPut(contentPack.verses);
+        await db.contentMetadata.put({
+          id: 'quran-core',
+          sourceName: `${contentPack.sourceName} (بستهٔ داخلی)`,
+          sourceUrl: contentPack.sourceUrl,
+          datasetVersion: contentPack.version,
+          licenseStatus: contentPack.licenseStatus,
+          lastSyncedAt: new Date(contentPack.generatedAt).getTime() || Date.now(),
+        });
+      });
+      return true;
+    } catch (error) {
+      console.warn('Could not install bundled Quran content package:', error);
+      return false;
+    }
+  },
+
+  async getContentMetadata(): Promise<ContentMetadata | undefined> {
+    try {
+      return await db.contentMetadata.get('quran-core');
+    } catch {
+      return undefined;
+    }
+  },
+
+  async recordAlQuranCloudSync(): Promise<void> {
+    try {
+      await db.contentMetadata.put({
+        id: 'quran-core',
+        sourceName: 'Al Quran Cloud',
+        sourceUrl: 'https://alquran.cloud/',
+        datasetVersion: 'quran-uthmani + fa.makarem + fa.fooladvand + fa.ansarian',
+        licenseStatus: 'pending_review',
+        lastSyncedAt: Date.now(),
+      });
+    } catch {
+      // Metadata must never prevent the Quran content from being available.
+    }
+  },
+
+  async getOfflineContentStatus(): Promise<OfflineContentStatus> {
+    try {
+      const verses = await db.verses.toArray();
+      const countsBySurah = new Map<number, number>();
+      verses.forEach((verse) => countsBySurah.set(verse.surahId, (countsBySurah.get(verse.surahId) || 0) + 1));
+
+      const downloadedSurahIds = ALL_SURAHS
+        .filter((surah) => (countsBySurah.get(surah.id) || 0) >= surah.versesCount)
+        .map((surah) => surah.id);
+
+      return {
+        downloadedSurahIds,
+        downloadedVerses: verses.length,
+        totalVerses: 6236,
+        isComplete: downloadedSurahIds.length === ALL_SURAHS.length && verses.length >= 6236,
+      };
+    } catch {
+      return { downloadedSurahIds: [], downloadedVerses: 0, totalVerses: 6236, isComplete: false };
+    }
+  },
+
+  async downloadSurahs(
+    surahIds: number[],
+    onProgress?: (current: number, total: number, surah: Surah) => void,
+    isCancelled?: () => boolean,
+  ): Promise<OfflineDownloadResult> {
+    const downloadedSurahIds: number[] = [];
+    const failedSurahIds: number[] = [];
+
+    for (let index = 0; index < surahIds.length; index += 1) {
+      if (isCancelled?.()) {
+        return { downloadedSurahIds, failedSurahIds, cancelled: true };
+      }
+
+      const surahId = surahIds[index];
+      const surah = ALL_SURAHS.find((item) => item.id === surahId);
+      if (!surah) continue;
+      onProgress?.(index + 1, surahIds.length, surah);
+
+      const verses = await this.getVersesBySurah(surahId);
+      if (verses.length >= surah.versesCount) {
+        downloadedSurahIds.push(surahId);
+      } else {
+        failedSurahIds.push(surahId);
+      }
+    }
+
+    return { downloadedSurahIds, failedSurahIds, cancelled: false };
+  },
+
+  async clearOfflineContent(): Promise<void> {
+    await db.verses.clear();
+  },
+
   async getAllSurahs(): Promise<Surah[]> {
     try {
       const list = await db.surahs.toArray();
@@ -58,6 +176,7 @@ export const QuranService = {
           // ذخیره ماندگار در دیتابیس مرورگر جهت استفاده آفلاین همیشگی
           try {
             await db.verses.bulkPut(data.verses);
+            await this.recordAlQuranCloudSync();
           } catch (dbErr) {
             console.warn('Could not save verses to IndexedDB:', dbErr);
           }
@@ -93,14 +212,15 @@ export const QuranService = {
               translationMakarem: mEd.ayahs[idx]?.text || '',
               translationFooladvand: fEd.ayahs[idx]?.text || '',
               translationAnsarian: aEd.ayahs[idx]?.text || '',
-              tafsirNemoneh: 'نکات تفسیری: جهت مشاهده تدبر عمیق در این آیه روی دکمه تدبر هوشمند کلیک نمایید.',
-              tafsirMizan: 'نکات المیزان: تبیین معارف توحیدی و حقایق قرآنی.',
+              tafsirNemoneh: 'راهنمای تدبّر این آیه هنوز به منبع مستند متصل نشده است.',
+              tafsirMizan: 'برای این آیه، متن تفسیریِ دارای ارجاع هنوز افزوده نشده است.',
               rootWords: []
             };
           });
 
           try {
             await db.verses.bulkPut(fallbackVerses);
+            await this.recordAlQuranCloudSync();
           } catch {}
           return fallbackVerses;
         }

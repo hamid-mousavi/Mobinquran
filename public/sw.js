@@ -1,5 +1,5 @@
 // Service Worker for Quran Mobin PWA
-const CACHE_NAME = 'quran-mobin-cache-v3';
+const CACHE_NAME = 'quran-mobin-cache-v5';
 
 const STATIC_ASSETS = [
   '/',
@@ -7,16 +7,45 @@ const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
-  '/apple-touch-icon.png'
+  '/apple-touch-icon.png',
+  '/data/quran-core-v1.json'
 ];
+
+async function cacheAppShell() {
+  const cache = await caches.open(CACHE_NAME);
+  const response = await fetch('/index.html', { cache: 'no-cache' });
+  if (!response.ok) throw new Error(`Could not cache app shell: ${response.status}`);
+
+  await cache.put('/index.html', response.clone());
+
+  // Vite emits hashed JS/CSS files. Cache those files during installation so
+  // the app can reopen offline immediately after it is installed.
+  const html = await response.text();
+  const assetPaths = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css))["']/g)]
+    .map((match) => new URL(match[1], self.location.origin).pathname);
+
+  await Promise.all(assetPaths.map(async (path) => {
+    try {
+      const assetResponse = await fetch(path, { cache: 'no-cache' });
+      if (assetResponse.ok) await cache.put(path, assetResponse);
+    } catch {
+      // A later network-first request can retry a transient asset failure.
+    }
+  }));
+
+  await Promise.all(STATIC_ASSETS.filter((asset) => asset !== '/index.html').map(async (asset) => {
+    try {
+      const assetResponse = await fetch(asset, { cache: 'no-cache' });
+      if (assetResponse.ok) await cache.put(asset, assetResponse);
+    } catch {
+      // Do not make the entire installation fail because an optional icon failed.
+    }
+  }));
+}
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+  event.waitUntil(cacheAppShell());
 });
 
 self.addEventListener('activate', (event) => {
