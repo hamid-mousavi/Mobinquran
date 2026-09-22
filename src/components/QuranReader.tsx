@@ -5,6 +5,59 @@ import { getArabicFontFamily } from '../utils/fontHelper';
 import { prefersReducedMotion } from '../utils/motion';
 import { shareAyah } from '../utils/shareAyah';
 
+/**
+ * نشان سنتی و گل مصحفی انتهای آیه شبیه به مصحف شریف عثمان طه و نسخه‌های نفیس کتب قرآن
+ */
+export const AyahEndMarker: React.FC<{
+  verseNumber: number;
+  className?: string;
+  isCurrentlyPlaying?: boolean;
+}> = ({ verseNumber, className = '', isCurrentlyPlaying }) => {
+  const persianNumber = verseNumber.toLocaleString('fa-IR');
+  return (
+    <span
+      className={`inline-flex items-center justify-center align-middle mx-1.5 select-none relative group/marker ${className}`}
+      title={`پایان آیهٔ ${persianNumber}`}
+      aria-label={`آیه ${persianNumber}`}
+      style={{ verticalAlign: 'middle', display: 'inline-flex' }}
+    >
+      <svg
+        viewBox="0 0 40 40"
+        className={`w-7 h-7 sm:w-8 sm:h-8 transition-transform group-hover/marker:scale-110 shrink-0 ${
+          isCurrentlyPlaying
+            ? 'text-amber-500 fill-amber-500/20 stroke-amber-600 dark:stroke-amber-400'
+            : 'text-amber-600/90 dark:text-amber-400/90 fill-amber-500/5 stroke-amber-600/80 dark:stroke-amber-400/80'
+        }`}
+        strokeWidth="1.2"
+      >
+        {/* حلقه بیرونی دندانه‌دار گل مصحفی */}
+        <circle cx="20" cy="20" r="18" fill="none" strokeDasharray="3 1.5" />
+        <circle cx="20" cy="20" r="15" fill="none" strokeWidth="0.8" opacity="0.85" />
+        <circle cx="20" cy="20" r="13" fill="none" strokeWidth="0.5" opacity="0.4" />
+        {/* گلبرگ‌های چهارگوشه به سبک سنتی تذهیب قرآنی */}
+        <path d="M20 2 L21.5 5 L20 6 L18.5 5 Z" fill="currentColor" stroke="none" />
+        <path d="M20 38 L21.5 35 L20 34 L18.5 35 Z" fill="currentColor" stroke="none" />
+        <path d="M2 20 L5 21.5 L6 20 L5 18.5 Z" fill="currentColor" stroke="none" />
+        <path d="M38 20 L35 21.5 L34 20 L35 18.5 Z" fill="currentColor" stroke="none" />
+        <circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none" />
+        <circle cx="32.5" cy="7.5" r="1.3" fill="currentColor" stroke="none" />
+        <circle cx="7.5" cy="32.5" r="1.3" fill="currentColor" stroke="none" />
+        <circle cx="32.5" cy="32.5" r="1.3" fill="currentColor" stroke="none" />
+      </svg>
+      <span
+        className={`absolute inset-0 flex items-center justify-center font-bold font-sans tabular-nums pt-0.5 ${
+          isCurrentlyPlaying
+            ? 'text-slate-950 dark:text-amber-200'
+            : 'text-amber-800 dark:text-amber-300'
+        }`}
+        style={{ fontSize: verseNumber >= 100 ? '9px' : '11px' }}
+      >
+        {persianNumber}
+      </span>
+    </span>
+  );
+};
+
 interface QuranReaderProps {
   currentSurah: Surah;
   verses: Verse[];
@@ -283,54 +336,89 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
       id="quran-reader-container"
       className="max-w-3xl mx-auto px-3 sm:px-4 py-6 pb-28 space-y-6"
     >
-      {/* بنر معنوی سوره به سبک کتیبه‌های مصحف شریف */}
+      {/* کتیبه مذهب سرسوره به سبک مصاحف نفیس کهن و عثمان طه */}
       <div
         id="surah-header-banner"
-        className={`relative overflow-hidden rounded-3xl p-6 text-center border shadow-sm transition-all ${
+        className={`relative overflow-hidden rounded-3xl p-5 sm:p-7 text-center border-2 shadow-md transition-all select-none ${
           darkMode
-            ? 'bg-gradient-to-b from-slate-900 via-teal-950/40 to-slate-900 border-teal-800/40 text-slate-100'
-            : 'bg-gradient-to-b from-stone-50 via-teal-50/50 to-stone-50 border-stone-200 text-slate-800'
+            ? 'bg-gradient-to-b from-slate-900 via-teal-950/60 to-slate-900 border-amber-500/40 text-slate-100 shadow-teal-950/40'
+            : 'bg-gradient-to-b from-amber-50/70 via-stone-50 to-amber-50/60 border-amber-600/35 text-slate-900 shadow-stone-200'
         }`}
       >
-        <div className="absolute top-2 right-4 text-[11px] text-teal-600 dark:text-teal-400 font-semibold">
-          جزء {currentSurah.juzNumber}
-        </div>
-        <div className="absolute top-2 left-4 text-[11px] text-teal-600 dark:text-teal-400 font-semibold">
-          صفحه {currentSurah.startPage}
+        {/* نقوش هندسی و قاب بیرونی کتیبه */}
+        <div className="absolute inset-1.5 rounded-2xl border border-dashed border-amber-500/30 pointer-events-none" />
+
+        {/* گوشه‌های اسلیمی سنتی تذهیب */}
+        <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-amber-500/60" />
+        <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-amber-500/60" />
+        <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-500/60" />
+        <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-500/60" />
+
+        {/* نوار متادیتا و مدال‌های طرفین */}
+        <div className="flex items-center justify-between gap-2 max-w-lg mx-auto mb-3">
+          {/* مدال سمت راست: محل نزول */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 shadow-xs">
+            <span>{currentSurah.revelationType === 'Meccan' ? 'مَكِّيَّة' : 'مَدَنِيَّة'}</span>
+            <span className="text-[10px] opacity-70">({currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'})</span>
+          </div>
+
+          {/* پلاک مرکزی شماره سوره */}
+          <div className="text-xs font-bold text-teal-700 dark:text-teal-300 px-2.5 py-0.5 rounded-lg bg-teal-500/10 border border-teal-500/20">
+            سوره {currentSurah.id} از ۱۱۴
+          </div>
+
+          {/* مدال سمت چپ: تعداد آیات */}
+          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 shadow-xs">
+            <span>{currentSurah.versesCount.toLocaleString('fa-IR')} آیه</span>
+          </div>
         </div>
 
-        <div className="inline-block p-1 px-4 mb-2 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-          سوره شماره {currentSurah.id} • {currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'}
+        {/* قاب عنوان سوره با خط ثلث و امیری */}
+        <div className="relative py-2 my-1">
+          <div className="flex items-center justify-center gap-3">
+            <span className="hidden sm:inline-block w-12 sm:w-16 h-px bg-gradient-to-r from-transparent via-amber-500/70 to-amber-500" />
+            <h1
+              className="text-3xl sm:text-5xl font-bold tracking-normal text-amber-600 dark:text-amber-300 drop-shadow-xs"
+              style={{ fontFamily: "'Amiri', 'Amiri Quran', serif" }}
+            >
+              سُورَةُ {currentSurah.nameArabic}
+            </h1>
+            <span className="hidden sm:inline-block w-12 sm:w-16 h-px bg-gradient-to-l from-transparent via-amber-500/70 to-amber-500" />
+          </div>
         </div>
 
-        <h1
-          className="text-3xl sm:text-4xl font-bold tracking-tight text-teal-800 dark:text-teal-200 mb-1"
-          style={{ fontFamily: "'Amiri', serif" }}
-        >
-          سُورَةُ {currentSurah.nameArabic}
-        </h1>
-
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-          {currentSurah.namePersian} ({currentSurah.englishName}) • {currentSurah.versesCount} آیه
-        </p>
+        {/* زیرنویس و اطلاعات مصحف (نام فارسی، جزء و صفحه) */}
+        <div className="mt-2 pt-2.5 border-t border-amber-500/20 flex items-center justify-center gap-3 sm:gap-6 text-xs text-slate-500 dark:text-slate-400 font-medium">
+          <span>نام فارسی: <strong className="text-slate-700 dark:text-slate-200">{currentSurah.namePersian}</strong> ({currentSurah.englishName})</span>
+          <span>•</span>
+          <span>جزء {currentSurah.juzNumber.toLocaleString('fa-IR')}</span>
+          <span>•</span>
+          <span>صفحه {currentSurah.startPage?.toLocaleString('fa-IR') || '۱'}</span>
+        </div>
       </div>
 
-      {/* سرآغاز بسم الله (به جز سوره توبه - شماره ۹) */}
+      {/* سرآغاز بسم‌الله الرحمن الرحیم در کادر مزین سنتی (به جز سوره توبه - شماره ۹) */}
       {currentSurah.id !== 9 && (
         <div
           id="bismillah-banner"
-          className="py-4 text-center select-none"
+          className={`relative max-w-xl mx-auto my-6 py-4 px-6 rounded-2xl text-center select-none border shadow-xs ${
+            darkMode
+              ? 'bg-gradient-to-r from-slate-900 via-teal-950/40 to-slate-900 border-amber-500/30 text-amber-200'
+              : 'bg-gradient-to-r from-amber-50/40 via-stone-50 to-amber-50/40 border-amber-500/25 text-teal-950'
+          }`}
           dir="rtl"
         >
-          <div
-            className={`inline-block text-2xl sm:text-3xl font-medium tracking-wide ${
-              darkMode ? 'text-amber-300/90' : 'text-teal-900'
-            }`}
-            style={{ fontFamily: "'Amiri Quran', serif" }}
-          >
-            بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+          {/* تزئین خطوط طرفین */}
+          <div className="flex items-center justify-center gap-4">
+            <span className="w-8 sm:w-14 h-px bg-gradient-to-r from-transparent to-amber-500/60" />
+            <div
+              className="text-2xl sm:text-3xl font-medium tracking-wide drop-shadow-xs"
+              style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
+            >
+              بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+            </div>
+            <span className="w-8 sm:w-14 h-px bg-gradient-to-l from-transparent to-amber-500/60" />
           </div>
-          <div className="h-0.5 w-24 mx-auto mt-3 bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-60" />
         </div>
       )}
 
@@ -398,22 +486,12 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                     : 'bg-white border-stone-200/90 hover:border-stone-300 shadow-sm'
                 }`}
               >
-                {/* نوار بالایی آیه: شماره آیه و ابزارها */}
+                {/* نوار بالایی آیه: نشان سنتی آیه و ابزارها */}
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-stone-100 dark:border-slate-800/80">
                   <div className="flex items-center gap-2">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
-                        isCurrentlyPlaying
-                          ? 'bg-amber-500 text-slate-950 shadow'
-                          : darkMode
-                          ? 'bg-slate-800 text-teal-400'
-                          : 'bg-stone-100 text-teal-700'
-                      }`}
-                    >
-                      {verse.verseNumber}
-                    </div>
+                    <AyahEndMarker verseNumber={verse.verseNumber} isCurrentlyPlaying={isCurrentlyPlaying} />
                     <span className="text-[11px] text-slate-400 font-medium">
-                      جزء {verse.juzNumber} • صفحه {verse.pageNumber}
+                      جزء {verse.juzNumber.toLocaleString('fa-IR')} • صفحه {verse.pageNumber.toLocaleString('fa-IR')}
                     </span>
                   </div>
 
@@ -495,9 +573,9 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                   </div>
                 </div>
 
-                {/* متن عربی آیه با خط و اعراب برجسته */}
+                {/* متن عربی آیه با خط و اعراب برجسته و تراز Justify */}
                 <div
-                  className={`text-right font-medium transition-all tracking-normal ${arabicLineHeightClass} ${
+                  className={`text-justify [text-align-last:right] font-medium transition-all tracking-normal ${arabicLineHeightClass} ${
                     darkMode ? 'text-slate-100' : 'text-slate-900'
                   }`}
                   style={{
@@ -507,20 +585,15 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                   dir="rtl"
                 >
                   {verse.textArabic}
-                  {/* نشانگر انتهای آیه در دل متن عربی */}
-                  <span
-                    className="inline-flex items-center justify-center mx-1.5 text-amber-600 dark:text-amber-400 font-bold opacity-85 select-none"
-                    style={{ fontSize: '0.85em' }}
-                  >
-                    ﴿{verse.verseNumber}﴾
-                  </span>
+                  {/* نشان سنتی انتهای آیه درون متن عربی بدون پرانتز */}
+                  <AyahEndMarker verseNumber={verse.verseNumber} isCurrentlyPlaying={isCurrentlyPlaying} />
                 </div>
 
-                {/* ترجمه فارسی آیه */}
+                {/* ترجمه فارسی آیه با تراز Justify */}
                 {settings.showTranslation && (
                   <div className="mt-3.5 pt-3 border-t border-dashed border-stone-200/80 dark:border-slate-800">
                     <p
-                      className={`text-right leading-relaxed ${
+                      className={`text-justify [text-align-last:right] leading-relaxed ${
                         darkMode ? 'text-slate-300' : 'text-stone-700'
                       }`}
                       style={{ fontSize: `${settings.translationFontSize}px` }}
@@ -528,8 +601,8 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                     >
                       {getTranslationText(verse)}
                     </p>
-                    <div className="text-[11px] text-slate-400 mt-1">
-                      ترجمه: {settings.activeTranslator === 'makarem' ? 'آیت‌الله مکارم شیرازی' : settings.activeTranslator === 'fooladvand' ? 'استاد فولادوند' : 'استاد انصاریان'}
+                    <div className="text-[11px] text-slate-400 mt-1.5 flex items-center justify-between">
+                      <span>ترجمه: {settings.activeTranslator === 'makarem' ? 'آیت‌الله مکارم شیرازی' : settings.activeTranslator === 'fooladvand' ? 'استاد فولادوند' : 'استاد انصاریان'}</span>
                     </div>
                   </div>
                 )}

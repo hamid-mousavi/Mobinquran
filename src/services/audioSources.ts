@@ -321,3 +321,15 @@ export const resolveAudioSource = (
 
   return null;
 };
+
+/**
+ * تبدیل آدرس صوتی مستقیم به آدرس پروکسی‌شدهٔ سرور برای کاربران داخل ایران
+ * تا در صورت اعمال فیلترینگ یا قطعی CDN خارجی، بدون نیاز به فیلترشکن صوت پخش شود.
+ */
+export const getProxiedAudioUrl = (url: string): string => {
+  if (!url || url.startsWith('blob:') || url.startsWith('/') || url.startsWith('data:')) {
+    return url;
+  }
+  return `/api/audio/proxy?url=${encodeURIComponent(url)}`;
+};
+

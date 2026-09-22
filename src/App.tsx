@@ -16,6 +16,7 @@ import { PWAUpdateBanner } from './components/PWAUpdateBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { AutoScrollControls } from './components/AutoScrollControls';
 import { MemorizationOverlay } from './components/MemorizationOverlay';
+import { QuranHomePage } from './components/QuranHomePage';
 import { QuranService } from './services/quranService';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
 import { ALL_SURAHS } from './data/surahs';
@@ -43,6 +44,8 @@ export default function App() {
   const [isCorePackageReady, setIsCorePackageReady] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('verse-by-verse');
   const [currentMushafPage, setCurrentMushafPage] = useState<number>(1);
+  const [isHomeView, setIsHomeView] = useState<boolean>(true);
+  const [lastReadPosition, setLastReadPosition] = useState<{ surahId: number; verseNumber: number; pageNumber?: number } | null>(null);
 
   // پروتوتایپ P3-T3: نمایش چیدمان ۱۵ خطی واقعی (دادهٔ MIT) از طریق ?proto=mushaf
   const isLayoutPrototype = typeof window !== 'undefined'
@@ -109,6 +112,7 @@ export default function App() {
       // بازیابی آخرین مطالعه (سوره + آیهٔ واقعی + صفحه)
       const lastRead = await QuranService.getLastRead();
       if (lastRead) {
+        setLastReadPosition(lastRead);
         const target = all.find((s) => s.id === lastRead.surahId);
         if (target) {
           setCurrentSurah(target);
@@ -248,12 +252,14 @@ export default function App() {
   // ذخیرهٔ آیهٔ واقعی در حال مشاهده (P3-T1) با debounce در QuranReader
   const handleReadingPositionChange = useCallback((verse: Verse) => {
     QuranService.saveLastRead(verse.surahId, verse.verseNumber, verse.pageNumber);
+    setLastReadPosition({ surahId: verse.surahId, verseNumber: verse.verseNumber, pageNumber: verse.pageNumber });
   }, []);
 
   // پرش به صفحه در مصحف
   const handleNavigateToMushafPage = (pageNumber: number) => {
     setCurrentMushafPage(pageNumber);
     setViewMode('mushaf-page');
+    setIsHomeView(false);
   };
 
   // تغییر و انتخاب سوره
@@ -261,8 +267,10 @@ export default function App() {
     setResumeScrollVerse(null);
     setCurrentSurah(surah);
     setCurrentMushafPage(surah.startPage || 1);
+    setIsHomeView(false);
     // فقط وقتی کاربر سوره را تغییر داد موقعیت ابتدای سوره ثبت می‌شود
     QuranService.saveLastRead(surah.id, 1, surah.startPage || 1);
+    setLastReadPosition({ surahId: surah.id, verseNumber: 1, pageNumber: surah.startPage || 1 });
   };
 
   // پخش صوت آیه
@@ -320,10 +328,54 @@ export default function App() {
         onToggleDarkMode={handleToggleDarkMode}
         isAutoScrollActive={isAutoScrollActive}
         onToggleAutoScroll={() => setIsAutoScrollActive((prev) => !prev)}
+        isHomeView={isHomeView}
+        onToggleHomeView={() => setIsHomeView((prev) => !prev)}
       />
 
-      {/* ناحیه نمایش اصلی: سوئیچ بین حالت آیه به آیه و مصحف ۶۰۴ صفحه‌ای */}
-      {isLayoutPrototype ? (
+      {/* ناحیه نمایش اصلی: صفحه اصلی یا خوانش قرآن */}
+      {isHomeView ? (
+        <QuranHomePage
+          surahs={surahs}
+          lastRead={lastReadPosition}
+          onContinueReading={() => {
+            setIsHomeView(false);
+            if (lastReadPosition?.verseNumber) {
+              setResumeScrollVerse(lastReadPosition.verseNumber);
+              setTimeout(() => requestQuranScrollToVerse(lastReadPosition.verseNumber), 200);
+            }
+          }}
+          onSelectSurah={(surah) => {
+            handleSelectSurah(surah);
+          }}
+          onNavigateToJuz={(juzNumber) => {
+            const target = surahs.find((s) => s.juzNumber === juzNumber) || surahs[0];
+            handleSelectSurah(target);
+          }}
+          onOpenMushafPage={() => {
+            setViewMode('mushaf-page');
+            setIsHomeView(false);
+          }}
+          onOpenSearch={() => setIsSearchModalOpen(true)}
+          onOpenBookmarks={() => setIsBookmarksModalOpen(true)}
+          onOpenKhatm={() => setIsKhatmModalOpen(true)}
+          onOpenAI={(verse) => {
+            if (verse) setAiContextVerse(verse);
+            setIsAIModalOpen(true);
+          }}
+          onOpenMemorization={() => {
+            setIsAudioPlayerOpen(false);
+            setActivePlayingVerseNumber(null);
+            setIsMemoOpen(true);
+          }}
+          onPlayVerseAudio={(sId, vNum) => {
+            const s = surahs.find((x) => x.id === sId);
+            if (s) setCurrentSurah(s);
+            setActivePlayingVerseNumber(vNum);
+            setIsAudioPlayerOpen(true);
+          }}
+          darkMode={settings.darkMode}
+        />
+      ) : isLayoutPrototype ? (
         <MushafPrototype
           pages={prototypePages}
           darkMode={settings.darkMode}

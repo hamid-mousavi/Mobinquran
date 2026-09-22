@@ -17,7 +17,8 @@ import {
   Check,
   Layers,
   Sparkle,
-  GraduationCap
+  GraduationCap,
+  Home,
 } from 'lucide-react';
 import { Surah, ViewMode } from '../types';
 
@@ -37,6 +38,8 @@ interface HeaderProps {
   onToggleDarkMode: () => void;
   isAutoScrollActive: boolean;
   onToggleAutoScroll: () => void;
+  isHomeView?: boolean;
+  onToggleHomeView?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -55,6 +58,8 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleDarkMode,
   isAutoScrollActive,
   onToggleAutoScroll,
+  isHomeView,
+  onToggleHomeView,
 }) => {
   const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -84,8 +89,25 @@ export const Header: React.FC<HeaderProps> = ({
       }`}
     >
       <div className="max-w-4xl mx-auto px-2.5 sm:px-4 h-16 flex items-center justify-between gap-2">
-        {/* راست: دکمه انتخاب سوره و سوئیچ نما */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+        {/* راست: دکمه خانه، انتخاب سوره و سوئیچ نما */}
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          {/* دکمه خانه / صفحه اصلی */}
+          {onToggleHomeView && (
+            <button
+              id="btn-header-home-toggle"
+              onClick={onToggleHomeView}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all border shrink-0 ${
+                isHomeView
+                  ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm'
+                  : 'bg-white/10 hover:bg-white/15 text-white/90 border-white/10'
+              }`}
+              title={isHomeView ? 'صفحه اصلی' : 'بازگشت به صفحه اصلی'}
+            >
+              <Home className="w-4 h-4 shrink-0" />
+              <span className="hidden md:inline">{isHomeView ? 'صفحه اصلی' : 'خانه'}</span>
+            </button>
+          )}
+
           <button
             id="btn-open-surah-selector"
             onClick={onOpenSurahList}
@@ -111,7 +133,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-header-viewmode-toggle"
             onClick={onToggleViewMode}
-            className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all border ${
+            className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all border shrink-0 ${
               viewMode === 'mushaf-page'
                 ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm'
                 : 'bg-white/10 hover:bg-white/15 text-white/90 border-white/10'

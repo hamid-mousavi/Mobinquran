@@ -25,6 +25,70 @@ export function createApp() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // پروکسی استریم فایل‌های صوتی قرآن جهت رفع مشکل فیلترینگ و عدم نیاز به فیلترشکن
+  app.get(['/api/audio/proxy', '/audio/proxy'], async (req, res) => {
+    const targetUrl = (req.query.url as string || '').trim();
+    if (!targetUrl || !targetUrl.startsWith('https://')) {
+      return res.status(400).send('Invalid audio URL');
+    }
+
+    const allowedHosts = [
+      'everyayah.com',
+      'www.everyayah.com',
+      'islamic.network',
+      'cdn.islamic.network',
+      'huggingface.co',
+      'qurancdn.com',
+      'verses.quran.com',
+      'quranicaudio.com',
+      'download.quranicaudio.com',
+    ];
+
+    try {
+      const parsed = new URL(targetUrl);
+      const isAllowed = allowedHosts.some((h) => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`));
+      if (!isAllowed) {
+        return res.status(403).send('Audio host not permitted');
+      }
+
+      const audioRes = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'QuranMobinApp/2.0 (AudioProxy)',
+          ...(req.headers.range ? { Range: req.headers.range } : {}),
+        },
+      });
+
+      if (!audioRes.ok || !audioRes.body) {
+        return res.status(audioRes.status).send('Failed to fetch audio stream');
+      }
+
+      res.status(audioRes.status);
+      res.setHeader('Content-Type', audioRes.headers.get('content-type') || 'audio/mpeg');
+      res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+
+      const contentLength = audioRes.headers.get('content-length');
+      if (contentLength) res.setHeader('Content-Length', contentLength);
+      const contentRange = audioRes.headers.get('content-range');
+      if (contentRange) res.setHeader('Content-Range', contentRange);
+      const acceptRanges = audioRes.headers.get('accept-ranges');
+      if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
+
+      const reader = audioRes.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(value);
+      }
+      res.end();
+    } catch (err: any) {
+      console.warn('Audio proxy error:', err?.message || err);
+      if (!res.headersSent) {
+        res.status(502).send('Error streaming audio');
+      }
+    }
+  });
+
   // وضعیت سرویس‌های هوش مصنوعی (بر اساس P0-T5 فقط اعلام فعال بودن کلی)
   app.get(['/api/ai/status', '/ai/status'], (req, res) => {
     res.json({
