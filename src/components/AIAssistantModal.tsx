@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, BookOpen, Heart, RefreshCw, Languages, ShieldCheck, Bot, Server } from 'lucide-react';
 import { Verse, Surah } from '../types';
 import { aiResponseSchema, AiResponse } from '../services/aiContract';
@@ -67,6 +67,22 @@ interface Message {
   localCandidates?: AiCandidateForRequest[];
 }
 
+function describeAiFailure(error: unknown, status?: number, code?: string): string {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return 'اتصال اینترنت قطع است. نتایج جستجوی محلی نمایش داده می‌شود.';
+  }
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return 'زمان پاسخ‌گویی دستیار تمام شد. لطفاً دوباره تلاش کنید.';
+  }
+  if (code === 'daily_limit_reached' || status === 429) {
+    return 'سهمیهٔ دستیار تمام شده یا سرویس موقتاً محدود است. نتایج جستجوی محلی نمایش داده می‌شود.';
+  }
+  if (code === 'ai_unavailable' || code === 'quota_unavailable' || status === 503) {
+    return 'دستیار هوشمند در حال حاضر در دسترس نیست. نتایج جستجوی محلی نمایش داده می‌شود.';
+  }
+  return 'ارتباط با دستیار برقرار نشد. نتایج جستجوی محلی نمایش داده می‌شود.';
+}
+
 const QUICK_TOPICS = [
   'آرامش دل در هنگام اضطراب و نگرانی',
   'صبر در برابر سختی‌ها و گشایش کارها',
@@ -98,6 +114,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isServerAiEnabled, setIsServerAiEnabled] = useState<boolean | null>(null);
   const [candidates, setCandidates] = useState<AiCandidateForRequest[]>([]);
+  const autoReflectionKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -109,18 +126,20 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
       .catch(() => setIsServerAiEnabled(false));
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const activeAgent = AI_AGENTS.find((a) => a.id === selectedAgentId) || AI_AGENTS[0];
   const ActiveAgentIcon = activeAgent.icon;
 
-  const handleSendMessage = async (customPrompt?: string) => {
+  const handleSendMessage = async (customPrompt?: string, automatic = false) => {
     const textToSend = customPrompt || inputText.trim();
     if (!textToSend || isLoading) return;
 
-    const newMessages: Message[] = [...messages, { role: 'user', content: textToSend }];
-    setMessages(newMessages);
-    if (!customPrompt) setInputText('');
+    const newMessages: Message[] = automatic
+      ? messages
+      : [...messages, { role: 'user', content: textToSend }];
+    if (!automatic) {
+      setMessages(newMessages);
+      if (!customPrompt) setInputText('');
+    }
     setIsLoading(true);
     let fallbackCandidates: AiCandidateForRequest[] = [];
 
@@ -138,15 +157,23 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           deviceId = crypto.randomUUID();
           localStorage.setItem(deviceStorageKey, deviceId);
         }
-        const response = await fetch('/api/ai/ask', {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
+        let response: Response;
+        try {
+          response = await fetch('/api/ai/ask', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Device-ID': deviceId },
+          signal: controller.signal,
           body: JSON.stringify({
             question: textToSend,
             candidates: nextCandidates.map(({ ref, text_fa }) => ({ ref, text_fa })),
             lang: 'fa',
           }),
-        });
+          });
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
 
         const rawBody = await response.text();
         let body: { error?: string; code?: string; requestId?: string } | AiResponse | null = null;
@@ -158,7 +185,11 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
 
         const validatedResponse = aiResponseSchema.safeParse(body);
         if (!response.ok || !validatedResponse.success) {
-          throw new Error('ai_request_failed');
+          const serverError = body && 'error' in body ? body : null;
+          const failure = new Error('ai_request_failed') as Error & { status?: number; code?: string };
+          failure.status = response.status;
+          failure.code = serverError?.code;
+          throw failure;
         }
         const candidateRefs = new Set(nextCandidates.map((candidate) => candidate.ref));
         const safeResponse = {
@@ -167,14 +198,18 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         };
         if (safeResponse.verses.length === 0) throw new Error('invalid_references');
         setMessages([...newMessages, { role: 'assistant', content: safeResponse.summary, agentId: selectedAgentId, response: safeResponse }]);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('AI request failed:', err);
         setMessages([
           ...newMessages,
           {
             role: 'assistant',
             agentId: selectedAgentId,
-            content: 'سرویس هوش مصنوعی در حال حاضر در دسترس نیست. لطفاً اتصال اینترنت خود یا وضعیت سرور را بررسی فرمایید. می‌توانید متن آیه و ترجمه‌ها را مطالعه نمایید.',
+            content: describeAiFailure(
+              err,
+              (err as { status?: number })?.status,
+              (err as { code?: string })?.code,
+            ),
             localCandidates: fallbackCandidates,
           },
         ]);
@@ -185,6 +220,18 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!isOpen || !currentVerse) return;
+    const reflectionKey = `${currentVerse.id}:${selectedAgentId}`;
+    if (autoReflectionKey.current === reflectionKey) return;
+    autoReflectionKey.current = reflectionKey;
+
+    const reflectionPrompt = `این آیه را با «${activeAgent.name}» تدبر کن. یک جمع‌بندی کوتاه و محتاطانه، یک نکته کاربردی برای زندگی امروز و یک پرسش تأملی ارائه بده. متن آیه را بازنویسی نکن و فقط به آیه‌های کاندید ارجاع بده.`;
+    void handleSendMessage(reflectionPrompt, true);
+  }, [isOpen, currentVerse, selectedAgentId]);
+
+  if (!isOpen) return null;
 
   return (
     <div
