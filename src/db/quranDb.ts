@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Surah, Verse, UserBookmark, ReadingState, ContentMetadata } from '../types';
+import { Surah, Verse, UserBookmark, ReadingState, ContentMetadata, KhatmPlan, AudioDownloadRecord, AudioErrorLogEntry } from '../types';
 import { ALL_SURAHS } from '../data/surahs';
 
 export class QuranDatabase extends Dexie {
@@ -8,6 +8,9 @@ export class QuranDatabase extends Dexie {
   bookmarks!: Table<UserBookmark, number>;
   readingState!: Table<ReadingState, string>;
   contentMetadata!: Table<ContentMetadata, string>;
+  khatmPlans!: Table<KhatmPlan, string>;
+  audioDownloads!: Table<AudioDownloadRecord, string>;
+  audioErrorLog!: Table<AudioErrorLogEntry, number>;
 
   constructor() {
     super('QuranMobinDB');
@@ -34,6 +37,39 @@ export class QuranDatabase extends Dexie {
       bookmarks: '++id, [surahId+verseNumber], surahId, verseNumber, createdAt',
       readingState: 'id',
       contentMetadata: 'id, lastSyncedAt, schemaVersion',
+    });
+
+    // Version 4: افزودن جدول برنامه‌های ختم (P3-T9) — انتقال از localStorage به IndexedDB
+    this.version(4).stores({
+      surahs: 'id, nameArabic, namePersian, revelationType, juzNumber, startPage',
+      verses: 'id, surahId, [surahId+verseNumber], juzNumber, pageNumber, hizbQuarter',
+      bookmarks: '++id, [surahId+verseNumber], surahId, verseNumber, createdAt',
+      readingState: 'id',
+      contentMetadata: 'id, lastSyncedAt, schemaVersion',
+      khatmPlans: 'id, type, isActive',
+    });
+
+    // Version 5: افزودن ابردادهٔ کش صوتی per-surah (P5-T2) — باینری در Cache Storage می‌ماند (ADR-8)
+    this.version(5).stores({
+      surahs: 'id, nameArabic, namePersian, revelationType, juzNumber, startPage',
+      verses: 'id, surahId, [surahId+verseNumber], juzNumber, pageNumber, hizbQuarter',
+      bookmarks: '++id, [surahId+verseNumber], surahId, verseNumber, createdAt',
+      readingState: 'id',
+      contentMetadata: 'id, lastSyncedAt, schemaVersion',
+      khatmPlans: 'id, type, isActive',
+      audioDownloads: 'key, reciterId, surahId, downloadedAt',
+    });
+
+    // Version 6: افزودن لاگ خطاهای صوتی برای مشاهده‌پذیری (P5-T5)
+    this.version(6).stores({
+      surahs: 'id, nameArabic, namePersian, revelationType, juzNumber, startPage',
+      verses: 'id, surahId, [surahId+verseNumber], juzNumber, pageNumber, hizbQuarter',
+      bookmarks: '++id, [surahId+verseNumber], surahId, verseNumber, createdAt',
+      readingState: 'id',
+      contentMetadata: 'id, lastSyncedAt, schemaVersion',
+      khatmPlans: 'id, type, isActive',
+      audioDownloads: 'key, reciterId, surahId, downloadedAt',
+      audioErrorLog: '++id, createdAt, reciterId, surahId',
     });
   }
 

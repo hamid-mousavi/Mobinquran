@@ -103,17 +103,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* اندازه فونت عربی */}
           <div className="space-y-2">
             <div className="flex justify-between items-center text-sm font-semibold">
-              <span>اندازه متن عربی آیات</span>
+              <label htmlFor="range-arabic-font-size" className="cursor-pointer">
+                اندازه متن عربی آیات
+              </label>
               <span className="text-teal-600 dark:text-teal-400 font-mono">{settings.arabicFontSize}px</span>
             </div>
             <input
+              id="range-arabic-font-size"
               type="range"
               min="22"
-              max="48"
+              max="56"
               step="2"
               value={settings.arabicFontSize}
               onChange={(e) => onUpdateSettings({ arabicFontSize: Number(e.target.value) })}
               className="w-full accent-teal-600 cursor-pointer"
+              aria-label="اندازه متن عربی آیات (تا ۲۰۰ درصد)"
             />
             {/* پیش‌نمایش اندازه قلم عربی */}
             <div
@@ -245,6 +249,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 checked={settings.showTranslation}
                 onChange={(e) => onUpdateSettings({ showTranslation: e.target.checked })}
                 className="sr-only peer"
+                aria-label="نمایش ترجمه زیر آیات"
               />
               <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
             </label>
@@ -254,17 +259,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {settings.showTranslation && (
             <div className="space-y-2">
               <div className="flex justify-between items-center text-sm font-semibold">
-                <span>اندازه قلم ترجمه فارسی</span>
+                <label htmlFor="range-translation-font-size" className="cursor-pointer">
+                  اندازه قلم ترجمه فارسی
+                </label>
                 <span className="text-teal-600 dark:text-teal-400 font-mono">{settings.translationFontSize}px</span>
               </div>
               <input
+                id="range-translation-font-size"
                 type="range"
                 min="13"
-                max="24"
+                max="30"
                 step="1"
                 value={settings.translationFontSize}
                 onChange={(e) => onUpdateSettings({ translationFontSize: Number(e.target.value) })}
                 className="w-full accent-teal-600 cursor-pointer"
+                aria-label="اندازه قلم ترجمه فارسی (تا ۲۰۰ درصد)"
               />
             </div>
           )}

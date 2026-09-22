@@ -1,7 +1,9 @@
-import React, { useEffect } from 'react';
-import { Bookmark, Sparkles, Copy, BookOpen, Play, Volume2, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Bookmark, Sparkles, Copy, BookOpen, Play, Volume2, Loader2, AlertCircle, RefreshCw, Share2 } from 'lucide-react';
 import { Verse, Surah, AppSettings } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
+import { prefersReducedMotion } from '../utils/motion';
+import { shareAyah } from '../utils/shareAyah';
 
 interface QuranReaderProps {
   currentSurah: Surah;
@@ -17,6 +19,55 @@ interface QuranReaderProps {
   onOpenVerseAction: (verse: Verse) => void;
   onOpenAIFortVerse: (verse: Verse) => void;
   onPlayVerseAudio: (verseNumber: number) => void;
+  onReadingPositionChange?: (verse: Verse) => void;
+  initialScrollToVerseNumber?: number | null;
+  onInitialScrollHandled?: () => void;
+}
+
+// مجازی‌سازی لیست (P3-T8): مت‌ریال‌سازی تدریجی آیه‌ها برای سوره‌های بلند.
+// بار اول فقط INITIAL_CHUNK آیه رندر می‌شود؛ با نزدیک‌شدن به انتها، chunk بعدی اضافه می‌شود
+// و پرش به آیهٔ دلخواه (شروع/پخش/مودال) از طریق متد سراسری کار می‌کند.
+const VIRTUALIZE_THRESHOLD = 200;
+const INITIAL_CHUNK = 40;
+const CHUNK_SIZE = 30;
+
+const scrollListeners = new Set<(verseNumber: number) => void>();
+
+/** درخواست اسکرول به آیه از خارج از کامپوننت (App.tsx) */
+export function requestQuranScrollToVerse(verseNumber: number): void {
+  scrollListeners.forEach((listener) => listener(verseNumber));
+}
+
+/**
+ * انتخاب «آیهٔ در حال مطالعه» از میان آیات قابل‌مشاهده (P3-T1).
+ * آیه‌ای برنده است که بیشترین پوشش را روی «خط مرجع مطالعه» (reading line) داشته باشد؛
+ * یعنی آیه‌ای که در حال عبور از ناحیهٔ مرکزی دید کاربر است.
+ * برخلاف حالت قبلی، انتخاب بر اساس هندسهٔ «همین دسته» انجام می‌شود و
+ * آیه‌ای که زمانی در بالای صفحه بوده (ratio=1) برای همیشه برنده نمی‌ماند.
+ */
+export interface VerseCandidate {
+  verse: Verse;
+  top: number;
+  bottom: number;
+}
+
+export function pickReadingVerse(
+  candidates: VerseCandidate[],
+  readingLineY: number
+): Verse | null {
+  let best: VerseCandidate | null = null;
+  let bestScore = Infinity;
+
+  for (const candidate of candidates) {
+    const center = (candidate.top + candidate.bottom) / 2;
+    const distance = Math.abs(center - readingLineY);
+    if (distance < bestScore) {
+      bestScore = distance;
+      best = candidate;
+    }
+  }
+
+  return best?.verse ?? null;
 }
 
 export const QuranReader: React.FC<QuranReaderProps> = ({
@@ -33,19 +84,173 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   onOpenVerseAction,
   onOpenAIFortVerse,
   onPlayVerseAudio,
+  onReadingPositionChange,
+  initialScrollToVerseNumber,
+  onInitialScrollHandled,
 }) => {
+  // مرجع جدیدترین تابع جهت استفاده در observer بدون وابستگی‌های رندر
+  const onReadingPositionChangeRef = useRef(onReadingPositionChange);
+  useEffect(() => {
+    onReadingPositionChangeRef.current = onReadingPositionChange;
+  }, [onReadingPositionChange]);
+
+  // مرجع وضعیت «بازگشت به آخرین مطالعه در حال انجام» برای observer؛
+  // تا بستن لغو شود، observer فقط با آخرین مقدار آن کار می‌کند و نیازی به بازسازی observable نیست.
+  const resumePendingRef = useRef(Boolean(initialScrollToVerseNumber));
+  useEffect(() => {
+    resumePendingRef.current = Boolean(initialScrollToVerseNumber);
+  }, [initialScrollToVerseNumber]);
+
+  // --- مجازی‌سازی لیست (P3-T8) ---
+  const isVirtualized = verses.length > VIRTUALIZE_THRESHOLD;
+  const [renderCount, setRenderCount] = useState(0);
+  useEffect(() => {
+    // هنگام تغییر سوره/آیات، پنجرهٔ متریال‌سازی ریست می‌شود ولی کوچک نمی‌شود
+    setRenderCount((prev) => (prev === 0 ? INITIAL_CHUNK : Math.max(prev, INITIAL_CHUNK)));
+  }, [verses]);
+
+  const visibleVerses = isVirtualized ? verses.slice(0, renderCount) : verses;
+
+  // پرش به آیهٔ مشخص: مطمین می‌شویم تعداد رندر کافی است، سپس اسکرول
+  const scrollToVerse = (verseNumber: number, behavior: 'auto' | 'smooth') => {
+    const el2 = document.getElementById(`verse-${verseNumber}`);
+    if (el2) {
+      el2.scrollIntoView({ behavior, block: 'center' });
+      return;
+    }
+    if (isVirtualized && verseNumber >= 1 && verseNumber <= verses.length) {
+      setRenderCount((prev) => Math.max(prev, verseNumber, INITIAL_CHUNK));
+      // بعد از رندر تعداد کافی، اسکرول انجام می‌شود
+      const tryScroll = () => {
+        const el3 = document.getElementById(`verse-${verseNumber}`);
+        if (el3) {
+          el3.scrollIntoView({ behavior: behavior === 'smooth' && !prefersReducedMotion() ? 'smooth' : 'auto', block: 'center' });
+        }
+      };
+      requestAnimationFrame(() => requestAnimationFrame(tryScroll));
+    }
+  };
+
+  // سرویس درخواست اسکرول از خارج (App.tsx: پخش صوتی/ونمودار/انتخاب از مودال)
+  useEffect(() => {
+    const listener = (verseNumber: number) => scrollToVerse(verseNumber, 'smooth');
+    scrollListeners.add(listener);
+    return () => {
+      scrollListeners.delete(listener);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVirtualized, verses, renderCount]);
+
+  // سنتینل پایین: وقتی به انتهای پنجرهٔ متریال‌شده نزدیک شویم، chunk بعدی اضافه می‌شود
+  useEffect(() => {
+    if (!isVirtualized || isLoading || verses.length === 0) return;
+    if (renderCount >= verses.length) return;
+    const sentinel = document.getElementById('reader-virtual-sentinel');
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          observer.disconnect();
+          setRenderCount((prev) => Math.min(prev + CHUNK_SIZE, verses.length));
+        }
+      },
+      { rootMargin: '800px 0px', threshold: 0 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isVirtualized, renderCount, verses, isLoading]);
+
+  // اسکرول بازگشت به آیهٔ آخرین مطالعه پس از بارگذاری آیات (P3-T1)
+  useEffect(() => {
+    if (isLoading || verses.length === 0 || !initialScrollToVerseNumber) return;
+    if (initialScrollToVerseNumber < 1 || initialScrollToVerseNumber > verses.length) {
+      onInitialScrollHandled?.();
+      return;
+    }
+    // اگر سوره بلند است و آیهٔ مقصد هنوز متریال نشده، تعداد را افزایش بده
+    const targetEl = document.getElementById(`verse-${initialScrollToVerseNumber}`);
+    if (isVirtualized && !targetEl && initialScrollToVerseNumber > renderCount) {
+      setRenderCount(initialScrollToVerseNumber);
+    }
+    if (!targetEl) return; // در commit بعدی (مثلاً پنجره‌سازی) دوباره تلاش می‌شود
+    targetEl.scrollIntoView({
+      behavior: 'auto',
+      block: 'center',
+    });
+    onInitialScrollHandled?.();
+  }, [verses, isLoading, renderCount, initialScrollToVerseNumber]);
+
+  // ثبت «آخرین محل مطالعه» با IntersectionObserver + debounce (P3-T1)
+  useEffect(() => {
+    const handler = onReadingPositionChangeRef.current;
+    if (!handler || isLoading || verses.length === 0) return;
+
+    const verseMap = new Map<number, Verse>();
+    verses.forEach((v) => verseMap.set(v.verseNumber, v));
+
+    let bestVerse: Verse | null = null;
+    let scrollDebounce: ReturnType<typeof setTimeout> | null = null;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // هنگام بازگشت به آخرین مطالعه (still pending)، موقعیت فعلی (بالای صفحه/آیه ۱)
+        // را ثبت نکن تا آخرین آیهٔ واقعی حفظ شود.
+        if (resumePendingRef.current) return;
+
+        // برای هر دسته، برنده را صرفاً از روی همین ورودی‌ها و با هندسهٔ لحظهٔ فعلی
+        // محاسبه می‌کنیم تا انتخاب قبلی (مثلاً آیهٔ ۱ بالای صفحه) برندهٔ همیشگی نماند.
+        const candidates: VerseCandidate[] = [];
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const vn = Number((entry.target as HTMLElement).dataset.verseNumber);
+          const verse = verseMap.get(vn);
+          if (!verse) continue;
+          const rect = entry.boundingClientRect;
+          candidates.push({ verse, top: rect.top, bottom: rect.bottom });
+        }
+
+        const picked = pickReadingVerse(
+          candidates,
+          (window.innerHeight || document.documentElement.clientHeight || 800) * 0.3
+        );
+        if (!picked) return;
+        bestVerse = picked;
+
+        if (scrollDebounce) clearTimeout(scrollDebounce);
+        scrollDebounce = setTimeout(() => {
+          if (bestVerse && onReadingPositionChangeRef.current) {
+            onReadingPositionChangeRef.current(bestVerse);
+          }
+        }, 800);
+      },
+      { rootMargin: '0px 0px 0px 0px', threshold: [0, 0.2, 0.5, 1] }
+    );
+
+    document.querySelectorAll('[data-reader-verse-element]').forEach((el) => observer.observe(el));
+
+    return () => {
+      observer.disconnect();
+      if (scrollDebounce) clearTimeout(scrollDebounce);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verses, isLoading, renderCount]);
+
   // اسکرول خودکار به آیه جاری هنگام پخش ترتیل صوتی
   useEffect(() => {
     if (activePlayingVerseNumber !== null) {
       const verseEl = document.getElementById(`verse-${activePlayingVerseNumber}`);
+      if (isVirtualized && !verseEl && activePlayingVerseNumber > renderCount) {
+        setRenderCount(activePlayingVerseNumber);
+      }
       if (verseEl) {
         verseEl.scrollIntoView({
-          behavior: 'smooth',
+          behavior: prefersReducedMotion() ? 'auto' : 'smooth',
           block: 'center',
         });
       }
     }
-  }, [activePlayingVerseNumber]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePlayingVerseNumber, renderCount]);
 
   const arabicFontFamily = getArabicFontFamily(settings.arabicFont);
 
@@ -172,15 +377,18 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
             <p className="text-sm text-slate-500">آیه‌ای برای نمایش در این سوره یافت نشد.</p>
           </div>
         ) : (
-          verses.map((verse) => {
-            const isBookmarked = bookmarkedVerseIds.has(verse.verseNumber);
-            const isCurrentlyPlaying = activePlayingVerseNumber === verse.verseNumber;
+          <>
+            {visibleVerses.map((verse) => {
+              const isBookmarked = bookmarkedVerseIds.has(verse.verseNumber);
+              const isCurrentlyPlaying = activePlayingVerseNumber === verse.verseNumber;
 
             return (
               <article
                 key={verse.id}
                 id={`verse-${verse.verseNumber}`}
-                className={`p-4 sm:p-5 rounded-2xl border transition-all duration-200 relative group ${
+                data-reader-verse-element=""
+                data-verse-number={verse.verseNumber}
+                className={`reader-verse-card p-4 sm:p-5 rounded-2xl border transition-all duration-200 relative group ${
                   isCurrentlyPlaying
                     ? darkMode
                       ? 'bg-teal-950/40 border-teal-500 ring-2 ring-teal-500/30'
@@ -262,6 +470,16 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                       <Copy className="w-4 h-4" />
                     </button>
 
+                    {/* اشتراک‌گذاری آیه (متن + کارت تصویری) */}
+                    <button
+                      onClick={() => shareAyah(verse, getTranslationText(verse), currentSurah)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+                      title="اشتراک‌گذاری آیه"
+                      aria-label="اشتراک‌گذاری آیه"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+
                     {/* نشانه‌گذاری آیه (Bookmark) */}
                     <button
                       onClick={() => onToggleBookmark(verse.verseNumber)}
@@ -317,7 +535,18 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                 )}
               </article>
             );
-          })
+            })}
+            {/* سنتینل مجازی‌سازی: افزودن chunk بعدی هنگام نزدیک‌شدن به انتهای رندر فعلی */}
+            {isVirtualized && renderCount < verses.length && (
+              <div
+                id="reader-virtual-sentinel"
+                className="flex items-center justify-center py-3 text-xs text-slate-400"
+                aria-hidden="true"
+              >
+                در حال بارگذاری آیات بعدی…
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>

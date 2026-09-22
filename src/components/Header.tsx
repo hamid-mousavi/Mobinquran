@@ -16,9 +16,10 @@ import {
   X,
   Check,
   Layers,
-  Sparkle
+  Sparkle,
+  GraduationCap
 } from 'lucide-react';
-import { Surah, ViewMode, AIProvider } from '../types';
+import { Surah, ViewMode } from '../types';
 
 interface HeaderProps {
   currentSurah: Surah;
@@ -31,11 +32,11 @@ interface HeaderProps {
   onOpenKhatm: () => void;
   onOpenOffline: () => void;
   onOpenAI: () => void;
+  onOpenMemorization: () => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
   isAutoScrollActive: boolean;
   onToggleAutoScroll: () => void;
-  aiProvider?: AIProvider;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -49,11 +50,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenKhatm,
   onOpenOffline,
   onOpenAI,
+  onOpenMemorization,
   darkMode,
   onToggleDarkMode,
   isAutoScrollActive,
   onToggleAutoScroll,
-  aiProvider = 'groq',
 }) => {
   const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -106,7 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
             <ChevronDown className="w-3.5 h-3.5 opacity-70 shrink-0 mr-0.5" />
           </button>
 
-          {/* سوئیچ سریع نما (مصحف مدینه / نمای آیه‌ای) */}
+          {/* سوئیچ سریع نما (نمایهٔ صفحه‌ای / نمای آیه‌ای) */}
           <button
             id="btn-header-viewmode-toggle"
             onClick={onToggleViewMode}
@@ -117,13 +118,13 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
             title={
               viewMode === 'mushaf-page'
-                ? 'نمای فعلی: مصحف ۶۰۴ صفحه‌ای (کلیک جهت نمای آیه‌ای)'
-                : 'نمای فعلی: آیه‌ای (کلیک جهت مصحف ۶۰۴ صفحه‌ای)'
+                ? 'نمای فعلی: صفحه‌ای (کلیک جهت نمای آیه‌ای)'
+                : 'نمای فعلی: آیه‌ای (کلیک جهت صفحه‌ای)'
             }
           >
             <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="hidden sm:inline">
-              {viewMode === 'mushaf-page' ? 'مصحف ۶۰۴ ص' : 'نمای آیه‌ای'}
+              {viewMode === 'mushaf-page' ? 'نمایهٔ صفحه‌ای' : 'نمای آیه‌ای'}
             </span>
           </button>
         </div>
@@ -144,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-header-ai-assistant"
             onClick={onOpenAI}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-bold text-xs shadow-md transition-all active:scale-95"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-linear-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-bold text-xs shadow-md transition-all active:scale-95"
             title="دستیار هوشمند تدبّر و هدایت قرآنی"
           >
             <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-950" />
@@ -314,6 +315,28 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="text-[10px] text-slate-400">تقویم</span>
                   </button>
 
+                  {/* حالت حفظ */}
+                  <button
+                    onClick={() => {
+                      onOpenMemorization();
+                      setIsToolsMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between p-2 rounded-xl text-xs transition-colors ${
+                      darkMode ? 'hover:bg-slate-800' : 'hover:bg-stone-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                        <GraduationCap className="w-4 h-4" />
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold">حالت حفظ</div>
+                        <div className="text-[10px] text-slate-400">بازهٔ انتخابی، تکرار و خودآزمایی</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-slate-400">شروع</span>
+                  </button>
+
                   {/* دستیار هوشمند تدبّر */}
                   <button
                     onClick={() => {
@@ -330,10 +353,9 @@ export const Header: React.FC<HeaderProps> = ({
                       </div>
                       <div className="text-right">
                         <div className="font-semibold">دستیار هوشمند تدبّر</div>
-                        <div className="text-[10px] text-slate-400">تحلیل چندایجنتی (نمونه، علامه، ادیب)</div>
+                        <div className="text-[10px] text-slate-400">پاسخ مستند با ارجاع به آیات محلی</div>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{aiProvider === 'deepseek' ? 'DeepSeek' : aiProvider === 'groq' ? 'Groq' : 'OpenRouter'}</span>
                   </button>
                 </div>
 

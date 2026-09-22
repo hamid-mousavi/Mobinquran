@@ -12,6 +12,9 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'prompt',
         injectRegister: null,
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
         manifest: false,
         includeAssets: [
           'apple-touch-icon.png',
@@ -22,63 +25,13 @@ export default defineConfig(() => {
           'fonts/*.woff2',
           'data/*.json',
         ],
-        workbox: {
+        injectManifest: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
-          navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api/],
-          runtimeCaching: [
-            {
-              urlPattern: /^\/api\/.*/i,
-              handler: 'NetworkOnly',
-            },
-            {
-              urlPattern: /\/fonts\/.*\.woff2$/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'quran-fonts-cache',
-                expiration: {
-                  maxEntries: 20,
-                  maxAgeSeconds: 365 * 24 * 60 * 60,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-            {
-              urlPattern: /\/data\/.*\.json$/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'quran-core-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 365 * 24 * 60 * 60,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-            {
-              urlPattern: /\.(?:png|jpg|jpeg|svg|ico)$/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'quran-images-cache',
-                expiration: {
-                  maxEntries: 50,
-                  maxAgeSeconds: 90 * 24 * 60 * 60,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-          ],
         },
         devOptions: {
           enabled: true,
-          type: 'classic',
+          type: 'module',
         },
       }),
     ],

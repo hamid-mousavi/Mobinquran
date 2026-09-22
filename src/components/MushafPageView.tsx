@@ -1,19 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronRight, ChevronLeft, Volume2, Sparkles, BookOpen, Bookmark, Copy, Loader2, Info } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Volume2, Sparkles, BookOpen, Bookmark, Loader2, Share2 } from 'lucide-react';
 import { Surah, Verse, AppSettings } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
-
-interface PageVerse {
-  id: number;
-  surahId: number;
-  surahNameArabic: string;
-  surahNamePersian: string;
-  verseNumber: number;
-  juzNumber: number;
-  pageNumber: number;
-  textArabic: string;
-  translationMakarem: string;
-}
+import { shareAyah } from '../utils/shareAyah';
+import { QuranService } from '../services/quranService';
 
 interface MushafPageViewProps {
   initialPageNumber: number;
@@ -25,7 +15,19 @@ interface MushafPageViewProps {
   onOpenVerseDetail: (verse: Verse) => void;
   onOpenAIForVerse: (verse: Verse) => void;
   onPlayVerseAudio: (verseNumber: number) => void;
-  onPageChange: (newPage: number) => void;
+  onPageChange: (newPage: number, surahId?: number, verseNumber?: number) => void;
+}
+
+function getTranslationDisplay(verse: Verse, settings: AppSettings): string {
+  switch (settings.activeTranslator) {
+    case 'fooladvand':
+      return verse.translationFooladvand || verse.translationMakarem || '';
+    case 'ansarian':
+      return verse.translationAnsarian || verse.translationMakarem || '';
+    case 'makarem':
+    default:
+      return verse.translationMakarem || verse.translationFooladvand || '';
+  }
 }
 
 export const MushafPageView: React.FC<MushafPageViewProps> = ({
@@ -41,11 +43,12 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
   onPageChange,
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(initialPageNumber || 1);
-  const [verses, setVerses] = useState<PageVerse[]>([]);
+  const [verses, setVerses] = useState<Verse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedVerse, setSelectedVerse] = useState<PageVerse | null>(null);
+  const [selectedVerse, setSelectedVerse] = useState<Verse | null>(null);
   const [isJumpInputOpen, setIsJumpInputOpen] = useState(false);
   const [jumpPageInput, setJumpPageInput] = useState(String(initialPageNumber || 1));
+  const [isPartNavOpen, setIsPartNavOpen] = useState(false);
 
   const pageContainerRef = useRef<HTMLDivElement>(null);
 
@@ -53,35 +56,29 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     if (initialPageNumber && initialPageNumber !== currentPage) {
       setCurrentPage(initialPageNumber);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPageNumber]);
 
-  // بارگذاری آیات صفحه جاری
+  // بارگذاری آیات صفحهٔ جاری به‌صورت کاملاً آفلاین از دیتابیس محلی (P3-T2)
   useEffect(() => {
     let isCancelled = false;
     async function loadPageData(pageNum: number) {
       setIsLoading(true);
-      try {
-        const res = await fetch(`/api/quran/page/${pageNum}`);
-        if (!res.ok) throw new Error('خطا در دریافت صفحه مصحف');
-        const data = await res.json();
-        if (!isCancelled && data.verses) {
-          setVerses(data.verses);
-          setSelectedVerse(null);
-          onPageChange(pageNum);
-        }
-      } catch (err) {
-        console.error('Error loading mushaf page:', err);
-      } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
+      const pageVerses = await QuranService.getVersesByPage(pageNum);
+      if (isCancelled) return;
+      setVerses(pageVerses);
+      setSelectedVerse(null);
+      if (pageVerses.length > 0) {
+        onPageChange(pageNum, pageVerses[0].surahId, pageVerses[0].verseNumber);
       }
+      setIsLoading(false);
     }
 
     loadPageData(currentPage);
     return () => {
       isCancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
   const handlePrevPage = () => {
@@ -105,45 +102,62 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     }
   };
 
+  // ناوبری با کیبورد (P3-T6): در RTL فلش راست = صفحهٔ قبل و فلش چپ = صفحهٔ بعد
+  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
+    if (isLoading) return;
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      handlePrevPage();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      handleNextPage();
+    }
+  };
+
   // گروه‌بندی آیات این صفحه بر اساس سوره
-  const surahsOnThisPage: { surah: Surah; verses: PageVerse[] }[] = [];
+  const surahsOnThisPage: { surah: Surah; verses: Verse[] }[] = [];
   verses.forEach((v) => {
     let group = surahsOnThisPage.find((g) => g.surah.id === v.surahId);
     if (!group) {
-      const s = surahs.find((item) => item.id === v.surahId) || {
-        id: v.surahId,
-        nameArabic: v.surahNameArabic,
-        namePersian: v.surahNamePersian,
-        englishName: '',
-        revelationType: 'Meccan',
-        versesCount: 0,
-        startPage: currentPage,
-        juzNumber: v.juzNumber,
+      const meta = surahs.find((item) => item.id === v.surahId);
+      group = {
+        surah: meta || {
+          id: v.surahId,
+          nameArabic: `سورة ${v.surahId}`,
+          namePersian: `سوره ${v.surahId}`,
+          englishName: '',
+          revelationType: 'Meccan',
+          versesCount: 0,
+          startPage: currentPage,
+          juzNumber: v.juzNumber,
+        },
+        verses: [],
       };
-      group = { surah: s, verses: [] };
       surahsOnThisPage.push(group);
     }
     group.verses.push(v);
   });
 
   const currentJuz = verses[0]?.juzNumber || 1;
+  const currentHizbQuarter = verses[0]?.hizbQuarter;
 
-  // تبدیل آیه صفحه به مدل کامل Verse جهت ارسال به مودال تفسیر و تدبّر
-  const toFullVerse = (pv: PageVerse): Verse => ({
-    id: pv.id,
-    surahId: pv.surahId,
-    verseNumber: pv.verseNumber,
-    juzNumber: pv.juzNumber,
-    pageNumber: pv.pageNumber,
-    textArabic: pv.textArabic,
-    translationMakarem: pv.translationMakarem,
-    translationFooladvand: '',
-    translationAnsarian: '',
-  });
+  const renderSajdaMark = (verse: Verse) => {
+    if (!verse.sajda) return null;
+    const isObligatory = verse.sajda.obligatory;
+    return (
+      <span
+        className="inline-flex items-center justify-center mx-1 text-red-600 dark:text-red-400 font-bold select-none text-sm"
+        title={isObligatory ? 'آیهٔ سجدهٔ واجب ✋' : 'آیهٔ سجدهٔ مستحب ✋'}
+        aria-label={isObligatory ? 'آیه سجده واجب' : 'آیه سجده مستحب'}
+      >
+        ۩
+      </span>
+    );
+  };
 
   return (
     <div id="mushaf-page-container" className="max-w-3xl mx-auto px-2 sm:px-4 py-4 space-y-4">
-      {/* نوار بالایی مصحف (شماره جزء، سوره، و ناوبری صفحات) */}
+      {/* نوار بالایی مصحف (شماره جزء، ربع حزب، سوره، و ناوبری صفحات) */}
       <div
         className={`flex items-center justify-between px-4 py-2.5 rounded-2xl border transition-all ${
           darkMode
@@ -156,6 +170,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           disabled={currentPage <= 1 || isLoading}
           className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 disabled:opacity-40 transition-all"
           title="صفحه قبل"
+          aria-label="صفحه قبل"
         >
           <ChevronRight className="w-4 h-4" />
           <span className="hidden sm:inline">صفحه قبل</span>
@@ -164,6 +179,12 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         {/* سربرگ صفحه مصحف */}
         <div className="flex items-center gap-3 text-xs sm:text-sm font-bold text-center">
           <span className="text-teal-700 dark:text-teal-400">جزء {currentJuz}</span>
+          {currentHizbQuarter ? (
+            <>
+              <span className="opacity-30">•</span>
+              <span className="text-slate-500 dark:text-slate-400">ربع {currentHizbQuarter}</span>
+            </>
+          ) : null}
           <span className="opacity-30">•</span>
           {isJumpInputOpen ? (
             <form onSubmit={handleJumpToPage} className="flex items-center gap-1">
@@ -206,20 +227,94 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           disabled={currentPage >= 604 || isLoading}
           className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 disabled:opacity-40 transition-all"
           title="صفحه بعد"
+          aria-label="صفحه بعد"
         >
           <span className="hidden sm:inline">صفحه بعد</span>
           <ChevronLeft className="w-4 h-4" />
         </button>
       </div>
 
-      {/* قاب تزئینی مصحف شریف عثمان‌طه */}
+      {/* ناوبری اجزاء و احزاب */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setIsPartNavOpen((v) => !v)}
+          className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+            darkMode
+              ? 'bg-slate-900 border-slate-700 text-amber-300 hover:bg-slate-800'
+              : 'bg-white border-stone-200 text-teal-800 hover:bg-slate-50'
+          }`}
+          aria-expanded={isPartNavOpen}
+        >
+          جزء / حزب 📖
+        </button>
+      </div>
+
+      {isPartNavOpen && (
+        <div
+          className={`rounded-2xl border p-3 space-y-2 ${
+            darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-stone-200'
+          }`}
+        >
+          <div className="text-[11px] font-bold text-slate-400">شروع جزء ۳۰ گانه</div>
+          <div className="flex flex-wrap gap-1.5">
+            {Array.from({ length: 30 }, (_, i) => i + 1).map((juz) => (
+              <button
+                key={`juz-${juz}`}
+                onClick={() => {
+                  setIsPartNavOpen(false);
+                  QuranService.getJuzStartPage(juz).then((page) => {
+                    if (page) setCurrentPage(page);
+                  });
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                  juz === currentJuz
+                    ? 'bg-teal-600 text-white border-teal-600'
+                    : darkMode
+                    ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-teal-500'
+                    : 'bg-slate-50 border-stone-200 text-slate-600 hover:border-teal-500'
+                }`}
+              >
+                جزء {juz}
+              </button>
+            ))}
+          </div>
+          <div className="text-[11px] font-bold text-slate-400 pt-1">شروع ربع حزب ۶۰ گانه</div>
+          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+            {Array.from({ length: 60 }, (_, i) => i + 1).map((hizb) => (
+              <button
+                key={`hizb-${hizb}`}
+                onClick={() => {
+                  setIsPartNavOpen(false);
+                  QuranService.getHizbStartPage(hizb).then((page) => {
+                    if (page) setCurrentPage(page);
+                  });
+                }}
+                className={`px-2 py-1 rounded-lg text-[10px] font-semibold border transition-all ${
+                  hizb === currentHizbQuarter
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : darkMode
+                    ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-amber-500'
+                    : 'bg-slate-50 border-stone-200 text-slate-600 hover:border-amber-500'
+                }`}
+              >
+                {hizb}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* قاب تزئینی نمایهٔ صفحه‌ای (رندر بر اساس دیتابیس موجود؛ چیدمان ۱۵ خطی در P3-T3) */}
       <div
         ref={pageContainerRef}
-        className={`relative p-5 sm:p-8 rounded-3xl border-2 transition-all duration-300 shadow-md ${
+        tabIndex={0}
+        onKeyDown={handleContainerKeyDown}
+        className={`relative p-5 sm:p-8 rounded-3xl border-2 transition-all duration-300 shadow-md outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
           darkMode
             ? 'bg-slate-900 border-amber-500/20 text-slate-100'
             : 'bg-[#fcfaf6] border-[#d4b982]/60 text-slate-900 shadow-stone-200'
         }`}
+        aria-label="نمای صفحه مصحف — برای صفخهٔ قبل و بعد از کلیدهای جهتنما استفاده کنید"
       >
         {/* کادر تذهیب گوشه‌های صفحه مصحف */}
         <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-amber-600/40 pointer-events-none" />
@@ -231,8 +326,12 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           <div className="py-24 text-center space-y-3">
             <Loader2 className="w-8 h-8 mx-auto animate-spin text-teal-600 dark:text-teal-400" />
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-              در حال بازخوانی صفحه {currentPage} مصحف شریف مدینه...
+              در حال بازخوانی صفحه {currentPage} از دیتابیس محلی...
             </p>
+          </div>
+        ) : verses.length === 0 ? (
+          <div className="py-24 text-center text-sm text-slate-500 dark:text-slate-400">
+            آیات این صفحه در دسترس نیست. لطفاً یکبار به اینترنت متصل شوید تا بستهٔ داده نصب شود.
           </div>
         ) : (
           <div className="space-y-6">
@@ -258,8 +357,8 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                         </p>
                       </div>
 
-                      {/* بسمله (به جز سوره توبه) */}
-                      {group.surah.id !== 9 && (
+                      {/* بسمله: به جز سورهٔ توبه (بدون بسمله) و فاتحه (آیهٔ ۱ خودش بسمله است - رفع تکرار) */}
+                      {group.surah.id !== 1 && group.surah.id !== 9 && (
                         <p className="font-['Amiri_Quran'] text-lg sm:text-xl text-amber-900 dark:text-amber-300 py-1">
                           بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
                         </p>
@@ -267,7 +366,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                     </div>
                   )}
 
-                  {/* متن پیوسته آیات صفحه با علائم عثمان‌طه */}
+                  {/* متن پیوسته آیات صفحه (نه چیدمان ۱۵ خطی؛ تا P3-T3) */}
                   <div
                     className="text-justify leading-[2.6] tracking-normal text-slate-800 dark:text-slate-100"
                     style={{
@@ -287,12 +386,13 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                               ? 'bg-amber-300/40 dark:bg-amber-500/30 text-amber-950 dark:text-amber-200'
                               : 'hover:bg-stone-200/50 dark:hover:bg-slate-800/60'
                           }`}
-                          title={`سوره ${v.surahNameArabic} - آیه ${v.verseNumber} (کلیک جهت مشاهده ترجمه و تفسیر)`}
+                          title={`سوره ${group.surah.nameArabic} - آیه ${v.verseNumber} (کلیک جهت مشاهده ترجمه و تفاسیر)`}
                         >
                           {v.textArabic}{' '}
                           <span className="inline-flex items-center justify-center text-amber-700 dark:text-amber-400 text-sm font-bold select-none px-1">
                             ﴿{v.verseNumber}﴾
                           </span>{' '}
+                          {renderSajdaMark(v)}
                         </span>
                       );
                     })}
@@ -322,7 +422,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           <div className="flex items-center justify-between border-b border-stone-200 dark:border-slate-800 pb-2">
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-teal-700 dark:text-teal-400">
-                سوره {selectedVerse.surahNameArabic} • آیه {selectedVerse.verseNumber}
+                سوره {surahs.find((s) => s.id === selectedVerse.surahId)?.nameArabic || selectedVerse.surahId} • آیه {selectedVerse.verseNumber}
               </span>
               <span className="text-xs text-slate-400">
                 (صفحه {selectedVerse.pageNumber}، جزء {selectedVerse.juzNumber})
@@ -335,22 +435,25 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 onClick={() => onPlayVerseAudio(selectedVerse.verseNumber)}
                 className="p-1.5 rounded-lg bg-teal-600/10 text-teal-700 dark:text-teal-400 hover:bg-teal-600/20"
                 title="تلاوت صوتی این آیه"
+                aria-label="تلاوت صوتی این آیه"
               >
                 <Volume2 className="w-4 h-4" />
               </button>
 
               <button
-                onClick={() => onOpenVerseDetail(toFullVerse(selectedVerse))}
+                onClick={() => onOpenVerseDetail(selectedVerse)}
                 className="p-1.5 rounded-lg bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 text-slate-600 dark:text-slate-300"
-                title="تفسیر المیزان و نمونه"
+                title="مشاهده ترجمه‌ها و تفاسیر"
+                aria-label="مشاهده ترجمه‌ها و تفاسیر"
               >
                 <BookOpen className="w-4 h-4" />
               </button>
 
               <button
-                onClick={() => onOpenAIForVerse(toFullVerse(selectedVerse))}
+                onClick={() => onOpenAIForVerse(selectedVerse)}
                 className="p-1.5 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25"
                 title="تدبّر هوشمند"
+                aria-label="تدبر هوشمند"
               >
                 <Sparkles className="w-4 h-4" />
               </button>
@@ -359,6 +462,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 onClick={() => onToggleBookmark(selectedVerse.verseNumber)}
                 className="p-1.5 rounded-lg bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 text-slate-600 dark:text-slate-300"
                 title="نشانه‌گذاری"
+                aria-label="نشانه‌گذاری"
               >
                 <Bookmark
                   className={`w-4 h-4 ${
@@ -368,14 +472,45 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                   }`}
                 />
               </button>
+
+              <button
+                onClick={() =>
+                  shareAyah(selectedVerse, getTranslationDisplay(selectedVerse, settings), surahs.find((s) => s.id === selectedVerse.surahId) || {
+                    id: selectedVerse.surahId,
+                    nameArabic: `سورة ${selectedVerse.surahId}`,
+                    namePersian: `سوره ${selectedVerse.surahId}`,
+                    englishName: '',
+                    revelationType: 'Meccan',
+                    versesCount: 0,
+                    startPage: selectedVerse.pageNumber,
+                    juzNumber: selectedVerse.juzNumber,
+                  })
+                }
+                className="p-1.5 rounded-lg bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 text-slate-600 dark:text-slate-300"
+                title="اشتراک‌گذاری آیه"
+                aria-label="اشتراک‌گذاری آیه"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
-          {/* ترجمه فارسی روان */}
+          {/* ترجمه فارسی بر اساس مترجم انتخابی */}
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            <span className="font-bold text-slate-800 dark:text-slate-200">ترجمه آیت‌الله مکارم: </span>
-            {selectedVerse.translationMakarem}
+            <span className="font-bold text-slate-800 dark:text-slate-200">
+              {settings.activeTranslator === 'makarem'
+                ? 'ترجمه آیت‌الله مکارم: '
+                : settings.activeTranslator === 'fooladvand'
+                ? 'ترجمه استاد فولادوند: '
+                : 'ترجمه استاد انصاریان: '}
+            </span>
+            {getTranslationDisplay(selectedVerse, settings)}
           </p>
+          {selectedVerse.sajda && (
+            <p className="text-[11px] text-red-500 dark:text-red-400 font-bold">
+              ⚠️ {selectedVerse.sajda.obligatory ? 'این آیه از آیات سجدهٔ واجب است.' : 'این آیه از آیات سجدهٔ مستحب است.'}
+            </p>
+          )}
         </div>
       )}
     </div>

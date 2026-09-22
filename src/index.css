@@ -48,3 +48,27 @@
   font-style: normal;
   font-display: swap;
 }
+
+/* احترام به کاهش حرکت کاربر (P3-T6): حذف انیمیشن/انتقال غیرضروری وقتی پیش-کاهش فعال است */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-fadeIn,
+  .animate-spin,
+  .animate-pulse {
+    animation: none !important;
+  }
+}
+
+/* بهینه‌سازی رندر سوره‌های طولانی مثل بقره (P3-T8): رندر تدریجی خارج از دید توسط مرورگر */
+.reader-verse-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 130px;
+  contain: layout style;
+}

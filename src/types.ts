@@ -90,16 +90,29 @@ export interface ContentReference {
 export type ViewMode = 'verse-by-verse' | 'mushaf-page';
 export type Translator = 'makarem' | 'fooladvand' | 'ansarian';
 
-export type AIProvider = 'openrouter' | 'deepseek' | 'groq' | 'gemini';
+/** نوع خطای صوتی برای ثبت در لاگ مشاهده‌پذیری (P5-T5) */
+export type AudioErrorKind =
+  | 'network'    // قطعی شبکه / زمان‌فنا
+  | 'not-found'  // 404 — فایل در منبع وجود ندارد (مثلاً آیات غایب منشاوی)
+  | 'corrupt'    // فایل خراب / decode شکست
+  | 'cors'       // دسترسی CORS رد شد
+  | 'cancelled'  // پخش به‌صورت دستی متوقف شد
+  | 'unknown';
 
-export interface AISettings {
-  provider: AIProvider;
-  openrouterKey: string;
-  deepseekKey: string;
-  groqKey: string;
-  geminiKey?: string;
-  model: string; // فقط برای OpenRouter استفاده می‌شود
+export interface AudioErrorLogEntry {
+  id?: number;
+  createdAt: number;
+  surahId: number;
+  verseNumber: number;
+  reciterId: string;
+  sourceIndex: number;
+  sourceName: string;
+  kind: AudioErrorKind;
+  message: string;
+  /** رشته‌ی مرجع منبع (URL مقصد) بدون افشای کلید */
+  url: string;
 }
+
 export type ArabicFont =
   | 'uthman-taha'
   | 'kfgqpc-hafs'
@@ -148,4 +161,16 @@ export interface KhatmPlan {
   currentDay: number;
   lastReadDate?: string;
   isActive: boolean;
+}
+
+/** ابردادهٔ سوره پخش‌شده بدون نیاز به اینترنت (P5-T2) — باینری در Cache Storage (ADR-8) */
+export interface AudioDownloadRecord {
+  key: string; // `${reciterId}::${surahId}`
+  reciterId: 'parhizgar' | 'abdulbasit' | 'minshawi' | 'afasy';
+  surahId: number;
+  downloadedVerses: number;
+  totalVerses: number;
+  bytes: number;
+  downloadedAt: number;
+  sourcesUsed: string[];
 }

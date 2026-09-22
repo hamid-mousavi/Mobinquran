@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Send, BookOpen, Heart, RefreshCw, Languages, ShieldCheck, Bot, Server } from 'lucide-react';
-import { Verse, Surah, AISettings, AIProvider } from '../types';
+import { Verse, Surah } from '../types';
+import { aiResponseSchema, AiResponse } from '../services/aiContract';
+import { AiCandidateForRequest, retrieveAiCandidates } from '../services/aiRetrieval';
 
 interface AIAssistantModalProps {
   isOpen: boolean;
@@ -8,8 +10,7 @@ interface AIAssistantModalProps {
   currentVerse?: Verse | null;
   currentSurah?: Surah | null;
   darkMode: boolean;
-  aiSettings: AISettings;
-  onUpdateAISettings: (settings: AISettings) => void;
+  onOpenVerse?: (verse: Verse) => void;
 }
 
 export type AIAgentId = 'moral' | 'conceptual' | 'literary' | 'rational';
@@ -62,6 +63,8 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   agentId?: AIAgentId;
+  response?: AiResponse;
+  localCandidates?: AiCandidateForRequest[];
 }
 
 const QUICK_TOPICS = [
@@ -78,8 +81,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   currentVerse,
   currentSurah,
   darkMode,
-  aiSettings,
-  onUpdateAISettings,
+  onOpenVerse,
 }) => {
   const [selectedAgentId, setSelectedAgentId] = useState<AIAgentId>('moral');
   const [showAgentList, setShowAgentList] = useState(false);
@@ -95,6 +97,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isServerAiEnabled, setIsServerAiEnabled] = useState<boolean | null>(null);
+  const [candidates, setCandidates] = useState<AiCandidateForRequest[]>([]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -111,11 +114,6 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   const activeAgent = AI_AGENTS.find((a) => a.id === selectedAgentId) || AI_AGENTS[0];
   const ActiveAgentIcon = activeAgent.icon;
 
-  const activeProvider = aiSettings.provider;
-  const setProvider = (provider: AIProvider) => {
-    onUpdateAISettings({ ...aiSettings, provider });
-  };
-
   const handleSendMessage = async (customPrompt?: string) => {
     const textToSend = customPrompt || inputText.trim();
     if (!textToSend || isLoading) return;
@@ -124,41 +122,51 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
     setMessages(newMessages);
     if (!customPrompt) setInputText('');
     setIsLoading(true);
+    let fallbackCandidates: AiCandidateForRequest[] = [];
 
     try {
-      const payload = {
-        surahName: currentSurah?.nameArabic || '',
-        verseNumber: currentVerse?.verseNumber || 0,
-        arabicText: currentVerse?.textArabic || '',
-        translation: currentVerse?.translationMakarem || '',
-        userQuestion: textToSend,
-        mode: currentVerse ? 'verse_reflection' : 'topic_guidance',
-        agentId: selectedAgentId,
-        provider: aiSettings.provider,
-      };
-
-      let replyText = '';
       try {
-        const response = await fetch('/api/ai/tadabbur', {
+        const nextCandidates = await retrieveAiCandidates(textToSend, currentVerse);
+        fallbackCandidates = nextCandidates;
+        setCandidates(nextCandidates);
+        if (nextCandidates.length === 0) {
+          throw new Error('no_local_candidates');
+        }
+        const deviceStorageKey = 'quran_ai_device_id';
+        let deviceId = localStorage.getItem(deviceStorageKey);
+        if (!deviceId) {
+          deviceId = crypto.randomUUID();
+          localStorage.setItem(deviceStorageKey, deviceId);
+        }
+        const response = await fetch('/api/ai/ask', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          headers: { 'Content-Type': 'application/json', 'X-Device-ID': deviceId },
+          body: JSON.stringify({
+            question: textToSend,
+            candidates: nextCandidates.map(({ ref, text_fa }) => ({ ref, text_fa })),
+            lang: 'fa',
+          }),
         });
 
         const rawBody = await response.text();
-        let body: { reply?: string; error?: string } | null = null;
+        let body: { error?: string; code?: string; requestId?: string } | AiResponse | null = null;
         try {
           body = rawBody ? JSON.parse(rawBody) : null;
         } catch {
           // Non-JSON response
         }
 
-        if (!response.ok || !body) {
-          const detail = body?.error || 'سرویس هوش مصنوعی در حال حاضر در دسترس نیست.';
-          throw new Error(detail);
+        const validatedResponse = aiResponseSchema.safeParse(body);
+        if (!response.ok || !validatedResponse.success) {
+          throw new Error('ai_request_failed');
         }
-
-        replyText = body.reply || 'پاسخی دریافت نشد.';
+        const candidateRefs = new Set(nextCandidates.map((candidate) => candidate.ref));
+        const safeResponse = {
+          ...validatedResponse.data,
+          verses: validatedResponse.data.verses.filter((verse) => candidateRefs.has(verse.ref)),
+        };
+        if (safeResponse.verses.length === 0) throw new Error('invalid_references');
+        setMessages([...newMessages, { role: 'assistant', content: safeResponse.summary, agentId: selectedAgentId, response: safeResponse }]);
       } catch (err: any) {
         console.error('AI request failed:', err);
         setMessages([
@@ -167,12 +175,12 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             role: 'assistant',
             agentId: selectedAgentId,
             content: 'سرویس هوش مصنوعی در حال حاضر در دسترس نیست. لطفاً اتصال اینترنت خود یا وضعیت سرور را بررسی فرمایید. می‌توانید متن آیه و ترجمه‌ها را مطالعه نمایید.',
+            localCandidates: fallbackCandidates,
           },
         ]);
         return;
       }
 
-      setMessages([...newMessages, { role: 'assistant', content: replyText, agentId: selectedAgentId }]);
     } finally {
       setIsLoading(false);
     }
@@ -194,11 +202,11 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           className={`p-3.5 border-b flex items-center justify-between ${
             darkMode
               ? 'border-slate-800 bg-slate-900 text-slate-100'
-              : 'bg-gradient-to-r from-teal-800 to-emerald-900 text-white'
+              : 'bg-linear-to-r from-teal-800 to-emerald-900 text-white'
           }`}
         >
           <div className="flex items-center gap-2.5">
-            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${activeAgent.color} text-white flex items-center justify-center shadow`}>
+            <div className={`w-9 h-9 rounded-xl bg-linear-to-br ${activeAgent.color} text-white flex items-center justify-center shadow`}>
               <ActiveAgentIcon className="w-5 h-5" />
             </div>
             <div>
@@ -272,29 +280,10 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           </div>
         </div>
 
-        {/* نوار وضعیت سرویس و انتخاب ارائه‌دهنده */}
-        <div className={`border-b px-3 py-2 flex items-center justify-between gap-2 flex-wrap ${
+        {/* وضعیت کلی سرویس */}
+        <div className={`border-b px-3 py-2 flex items-center justify-end ${
           darkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-stone-50/80 border-stone-200'
         }`}>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">سرویس:</span>
-            {(['gemini', 'openrouter', 'deepseek', 'groq'] as AIProvider[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setProvider(p)}
-                className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all border ${
-                  aiSettings.provider === p
-                    ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
-                    : darkMode
-                    ? 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700'
-                    : 'bg-white hover:bg-stone-100 text-slate-700 border-stone-200'
-                }`}
-              >
-                {p === 'gemini' ? 'Gemini' : p === 'deepseek' ? 'DeepSeek' : p === 'groq' ? 'Groq' : 'OpenRouter'}
-              </button>
-            ))}
-          </div>
-
           <div className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg ${
             isServerAiEnabled === true
               ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
@@ -304,11 +293,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           }`}>
             <Server className="w-3 h-3" />
             <span>
-              {isServerAiEnabled === true
-                ? 'سرویس هوش مصنوعی فعال'
-                : isServerAiEnabled === false
-                ? 'تنظیمات سرور کامل نیست'
-                : 'بررسی وضعیت...'}
+              {isServerAiEnabled === true ? 'سرویس هوش مصنوعی فعال' : isServerAiEnabled === false ? 'دستیار در دسترس نیست' : 'بررسی وضعیت...'}
             </span>
           </div>
         </div>
@@ -316,24 +301,15 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         <div className={`px-3 py-2 text-[10px] leading-relaxed border-b ${
           darkMode ? 'bg-amber-950/20 border-amber-900/50 text-amber-200' : 'bg-amber-50 border-amber-100 text-amber-900'
         }`}>
-          پاسخ‌ها با هوش مصنوعی تولید می‌شوند و ممکن است خطا داشته باشند. برای پژوهش، فتوا یا تصمیم‌های مهم به منابع معتبر و اهل‌نظر مراجعه کنید.
+          پاسخ‌ها با هوش مصنوعی تولید می‌شوند و ممکن است خطا داشته باشند؛ این دستیار مرجع فتوا یا تفسیر رسمی نیست.
         </div>
 
-        {/* برچسب آیه انتخابی اگر وجود دارد */}
         {currentVerse && (
-          <div
-            className={`px-4 py-2 text-xs border-b flex items-center justify-between ${
-              darkMode
-                ? 'bg-slate-800/60 border-slate-800 text-amber-300'
-                : 'bg-amber-50 border-amber-100 text-teal-900'
-            }`}
-          >
-            <span className="font-bold">
-              تدبّر آیه {currentVerse.verseNumber} سوره {currentSurah?.nameArabic}:
-            </span>
-            <span className="truncate max-w-[220px] opacity-75 font-['Amiri_Quran']">
-              {currentVerse.textArabic}
-            </span>
+          <div className={`px-4 py-2 text-xs border-b flex items-center justify-between ${
+            darkMode ? 'bg-slate-800/60 border-slate-800 text-amber-300' : 'bg-amber-50 border-amber-100 text-teal-900'
+          }`}>
+            <span className="font-bold">آیه {currentVerse.verseNumber} سوره {currentSurah?.nameArabic}:</span>
+            <span className="truncate max-w-55 opacity-75 font-['Amiri_Quran']">{currentVerse.textArabic}</span>
           </div>
         )}
 
@@ -342,7 +318,6 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           {messages.map((m, idx) => {
             const msgAgent = AI_AGENTS.find((a) => a.id === m.agentId) || activeAgent;
             const MsgIcon = msgAgent.icon;
-
             return (
               <div
                 key={idx}
@@ -350,7 +325,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
               >
                 {m.role === 'assistant' && (
                   <div
-                    className={`w-7 h-7 rounded-lg bg-gradient-to-br ${msgAgent.color} text-white flex items-center justify-center shrink-0 mt-1 shadow-sm`}
+                    className={`w-7 h-7 rounded-lg bg-linear-to-br ${msgAgent.color} text-white flex items-center justify-center shrink-0 mt-1 shadow-sm`}
                     title={msgAgent.name}
                   >
                     <MsgIcon className="w-4 h-4" />
@@ -373,6 +348,49 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                     </div>
                   )}
                   {m.content}
+                  {m.response && (
+                    <div className="mt-3 space-y-2">
+                      <div className="text-[10px] font-bold text-slate-500">ارجاع‌های معتبر از متن محلی قرآن</div>
+                      {m.response.verses.map((answer) => {
+                        const candidate = candidates.find((item) => item.ref === answer.ref);
+                        if (!candidate) return null;
+                        return (
+                          <button
+                            key={answer.ref}
+                            type="button"
+                            onClick={() => onOpenVerse?.(candidate.verse)}
+                            className="w-full text-right rounded-xl border border-teal-500/30 bg-teal-500/5 p-2.5 hover:bg-teal-500/10"
+                          >
+                            <div className="flex items-center justify-between text-[11px] font-bold text-teal-700 dark:text-teal-300">
+                              <span>{answer.ref}</span>
+                              <span>متن آیه از حافظهٔ محلی</span>
+                            </div>
+                            <p className="mt-1 font-['Amiri_Quran'] leading-7 text-slate-700 dark:text-slate-200">{candidate.verse.textArabic}</p>
+                            <p className="mt-1 text-[11px]">{answer.why_relevant}</p>
+                            <p className="mt-1 text-[11px] text-slate-500">نکته: {answer.practical_note}</p>
+                          </button>
+                        );
+                      })}
+                      <div className="text-[10px] text-amber-600">سطح اطمینان: {m.response.confidence} · تولیدشده با هوش مصنوعی</div>
+                    </div>
+                  )}
+                  {m.localCandidates && m.localCandidates.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <div className="text-[10px] font-bold text-slate-500">نتایج جستجوی محلی (بدون توضیح AI)</div>
+                      {m.localCandidates.map((candidate) => (
+                        <button
+                          key={candidate.ref}
+                          type="button"
+                          onClick={() => onOpenVerse?.(candidate.verse)}
+                          className="w-full text-right rounded-xl border border-slate-400/30 bg-slate-500/5 p-2.5 hover:bg-slate-500/10"
+                        >
+                          <div className="text-[11px] font-bold text-teal-700 dark:text-teal-300">{candidate.ref}</div>
+                          <p className="mt-1 font-['Amiri_Quran'] leading-7 text-slate-700 dark:text-slate-200">{candidate.verse.textArabic}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{candidate.text_fa}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );

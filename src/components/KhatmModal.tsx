@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, CheckCircle2, Circle, Flame, Sparkles, X, PlusCircle, RotateCcw, BookOpen, ChevronLeft } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Calendar, CheckCircle2, Circle, Flame, X, RotateCcw, BookOpen } from 'lucide-react';
 import { KhatmPlan, KhatmType } from '../types';
+import { localDateKey, currentKhatmDay } from '../utils/date';
+import { buildKhatmSegments, KhatmSegment } from '../utils/khatmMath';
+import { QuranService } from '../services/quranService';
 
 interface KhatmModalProps {
   isOpen: boolean;
@@ -9,17 +12,7 @@ interface KhatmModalProps {
   onNavigateToPage: (pageNumber: number) => void;
 }
 
-const DEFAULT_PLAN: KhatmPlan = {
-  id: 'ramadan_30_default',
-  title: 'ختم ۳۰ روزه قرآن کریم (جزء به جزء)',
-  type: 'ramadan_30',
-  startDate: new Date().toISOString().split('T')[0],
-  targetDays: 30,
-  totalPages: 604,
-  completedPages: [],
-  currentDay: 1,
-  isActive: true,
-};
+const DEFAULT_SEGMENT_COUNT = 30;
 
 export const KhatmModal: React.FC<KhatmModalProps> = ({
   isOpen,
@@ -27,107 +20,213 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
   darkMode,
   onNavigateToPage,
 }) => {
-  const [plan, setPlan] = useState<KhatmPlan>(() => {
-    const saved = localStorage.getItem('quran_khatm_plan');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return DEFAULT_PLAN;
-      }
-    }
-    return DEFAULT_PLAN;
-  });
+  const [plan, setPlan] = useState<KhatmPlan | null>(null);
+  const [segments, setSegments] = useState<KhatmSegment[]>([]);
+  const [perDayLabel, setPerDayLabel] = useState('');
+  const [isPlanLoading, setIsPlanLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState<'status' | 'new_plan'>('status');
   const [newPlanType, setNewPlanType] = useState<KhatmType>('ramadan_30');
   const [customDays, setCustomDays] = useState(60);
 
   useEffect(() => {
-    localStorage.setItem('quran_khatm_plan', JSON.stringify(plan));
-  }, [plan]);
+    if (!isOpen) return;
+    let cancelled = false;
+
+    (async () => {
+      setIsPlanLoading(true);
+      try {
+        // مرزهای واقعی مصحف و برنامهٔ فعال (هر دو از IndexedDB)
+        const [starts, savedPlan] = await Promise.all([
+          QuranService.getMushafStarts(),
+          QuranService.getKhatmPlan(),
+        ]);
+        if (cancelled) return;
+
+        const target = savedPlan ?? {
+          id: 'ramadan_30_default',
+          title: 'ختم ۳۰ روزه قرآن کریم (جزء به جزء)',
+          type: 'ramadan_30' as KhatmType,
+          startDate: localDateKey(),
+          targetDays: DEFAULT_SEGMENT_COUNT,
+          totalPages: 604,
+          completedPages: [],
+          currentDay: 1,
+          isActive: true,
+        };
+
+        if (cancelled) return;
+        setPlan(target);
+
+        const result = buildKhatmSegments(
+          target.type || 'custom',
+          target.targetDays,
+          starts.juzStartPages,
+          starts.quarterStartPages
+        );
+        setSegments(result.segments);
+        setPerDayLabel(result.perDayLabel);
+      } catch {
+        // در صورت خطا، حالت نخست ختم ۳۰ روزه با تقسیم هم‌تا
+        const fallback: KhatmSegment[] = [];
+        const len = Math.ceil(604 / DEFAULT_SEGMENT_COUNT);
+        for (let day = 1; day <= DEFAULT_SEGMENT_COUNT; day++) {
+          fallback.push({
+            day,
+            startPage: (day - 1) * len + 1,
+            endPage: Math.min(604, day * len),
+            label: '',
+          });
+        }
+        setSegments(fallback);
+        setPerDayLabel(`روزانه ~${len} صفحه`);
+        setPlan({
+          id: 'ramadan_30_default',
+          title: 'ختم ۳۰ روزه قرآن کریم (جزء به جزء)',
+          type: 'ramadan_30',
+          startDate: localDateKey(),
+          targetDays: DEFAULT_SEGMENT_COUNT,
+          totalPages: 604,
+          completedPages: [],
+          currentDay: 1,
+          isActive: true,
+        });
+      } finally {
+        if (!cancelled) setIsPlanLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  // ذخیرهٔ همهٔ تغییرات برنامه به‌صورت مستقیم در Dexie (P3-T9)
+  const applyPlanChange = useCallback((updater: (prev: KhatmPlan) => KhatmPlan) => {
+    setPlan((prev) => {
+      if (!prev) return prev;
+      const next = updater(prev);
+      QuranService.saveKhatmPlan({ ...next, isActive: true }).catch(() => {});
+      return next;
+    });
+  }, []);
 
   if (!isOpen) return null;
 
-  // محاسبات روزانه
-  const pagesPerDay = Math.ceil(plan.totalPages / plan.targetDays);
-  const todayStartPage = Math.min(604, (plan.currentDay - 1) * pagesPerDay + 1);
-  const todayEndPage = Math.min(604, plan.currentDay * pagesPerDay);
+  // روز جاری از روی تاریخ شروع و تاریخ محلیِ امروز (نه UTC و نه شمارندهٔ ذخیره‌شده)
+  const targetDays = plan?.targetDays || DEFAULT_SEGMENT_COUNT;
+  const totalPages = plan?.totalPages || 604;
+  const derivedDay = plan ? currentKhatmDay(plan.startDate, targetDays) : 1;
+  const currentDay = Math.min(derivedDay, Math.max(1, segments.length || targetDays));
 
-  const completedCount = plan.completedPages.length;
-  const progressPercent = Math.min(100, Math.round((completedCount / plan.totalPages) * 100));
+  const todaySegment: KhatmSegment | null = segments[currentDay - 1] || null;
 
-  // بررسی اینکه آیا صفحات امروز همه خوانده شده‌اند
-  const todayPages: number[] = [];
-  for (let p = todayStartPage; p <= todayEndPage; p++) {
-    todayPages.push(p);
-  }
-  const isTodayCompleted = todayPages.every((p) => plan.completedPages.includes(p));
+  const completedCount = plan?.completedPages.length || 0;
+  const progressPercent = Math.min(100, Math.round((completedCount / totalPages) * 100));
+
+  // آیا همهٔ صفحات بازهٔ امروز خوانده شده‌اند؟
+  const isTodayCompleted =
+    !!todaySegment &&
+    (() => {
+      const pages = plan?.completedPages || [];
+      for (let p = todaySegment.startPage; p <= todaySegment.endPage; p++) {
+        if (!pages.includes(p)) return false;
+      }
+      return true;
+    })();
 
   const togglePageCompletion = (pageNum: number) => {
-    setPlan((prev) => {
+    applyPlanChange((prev) => {
       const exists = prev.completedPages.includes(pageNum);
       const updatedPages = exists
         ? prev.completedPages.filter((p) => p !== pageNum)
         : [...prev.completedPages, pageNum].sort((a, b) => a - b);
-
-      return {
-        ...prev,
-        completedPages: updatedPages,
-      };
+      return { ...prev, completedPages: updatedPages };
     });
   };
 
   const handleMarkTodayCompleted = () => {
-    setPlan((prev) => {
-      const newPages = new Set([...prev.completedPages, ...todayPages]);
-      const nextDay = Math.min(prev.targetDays, prev.currentDay + 1);
+    if (!todaySegment || !plan) return;
+    applyPlanChange((prev) => {
+      const newPages = new Set(prev.completedPages);
+      for (let p = todaySegment.startPage; p <= todaySegment.endPage; p++) {
+        newPages.add(p);
+      }
       return {
         ...prev,
         completedPages: Array.from(newPages).sort((a, b) => a - b),
-        currentDay: nextDay,
-        lastReadDate: new Date().toISOString().split('T')[0],
+        lastReadDate: localDateKey(),
       };
     });
   };
 
-  const handleCreateNewPlan = () => {
+  const handleCreateNewPlan = async () => {
     let days = 30;
-    let title = 'ختم ۳۰ روزه قرآن کریم (روزانه ۱ جزء)';
+    let title = 'ختم ۳۰ روزه قرآن کریم (بر اساس مرز واقعی اجزاء)';
 
     if (newPlanType === 'arbaeen_40') {
       days = 40;
-      title = 'چله قرآنی و تزکیه نفس (۴۰ روزه - روزانه ۱۵ صفحه)';
+      title = 'چله قرآنی و تزکیه نفس (۴۰ روزه - بر اساس حدود حزب از جدول مصحف)';
     } else if (newPlanType === 'hizb_120') {
       days = 120;
-      title = 'ختم تدبّری ۱۲۰ روزه (روزانه ۱ حزب / ۵ صفحه)';
+      title = 'ختم تدبّری ۱۲۰ روزه (روزانه ۲ ربع حزب)';
     } else if (newPlanType === 'custom') {
       days = Math.max(10, Math.min(365, customDays));
-      title = `ختم سفارشی ${days} روزه (روزانه ${Math.ceil(604 / days)} صفحه)`;
+      title = `ختم سفارشی ${days} روزه`;
     }
 
-    const newPlan: KhatmPlan = {
-      id: `plan_${Date.now()}`,
-      title,
-      type: newPlanType,
-      startDate: new Date().toISOString().split('T')[0],
-      targetDays: days,
-      totalPages: 604,
-      completedPages: [],
-      currentDay: 1,
-      isActive: true,
-    };
+    try {
+      const starts = await QuranService.getMushafStarts();
+      const result = buildKhatmSegments(
+        newPlanType,
+        days,
+        starts.juzStartPages,
+        starts.quarterStartPages
+      );
+      setSegments(result.segments);
+      setPerDayLabel(result.perDayLabel);
 
-    setPlan(newPlan);
-    setActiveTab('status');
+      const newPlan: KhatmPlan = {
+        id: `plan_${Date.now()}`,
+        title,
+        type: newPlanType,
+        startDate: localDateKey(),
+        targetDays: days,
+        totalPages: 604,
+        completedPages: [],
+        currentDay: 1,
+        isActive: true,
+      };
+      await QuranService.saveKhatmPlan(newPlan);
+      setPlan(newPlan);
+      setActiveTab('status');
+    } catch {
+      // fallback: تقسیم هم‌تا
+      const result = buildKhatmSegments('custom', days, [], []);
+      setSegments(result.segments);
+      setPerDayLabel(result.perDayLabel);
+      const newPlan: KhatmPlan = {
+        id: `plan_${Date.now()}`,
+        title,
+        type: newPlanType,
+        startDate: localDateKey(),
+        targetDays: days,
+        totalPages: 604,
+        completedPages: [],
+        currentDay: 1,
+        isActive: true,
+      };
+      await QuranService.saveKhatmPlan(newPlan);
+      setPlan(newPlan);
+      setActiveTab('status');
+    }
   };
 
   const handleResetCurrentPlan = () => {
     if (window.confirm('آیا از بازنشانی پیشرفت برنامه ختم قرآن اطمینان دارید؟')) {
-      setPlan((prev) => ({
+      applyPlanChange((prev) => ({
         ...prev,
         completedPages: [],
-        currentDay: 1,
       }));
     }
   };
@@ -164,6 +263,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
           <button
             onClick={onClose}
             className="p-2 rounded-xl hover:bg-stone-200 dark:hover:bg-slate-800 transition-colors text-slate-500"
+            aria-label="بستن پنجره ختم"
           >
             <X className="w-5 h-5" />
           </button>
@@ -196,139 +296,164 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
         {/* محتوای مودال */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
           {activeTab === 'status' ? (
-            <>
-              {/* کارت وضعیت کلی */}
-              <div
-                className={`p-4 sm:p-5 rounded-2xl border relative overflow-hidden ${
-                  darkMode
-                    ? 'bg-gradient-to-br from-slate-800 to-slate-850 border-slate-700'
-                    : 'bg-gradient-to-br from-white to-amber-50/50 border-amber-200/80 shadow-sm'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
-                      برنامه فعال
-                    </span>
-                    <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
-                      {plan.title}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      روز {plan.currentDay} از {plan.targetDays} • روزانه ~{pagesPerDay} صفحه
-                    </p>
-                  </div>
-                  <div className="text-left">
-                    <span className="text-2xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400">
-                      {progressPercent}٪
-                    </span>
-                    <p className="text-[11px] text-slate-400">پیشرفت کل</p>
-                  </div>
-                </div>
-
-                {/* نوار پیشرفت */}
-                <div className="mt-4 w-full bg-stone-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-gradient-to-l from-amber-500 to-amber-600 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-
-                <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                  <span>{completedCount} صفحه خوانده شده</span>
-                  <span>{plan.totalPages - completedCount} صفحه باقیمانده</span>
-                </div>
+            isPlanLoading && !plan ? (
+              <div className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+                در حال بارگذاری برنامهٔ ختم...
               </div>
-
-              {/* بخش تلاوت امروز */}
-              <div
-                className={`p-4 rounded-2xl border space-y-3 ${
-                  darkMode
-                    ? 'bg-slate-800/60 border-slate-700'
-                    : 'bg-white border-stone-200 shadow-sm'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Flame className="w-5 h-5 text-amber-500" />
-                    <h4 className="font-bold text-sm">تکلیف تلاوت امروز (روز {plan.currentDay})</h4>
-                  </div>
-                  <span className="text-xs font-bold text-teal-700 dark:text-teal-400">
-                    صفحه {todayStartPage} تا {todayEndPage}
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  با تلاوت این {todayPages.length} صفحه در مصحف شریف، سهم امروز از عهد قرآنی خود را به پایان برسانید.
-                </p>
-
-                {/* صفحات ریز امروز جهت علامت‌گذاری */}
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {todayPages.map((pageNum) => {
-                    const isDone = plan.completedPages.includes(pageNum);
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => togglePageCompletion(pageNum)}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                          isDone
-                            ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                            : 'bg-stone-50 dark:bg-slate-800 border-stone-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-amber-400'
-                        }`}
-                      >
-                        {isDone ? (
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                        ) : (
-                          <Circle className="w-3.5 h-3.5 opacity-40" />
-                        )}
-                        <span>ص {pageNum}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="pt-2 flex flex-col sm:flex-row items-center gap-2">
-                  <button
-                    onClick={() => {
-                      onNavigateToPage(todayStartPage);
-                      onClose();
-                    }}
-                    className="w-full sm:w-auto flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow transition-all active:scale-95"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    <span>شروع تلاوت امروز (صفحه {todayStartPage})</span>
-                  </button>
-
-                  <button
-                    onClick={handleMarkTodayCompleted}
-                    className={`w-full sm:w-auto py-2.5 px-4 rounded-xl font-bold text-xs border transition-all ${
-                      isTodayCompleted
-                        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 cursor-default'
-                        : 'bg-stone-100 dark:bg-slate-800 hover:bg-amber-500/10 text-slate-700 dark:text-slate-200 border-stone-200 dark:border-slate-700'
-                    }`}
-                  >
-                    {isTodayCompleted ? 'تلاوت امروز ثبت شد ✓' : 'ثبت کامل تلاوت امروز'}
-                  </button>
-                </div>
-              </div>
-
-              {/* اکشن بازنشانی */}
-              <div className="flex justify-end pt-1">
-                <button
-                  onClick={handleResetCurrentPlan}
-                  className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-red-500 transition-colors"
+            ) : (
+              <>
+                {/* کارت وضعیت کلی */}
+                <div
+                  className={`p-4 sm:p-5 rounded-2xl border relative overflow-hidden ${
+                    darkMode
+                      ? 'bg-gradient-to-br from-slate-800 to-slate-850 border-slate-700'
+                      : 'bg-gradient-to-br from-white to-amber-50/50 border-amber-200/80 shadow-sm'
+                  }`}
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>بازنشانی پیشرفت برنامه</span>
-                </button>
-              </div>
-            </>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                        برنامه فعال
+                      </span>
+                      <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                        {plan?.title}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        روز {currentDay} از {targetDays} • {perDayLabel}
+                      </p>
+                    </div>
+                    <div className="text-left">
+                      <span className="text-2xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400">
+                        {progressPercent}٪
+                      </span>
+                      <p className="text-[11px] text-slate-400">پیشرفت کل</p>
+                    </div>
+                  </div>
+
+                  {/* نوار پیشرفت */}
+                  <div className="mt-4 w-full bg-stone-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-gradient-to-l from-amber-500 to-amber-600 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    <span>{completedCount} صفحه خوانده شده</span>
+                    <span>{totalPages - completedCount} صفحه باقیمانده</span>
+                  </div>
+                </div>
+
+                {/* بخش تلاوت امروز */}
+                <div
+                  className={`p-4 rounded-2xl border space-y-3 ${
+                    darkMode
+                      ? 'bg-slate-800/60 border-slate-700'
+                      : 'bg-white border-stone-200 shadow-sm'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-5 h-5 text-amber-500" />
+                      <h4 className="font-bold text-sm">تکلیف تلاوت امروز (روز {currentDay})</h4>
+                    </div>
+                    {todaySegment && (
+                      <span className="text-xs font-bold text-teal-700 dark:text-teal-400">
+                        صفحه {todaySegment.startPage} تا {todaySegment.endPage}
+                        {todaySegment.label ? ` • ${todaySegment.label}` : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    با تلاوت امروز، سهم روزانهٔ عهد قرآنی خود را با مرزهای واقعی مصحف
+                    (جزء/ربع حزب) به پایان برسانید.
+                  </p>
+
+                  {todaySegment ? (
+                    <>
+                      {/* صفحات ریز امروز جهت علامت‌گذاری */}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {(() => {
+                          const pageButtons: React.ReactNode[] = [];
+                          for (
+                            let pageNum = todaySegment.startPage;
+                            pageNum <= todaySegment.endPage;
+                            pageNum++
+                          ) {
+                            const isDone = plan?.completedPages.includes(pageNum) || false;
+                            pageButtons.push(
+                              <button
+                                key={pageNum}
+                                onClick={() => togglePageCompletion(pageNum)}
+                                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                                  isDone
+                                    ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                                    : 'bg-stone-50 dark:bg-slate-800 border-stone-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-amber-400'
+                                }`}
+                              >
+                                {isDone ? (
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Circle className="w-3.5 h-3.5 opacity-40" />
+                                )}
+                                <span>ص {pageNum}</span>
+                              </button>
+                            );
+                          }
+                          return pageButtons;
+                        })()}
+                      </div>
+
+                      <div className="pt-2 flex flex-col sm:flex-row items-center gap-2">
+                        <button
+                          onClick={() => {
+                            onNavigateToPage(todaySegment.startPage);
+                            onClose();
+                          }}
+                          className="w-full sm:w-auto flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow transition-all active:scale-95"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                          <span>شروع تلاوت امروز (صفحه {todaySegment.startPage})</span>
+                        </button>
+
+                        <button
+                          onClick={handleMarkTodayCompleted}
+                          className={`w-full sm:w-auto py-2.5 px-4 rounded-xl font-bold text-xs border transition-all ${
+                            isTodayCompleted
+                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 cursor-default'
+                              : 'bg-stone-100 dark:bg-slate-800 hover:bg-amber-500/10 text-slate-700 dark:text-slate-200 border-stone-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {isTodayCompleted ? 'تلاوت امروز ثبت شد ✓' : 'ثبت کامل تلاوت امروز'}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-400">محاسبهٔ بازهٔ امروز در حال انجام است...</p>
+                  )}
+                </div>
+
+                {/* اکشن بازنشانی */}
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={handleResetCurrentPlan}
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>بازنشانی پیشرفت برنامه</span>
+                  </button>
+                </div>
+              </>
+            )
           ) : (
             /* تعریف برنامه جدید */
             <div className="space-y-4">
               <div className="space-y-1">
                 <h3 className="font-bold text-sm">انتخاب قالب ختم قرآن کریم</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  یکی از دوره‌های استاندارد زیر را جهت برنامه‌ریزی تلاوت مداوم انتخاب کنید:
+                  بازهٔ روزانه با مرز واقعی اجزاء و احزاب از جدول مصحف محاسبه می‌شود
+                  (نه تقسیم سادهٔ `604 / روز`).
                 </p>
               </div>
 
@@ -347,11 +472,12 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
                       ختم ۳۰ روزه ماه مبارک رمضان
                     </span>
                     <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                      روزانه ۱ جزء (~۲۰ صفحه)
+                      روزانه ۱ جزء (مرز واقعی)
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    مناسب برای ماه مبارک رمضان جهت قرائت یک جزء در هر شبانه‌روز.
+                    مناسب برای ماه مبارک رمضان جهت قرائت یک جزء در هر شبانه‌روز؛ بازهٔ هر روز دقیقاً
+                    همان مرز جزء در مصحف است.
                   </p>
                 </div>
 
@@ -369,11 +495,11 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
                       چله قرآنی و تزکیه (۴۰ روزه)
                     </span>
                     <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                      روزانه ۱۵ صفحه
+                      روزانه ~۱۵ صفحه
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    دوره‌ای معنوی برای انس با قرآن در مدت ۴۰ روز با گام‌های روزانه متوازن.
+                    دوره‌ای معنوی برای انس با قرآن در ۴۰ روز با گام‌های روزانهٔ هم‌گام با مرزهای حزب.
                   </p>
                 </div>
 
@@ -388,14 +514,15 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                      ختم تدبّری ۱۲۰ روزه (حزب به حزب)
+                      ختم تدبّری ۱۲۰ روزه (ربع حزب به ربع)
                     </span>
                     <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                      روزانه ۱ حزب (~۵ صفحه)
+                      روزانه ۲ ربع حزب (~۵ صفحه)
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    مطالعه عمیق و تدبّر در آیات با حجم سبک روزانه ۵ صفحه طی ۴ ماه.
+                    مطالعهٔ عمیق و تدبّر با حجم سبک روزانه؛ بازهٔ هر روز روی مرز واقعی ربع حزب جدول
+                    مصحف می‌ایستد.
                   </p>
                 </div>
 

@@ -7,11 +7,15 @@ import {
   OfflineContentStatus,
   OfflineDownloadResult,
   ContentMetadata,
+  KhatmPlan,
 } from '../types';
 import { ALL_SURAHS } from '../data/surahs';
 import { searchQuranOffline, SearchOptions, SearchResponse } from './searchEngine';
 
 const CORE_PACK_URL = '/data/quran-core-v1.json';
+
+// کش مرزهای واقعی مصحف (p3-t5 / P3-T9): صفحات شروع هر جزء و هر ربع حزب
+let mushafStartsCache: { juzStartPages: number[]; quarterStartPages: number[] } | null = null;
 
 interface BundledCorePack {
   id: string;
@@ -192,6 +196,28 @@ export const QuranService = {
     return [];
   },
 
+  /**
+   * خواندن آیات یک صفحهٔ مصحف به‌صورت کاملاً آفلاین از دیتابیس محلی (P3-T2)
+   */
+  async getVersesByPage(pageNumber: number): Promise<Verse[]> {
+    if (!pageNumber || pageNumber < 1 || pageNumber > 604) return [];
+    try {
+      const result = await db.verses.where('pageNumber').equals(pageNumber).sortBy('id');
+      if (result.length > 0) return result;
+    } catch {
+      // ادامه
+    }
+    const installed = await this.ensureBundledCorePackage();
+    if (installed) {
+      try {
+        return await db.verses.where('pageNumber').equals(pageNumber).sortBy('id');
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  },
+
   async getVerseBySurahAndNumber(surahId: number, verseNumber: number): Promise<Verse | undefined> {
     try {
       const v = await db.verses.where({ surahId, verseNumber }).first();
@@ -205,6 +231,123 @@ export const QuranService = {
       return await db.verses.where({ surahId, verseNumber }).first();
     } catch {
       return undefined;
+    }
+  },
+
+  /**
+   * شماره صفحهٔ شروع جزء (۱ تا ۳۰) — آفلاین از ایندکس juzNumber (P3-T5)
+   */
+  async getJuzStartPage(juzNumber: number): Promise<number | null> {
+    if (!juzNumber || juzNumber < 1 || juzNumber > 30) return null;
+    try {
+      const firstVerse = await db.verses.where('juzNumber').equals(juzNumber).first();
+      if (firstVerse) return firstVerse.pageNumber;
+    } catch {
+      // ادامه
+    }
+    const installed = await this.ensureBundledCorePackage();
+    if (installed) {
+      try {
+        const v = await db.verses.where('juzNumber').equals(juzNumber).first();
+        return v?.pageNumber ?? null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  },
+
+  /**
+   * شماره صفحهٔ شروع ربع حزب (۱ تا ۶۰) — آفلاین از ایندکس hizbQuarter (P3-T5)
+   */
+  async getHizbStartPage(hizbQuarter: number): Promise<number | null> {
+    if (!hizbQuarter || hizbQuarter < 1 || hizbQuarter > 240) return null;
+    try {
+      const firstVerse = await db.verses.where('hizbQuarter').equals(hizbQuarter).first();
+      if (firstVerse) return firstVerse.pageNumber;
+    } catch {
+      // ادامه
+    }
+    const installed = await this.ensureBundledCorePackage();
+    if (installed) {
+      try {
+        const v = await db.verses.where('hizbQuarter').equals(hizbQuarter).first();
+        return v?.pageNumber ?? null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  },
+
+  /**
+   * مرزهای واقعی مصحف: صفحات شروع ۳۰ جزء و ۲۴۰ ربع حزب از دادهٔ بسته (P3-T5 / P3-T9)
+   * نتیجه کش می‌شود تا هزینهٔ کوئری یک‌بار پرداخت شود.
+   */
+  async getMushafStarts(): Promise<{ juzStartPages: number[]; quarterStartPages: number[] }> {
+    if (mushafStartsCache) return mushafStartsCache;
+
+    const install = async (): Promise<boolean> => {
+      const s1 = await db.verses.count();
+      if (s1 >= 6236) return true;
+      return this.ensureBundledCorePackage();
+    };
+
+    try {
+      await install();
+      const juzStartPages: number[] = [];
+      for (let j = 1; j <= 30; j++) {
+        const v = await db.verses.where('juzNumber').equals(j).first();
+        juzStartPages.push(v?.pageNumber ?? 1);
+      }
+      const quarterStartPages: number[] = [];
+      for (let q = 1; q <= 240; q++) {
+        const v = await db.verses.where('hizbQuarter').equals(q).first();
+        quarterStartPages.push(v?.pageNumber ?? 1);
+      }
+      mushafStartsCache = { juzStartPages, quarterStartPages };
+      return mushafStartsCache;
+    } catch {
+      // در صورت خطا، fallback ایمن: بازه‌های همتراز با صفحهٔ ۱ و ۶۰۴
+      const juzStartPages = Array.from({ length: 30 }, (_, i) => Math.floor((i * 604) / 30) + 1);
+      juzStartPages[29] = 604;
+      const quarterStartPages = Array.from({ length: 240 }, (_, i) => Math.floor((i * 604) / 240) + 1);
+      quarterStartPages[239] = 604;
+      return { juzStartPages, quarterStartPages };
+    }
+  },
+
+  async getKhatmPlan(): Promise<KhatmPlan | null> {
+    try {
+      const plans = await db.khatmPlans.toArray();
+      return plans.find((p) => p.isActive) || plans[0] || null;
+    } catch {
+      return null;
+    }
+  },
+
+  async saveKhatmPlan(plan: KhatmPlan): Promise<void> {
+    await db.khatmPlans.put({
+      ...plan,
+      isActive: plan.isActive === undefined ? true : plan.isActive,
+    });
+  },
+
+  /**
+   * مهاجرت برنامهٔ ختم از localStorage قدیمی (`quran_khatm_plan`) به Dexie (P3-T9)
+   */
+  async importLegacyKhatmPlanIfEmpty(): Promise<void> {
+    try {
+      const count = await db.khatmPlans.count();
+      if (count > 0) return;
+      const raw = localStorage.getItem('quran_khatm_plan');
+      if (!raw) return;
+      const legacy = JSON.parse(raw) as KhatmPlan;
+      if (!legacy || !legacy.id || !legacy.startDate) return;
+      await this.saveKhatmPlan({ ...legacy, isActive: true });
+      localStorage.removeItem('quran_khatm_plan');
+    } catch {
+      // بی‌صدا: ادامه با حالت پیش‌فرض
     }
   },
 

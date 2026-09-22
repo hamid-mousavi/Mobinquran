@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, User, Repeat, Info, Check } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, User, Repeat, Info, Check, Timer, TimerOff, ListMusic } from 'lucide-react';
 import { Verse, Surah } from '../types';
+import { ReciterId, getSourcesForReciter, getAudioSourceUrl } from '../services/audioSources';
+import {
+  saveAudioResumePosition,
+  loadAudioResumePosition,
+  clearAudioResumePosition,
+  loadSleepTimerPrefs,
+  saveSleepTimerPrefs,
+  formatSleepTimeRemaining,
+} from '../services/audioPlaybackPrefs';
+import { logAudioError, classifyAudioError, describeAudioError, getAudioErrorLog, clearAudioErrorLog } from '../services/audioErrorLog';
 
 interface AudioPlayerBarProps {
   currentSurah: Surah;
@@ -9,9 +19,12 @@ interface AudioPlayerBarProps {
   onSelectVerseToPlay: (verseNumber: number) => void;
   onClose: () => void;
   darkMode: boolean;
+  onAutoAdvanceToNextSurah?: () => void;
+  onJumpToSurah?: (surahId: number) => void;
+  allSurahs?: { id: number; nameArabic: string }[];
 }
 
-export type ReciterId = 'parhizgar' | 'abdulbasit' | 'minshawi' | 'afasy';
+export type { ReciterId } from '../services/audioSources';
 
 interface Reciter {
   id: ReciterId;
@@ -20,7 +33,6 @@ interface Reciter {
   bio: string;
   initials: string;
   avatarColor: string;
-  getUrl: (surahId: number, verseNumber: number) => string;
 }
 
 const RECITERS: Reciter[] = [
@@ -31,11 +43,6 @@ const RECITERS: Reciter[] = [
     bio: 'قاری بین‌المللی و حافظ کل قرآن کریم از ایران؛ دارنده رتبه اول مسابقات جهانی و استانداردترین دوره ترتیل آموزشی جهت یادگیری روخوانی و حفظ.',
     initials: 'ش‌پ',
     avatarColor: 'bg-emerald-700 text-white',
-    getUrl: (s, v) => {
-      const sPad = String(s).padStart(3, '0');
-      const vPad = String(v).padStart(3, '0');
-      return `https://everyayah.com/data/Parhizgar_48kbps/${sPad}${vPad}.mp3`;
-    },
   },
   {
     id: 'abdulbasit',
@@ -44,11 +51,6 @@ const RECITERS: Reciter[] = [
     bio: 'ملقب به «صوت مکه»؛ یکی از بزرگ‌ترین و نامدارترین قاریان تاریخ جهان اسلام از مصر با لحنی دلنشین، عمیق و پرصلابت.',
     initials: 'ع‌ب',
     avatarColor: 'bg-amber-700 text-white',
-    getUrl: (s, v) => {
-      const sPad = String(s).padStart(3, '0');
-      const vPad = String(v).padStart(3, '0');
-      return `https://everyayah.com/data/Abdul_Basit_Murattal_64kbps/${sPad}${vPad}.mp3`;
-    },
   },
   {
     id: 'minshawi',
@@ -57,11 +59,6 @@ const RECITERS: Reciter[] = [
     bio: 'ملقب به «شهید القراء»؛ دارای سبک ترتیل بی‌نظیر حزن‌آلود و خاشعانه با کامل‌ترین قواعد تجوید و وقف و ابتدا.',
     initials: 'م‌ص',
     avatarColor: 'bg-blue-700 text-white',
-    getUrl: (s, v) => {
-      const sPad = String(s).padStart(3, '0');
-      const vPad = String(v).padStart(3, '0');
-      return `https://everyayah.com/data/Menshawi_32kbps/${sPad}${vPad}.mp3`;
-    },
   },
   {
     id: 'afasy',
@@ -70,11 +67,6 @@ const RECITERS: Reciter[] = [
     bio: 'امام جماعت مسجد کبیر کویت و قاری سرشناس معاصر با ضبط‌های صوتی دیجیتال باکیفیت و صوت رسا.',
     initials: 'م‌ع',
     avatarColor: 'bg-teal-700 text-white',
-    getUrl: (s, v) => {
-      const sPad = String(s).padStart(3, '0');
-      const vPad = String(v).padStart(3, '0');
-      return `https://everyayah.com/data/Alafasy_64kbps/${sPad}${vPad}.mp3`;
-    },
   },
 ];
 
@@ -94,6 +86,9 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   onSelectVerseToPlay,
   onClose,
   darkMode,
+  onAutoAdvanceToNextSurah,
+  onJumpToSurah,
+  allSurahs = [],
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>('parhizgar');
@@ -101,11 +96,22 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [showReciterModal, setShowReciterModal] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [sourceIndex, setSourceIndex] = useState(0); // منبع fallback فعال برای آیه جاری
 
   // حالت تکرار آیه
   const [repeatTarget, setRepeatTarget] = useState<number>(1); // تعداد کل تکرار هر آیه
   const [currentRepeatIndex, setCurrentRepeatIndex] = useState<number>(1); // تکرار فعلی
   const [showRepeatMenu, setShowRepeatMenu] = useState(false);
+
+  // تایمر خواب (P5-T3)
+  const [sleepTimer, setSleepTimer] = useState<{ mode: 'time' | 'verses'; value: number } | null>(null);
+  const [sleepRemainingSec, setSleepRemainingSec] = useState<number | null>(null);
+  const [sleepShowNotice, setSleepShowNotice] = useState(false);
+  const [showSleepMenu, setShowSleepMenu] = useState(false);
+
+  // صف پخش پیوسته (P5-T3): سورهٔ فعلی + سوره‌های بعدی
+  const [showQueueMenu, setShowQueueMenu] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -122,25 +128,130 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
   const currentReciter = RECITERS.find((r) => r.id === selectedReciterId) || RECITERS[0];
   const currentPlayingVerseNumber = activeVerseNumber || (verses.length > 0 ? verses[0].verseNumber : 1);
+  const currentSources = getSourcesForReciter(selectedReciterId);
+  const currentAudioSource = currentSources[Math.min(sourceIndex, currentSources.length - 1)];
 
-  // ریست شمارنده تکرار هنگام تغییر دستی آیه
+  // Media Session API — کنترل از قفل صفحه / مرکز اعلان
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: `آیه ${currentPlayingVerseNumber} — ${currentSurah.namePersian}`,
+      artist: currentReciter.name,
+      album: 'قرآن مبین ۲',
+    });
+
+    navigator.mediaSession.setActionHandler('play', () => togglePlay());
+    navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+    navigator.mediaSession.setActionHandler('previoustrack', () => handlePrevVerse());
+    navigator.mediaSession.setActionHandler('nexttrack', () => handleNextVerse());
+    // پخش پس‌زمینه: جابه‌جایی ±۱۰ ثانیه از قفل صفحه / مرکز اعلان (P5-T3)
+    navigator.mediaSession.setActionHandler('seekbackward', () => {
+      if (audioRef.current) {
+        audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
+      }
+    });
+    navigator.mediaSession.setActionHandler('seekforward', () => {
+      if (audioRef.current && audioRef.current.duration) {
+        audioRef.current.currentTime = Math.min(
+          audioRef.current.duration,
+          audioRef.current.currentTime + 10
+        );
+      }
+    });
+    navigator.mediaSession.setActionHandler('stop', () => {
+      if (audioRef.current) audioRef.current.pause();
+      setIsPlaying(false);
+    });
+    if ('playbackState' in navigator.mediaSession) {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    }
+
+    return () => {
+      navigator.mediaSession.setActionHandler('play', null);
+      navigator.mediaSession.setActionHandler('pause', null);
+      navigator.mediaSession.setActionHandler('previoustrack', null);
+      navigator.mediaSession.setActionHandler('nexttrack', null);
+      navigator.mediaSession.setActionHandler('seekbackward', null);
+      navigator.mediaSession.setActionHandler('seekforward', null);
+      navigator.mediaSession.setActionHandler('stop', null);
+    };
+  }, [currentPlayingVerseNumber, currentSurah.id, currentSurah.namePersian, currentReciter.name, isPlaying]);
+
+  // ریست شمارنده تکرار و منبع fallback هنگام تغییر دستی آیه
   useEffect(() => {
     setCurrentRepeatIndex(1);
+    setSourceIndex(0);
   }, [currentPlayingVerseNumber]);
 
-  // تغییر سورس هنگام تغییر آیه یا قاری
+  // ریست fallback هنگام تغییر قاری
   useEffect(() => {
-    if (audioRef.current) {
-      const url = currentReciter.getUrl(currentSurah.id, currentPlayingVerseNumber);
-      audioRef.current.src = url;
-      audioRef.current.playbackRate = playbackRate;
-      if (isPlaying) {
-        audioRef.current.play().catch(() => {
+    setSourceIndex(0);
+  }, [selectedReciterId]);
+
+  // ذخیرهٔ موقعیت پخش (P5-T3: ادامه از آخرین آیه در دفعهٔ بعد)
+  useEffect(() => {
+    saveAudioResumePosition({
+      surahId: currentSurah.id,
+      verseNumber: currentPlayingVerseNumber,
+      reciterId: selectedReciterId,
+      playbackRate,
+      updatedAt: Date.now(),
+    });
+  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId]);
+
+  // تایمر خواب بر اساس زمان (P5-T3): شمارش معکوس فقط هنگام پخش
+  useEffect(() => {
+    if (!sleepTimer || sleepTimer.mode !== 'time' || !isPlaying) return;
+    setSleepRemainingSec(sleepTimer.value * 60);
+    const interval = window.setInterval(() => {
+      setSleepRemainingSec((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          // زمان تمام شد: توقف پخش و بستن تایمر
+          window.clearInterval(interval);
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
           setIsPlaying(false);
-        });
+          setSleepRemainingSec(null);
+          setSleepTimer(null);
+          setSleepShowNotice(true);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [sleepTimer, isPlaying]);
+
+  // تغییر سورس هنگام تغییر آیه یا قاری (بدون وابستگی به سرعت — تغییر سرعت src را ریست نکند)
+  useEffect(() => {
+    setPlaybackError(null);
+    if (audioRef.current) {
+      const url = getAudioSourceUrl(
+        selectedReciterId,
+        currentSurah.id,
+        currentPlayingVerseNumber,
+        Math.min(sourceIndex, currentSources.length - 1)
+      );
+      if (url) {
+        audioRef.current.src = url;
+        if (isPlaying) {
+          audioRef.current.play().catch(() => {
+            setIsPlaying(false);
+          });
+        }
       }
     }
-  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, playbackRate]);
+  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, isPlaying, sourceIndex]);
+
+  // اعمال سرعت پخش بدون تغییر منبع (اصلاح باگ M2)
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -161,7 +272,19 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     const currentIndex = verses.findIndex((v) => v.verseNumber === currentPlayingVerseNumber);
     if (currentIndex !== -1 && currentIndex < verses.length - 1) {
       setCurrentRepeatIndex(1);
+      setPlaybackError(null);
       onSelectVerseToPlay(verses[currentIndex + 1].verseNumber);
+    } else if (currentIndex !== -1 && currentIndex === verses.length - 1) {
+      // پایان سوره: در صورت وجود، به سوره بعد برو
+      if (onAutoAdvanceToNextSurah) {
+        setCurrentRepeatIndex(1);
+        setPlaybackError(null);
+        onAutoAdvanceToNextSurah();
+      } else {
+        setCurrentRepeatIndex(1);
+        setPlaybackError(null);
+        setPlaybackError('پایان بخش ترتیل رسید.');
+      }
     }
   };
 
@@ -187,6 +310,20 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       }
     }
 
+    // تایمر خواب به‌صورت «تعداد آیه»: هر آیهٔ کامل‌شده یک‌بار شمارش می‌شود
+    if (sleepTimer && sleepTimer.mode === 'verses') {
+      const next = { ...sleepTimer, value: sleepTimer.value - 1 };
+      if (next.value <= 0) {
+        if (audioRef.current) audioRef.current.pause();
+        setIsPlaying(false);
+        setSleepTimer(null);
+        setSleepShowNotice(true);
+        return;
+      }
+      setSleepTimer(next);
+      saveSleepTimerPrefs(next);
+    }
+
     // اگر تکرار به پایان رسید، برو به آیه بعدی
     setCurrentRepeatIndex(1);
     handleNextVerse();
@@ -196,6 +333,59 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     if (audioRef.current && audioRef.current.duration) {
       const progress = (audioRef.current.currentTime / audioRef.current.duration) * 100;
       setAudioProgress(progress);
+    }
+  };
+
+  // خطای پخش (فایل یافت نشد / شبکه) — P5-T5: طبقه‌بندی و ثبت در لاگ مشاهده‌پذیری + fallback خودکار
+  const handleAudioError = () => {
+    const sources = getSourcesForReciter(selectedReciterId);
+    const mediaCode =
+      audioRef.current && audioRef.current.error
+        ? (audioRef.current.error as MediaError).code
+        : null;
+    const kind = classifyAudioError(mediaCode, navigator.onLine);
+    const currentSource = sources[Math.min(sourceIndex, sources.length - 1)];
+    const url = getAudioSourceUrl(
+      selectedReciterId,
+      currentSurah.id,
+      currentPlayingVerseNumber,
+      Math.min(sourceIndex, sources.length - 1)
+    );
+
+    // ثبت در لاگ مشاهده‌پذیری (فقط پس از اتمام زنجیرهٔ fallback برای جلوگیری از نویز)
+    if (sourceIndex >= sources.length - 1) {
+      logAudioError({
+        surahId: currentSurah.id,
+        verseNumber: currentPlayingVerseNumber,
+        reciterId: selectedReciterId,
+        sourceIndex,
+        sourceName: currentSource.name,
+        kind,
+        message: describeAudioError(kind),
+        url: url ?? '',
+      });
+    }
+
+    if (sourceIndex < sources.length - 1) {
+      // آرایه دارای منبع بعدی است؛ سوئیچ به آن بدون قطع پخش
+      setSourceIndex((prev) => prev + 1);
+      setPlaybackError(null);
+      return;
+    }
+    setIsPlaying(false);
+    setPlaybackError(describeAudioError(kind));
+  };
+
+  // ادامه به آیه بعد هنگام تکرار و خطا
+  const handleSkipVerse = () => {
+    handleNextVerse();
+  };
+
+  const handleRetry = () => {
+    setPlaybackError(null);
+    if (audioRef.current) {
+      audioRef.current.load();
+      audioRef.current.play().catch(() => setIsPlaying(false));
     }
   };
 
@@ -214,6 +404,39 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
             style={{ width: `${audioProgress}%` }}
           />
         </div>
+
+        {/* پیام خطای پخش */}
+        {playbackError && (
+          <div className={`px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs flex items-center justify-between gap-2 border-t ${
+            darkMode ? 'bg-red-950/60 border-slate-800 text-red-300' : 'bg-red-50 border-stone-200 text-red-700'
+          }`}>
+            <span className="truncate">{playbackError}</span>
+            <span className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={handleRetry}
+                className="px-2 py-0.5 rounded-lg bg-red-600/90 hover:bg-red-600 text-white text-[10px] font-bold transition-colors"
+              >
+                تلاش مجدد
+              </button>
+              <button
+                onClick={handleSkipVerse}
+                className="px-2 py-0.5 rounded-lg border border-red-300 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900 text-red-700 dark:text-red-300 text-[10px] font-bold transition-colors"
+              >
+                رد کردن آیه
+              </button>
+            </span>
+          </div>
+        )}
+
+        {/* اعلان تایمر خواب */}
+        {sleepShowNotice && (
+          <div className={`px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs flex items-center justify-center gap-2 border-t ${
+            darkMode ? 'bg-indigo-950/60 border-slate-800 text-indigo-200' : 'bg-indigo-50 border-stone-200 text-indigo-700'
+          }`}>
+            <Timer className="w-3.5 h-3.5 shrink-0" />
+            <span>تایمر خواب به پایان رسید و پخش متوقف شد. برای ادامه، دکمه پخش را بزنید.</span>
+          </div>
+        )}
 
         <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2 flex items-center justify-between gap-1.5 sm:gap-2">
           {/* سمت راست: عکس قاری (آواتار جمع‌وجور) + اطلاعات آیه */}
@@ -332,6 +555,58 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               )}
             </div>
 
+            {/* دکمه صف پخش پیوسته */}
+            <div className="relative">
+              <button
+                onClick={() => setShowQueueMenu(!showQueueMenu)}
+                className="p-1.5 sm:p-2 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-black/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-colors"
+                title="صف پخش (سوره‌های در انتظار)"
+              >
+                <ListMusic className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+
+              {showQueueMenu && (
+                <div
+                  className={`absolute bottom-full left-0 mb-2 w-72 p-2 shadow-xl border rounded-2xl z-50 text-xs ${
+                    darkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-stone-200 text-slate-800'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold text-slate-400 px-2 py-1 border-b border-stone-100 dark:border-slate-800 mb-1">
+                    صف پخش — سورهٔ فعلی و بعدی (پخش پیوسته)
+                  </div>
+                  <div className="max-h-64 overflow-y-auto space-y-1 pr-1">
+                    {(allSurahs || []).map((s) => {
+                      const isCurrent = s.id === currentSurah.id;
+                      const playable = isCurrent || (onAutoAdvanceToNextSurah !== undefined);
+                      return (
+                        <button
+                          key={s.id}
+                          disabled={!playable}
+                          onClick={() => {
+                            if (!isCurrent && onJumpToSurah) {
+                              onJumpToSurah(s.id);
+                            }
+                            setShowQueueMenu(false);
+                          }}
+                          className={`w-full text-right px-2.5 py-1.5 rounded-xl flex items-center justify-between transition-colors ${
+                            isCurrent
+                              ? 'bg-teal-600 text-white font-bold'
+                              : 'hover:bg-stone-100 dark:hover:bg-slate-800 disabled:opacity-40'
+                          }`}
+                        >
+                          <span className="truncate">{s.nameArabic}</span>
+                          {isCurrent && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="text-[10px] text-slate-400 px-2 py-1.5 mt-1 border-t border-stone-100 dark:border-slate-800">
+                    پس از پایان آخرین آیهٔ هر سوره، به‌طور خودکار سورهٔ بعدی پخش می‌شود.
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* دکمه تنظیم سرعت پخش */}
             <button
               onClick={handleCycleSpeed}
@@ -341,6 +616,96 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               {playbackRate}x
             </button>
 
+            {/* دکمه تایمر خواب */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSleepMenu(!showSleepMenu)}
+                className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg text-xs font-bold border transition-colors ${
+                  sleepTimer
+                    ? 'border-indigo-500 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300'
+                    : 'border-slate-300 dark:border-slate-700 hover:bg-black/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300'
+                }`}
+                title="تایمر خواب (توقف خودکار پخش)"
+              >
+                <Timer className="w-3.5 h-3.5" />
+                {sleepTimer
+                  ? sleepTimer.mode === 'time'
+                    ? sleepRemainingSec !== null
+                      ? formatSleepTimeRemaining(sleepRemainingSec)
+                      : `${sleepTimer.value} دقیقه`
+                    : `${sleepTimer.value} آیه`
+                  : null}
+              </button>
+
+              {/* منوی گزینه‌های تایمر خواب */}
+              {showSleepMenu && (
+                <div
+                  className={`absolute bottom-full left-0 mb-2 w-48 p-2 shadow-xl border rounded-2xl z-50 text-xs ${
+                    darkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-stone-200 text-slate-800'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold text-slate-400 px-2 py-1 border-b border-stone-100 dark:border-slate-800 mb-1">
+                    توقف خودکار پخش پس از:
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 mb-2">
+                    {[5, 10, 15, 30, 45, 60].map((min) => (
+                      <button
+                        key={min}
+                        onClick={() => {
+                          setSleepTimer({ mode: 'time', value: min });
+                          setSleepRemainingSec(min * 60);
+                          setSleepShowNotice(false);
+                          setShowSleepMenu(false);
+                        }}
+                        className={`px-2 py-1.5 rounded-xl text-center font-bold transition-colors ${
+                          sleepTimer?.mode === 'time' && sleepTimer.value === min
+                            ? 'bg-indigo-600 text-white'
+                            : 'hover:bg-stone-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {min} دقیقه
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-[10px] font-bold text-slate-400 px-2 py-1">یا تعداد آیه:</div>
+                  <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+                    {[5, 10, 20].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => {
+                          setSleepTimer({ mode: 'verses', value: n });
+                          setSleepShowNotice(false);
+                          setShowSleepMenu(false);
+                        }}
+                        className={`px-2 py-1.5 rounded-xl text-center font-bold transition-colors ${
+                          sleepTimer?.mode === 'verses' && sleepTimer.value === n
+                            ? 'bg-indigo-600 text-white'
+                            : 'hover:bg-stone-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {n} آیه
+                      </button>
+                    ))}
+                  </div>
+                  {sleepTimer && (
+                    <button
+                      onClick={() => {
+                        setSleepTimer(null);
+                        setSleepRemainingSec(null);
+                        setSleepShowNotice(false);
+                        setShowSleepMenu(false);
+                      }}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-xl text-red-600 dark:text-red-400 font-bold hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                    >
+                      <TimerOff className="w-3.5 h-3.5" />
+                      خاموش کردن تایمر
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* اعمال پیش‌فرض تایمر از تنظیمات ذخیره‌شده */}
             {/* کلید قطع / وصل صدا */}
             <button
               onClick={() => {
@@ -377,6 +742,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
           ref={audioRef}
           onEnded={handleAudioEnded}
           onTimeUpdate={handleTimeUpdate}
+          onError={handleAudioError}
           className="hidden"
         />
       </div>
@@ -433,6 +799,9 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
                 <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
                   {currentReciter.bio}
                 </p>
+                <div className="text-[10px] text-slate-400 mt-2 leading-relaxed border-t border-stone-100 dark:border-slate-800 pt-2">
+                  منبع صوت: {currentAudioSource.name}
+                </div>
               </div>
             </div>
 
@@ -444,7 +813,30 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               <div className="grid grid-cols-1 gap-2 max-h-52 overflow-y-auto pr-1">
                 {RECITERS.map((r) => {
                   const isSelected = r.id === selectedReciterId;
-                  return (
+// هشدار تایمر خواب پس از اتمام: خودکار پنهان شود
+  useEffect(() => {
+    if (!sleepShowNotice) return;
+    const t = window.setTimeout(() => setSleepShowNotice(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [sleepShowNotice]);
+
+  // اعمال پیش‌فرض تایمر خواب از تنظیمات ذخیره‌شده
+  useEffect(() => {
+    const prefs = loadSleepTimerPrefs();
+    if (prefs) {
+      setSleepTimer(prefs);
+      if (prefs.mode === 'time') setSleepRemainingSec(prefs.value * 60);
+    }
+  }, []);
+
+  // ذخیرهٔ انتخاب تایمر خواب
+  useEffect(() => {
+    if (sleepTimer) {
+      saveSleepTimerPrefs(sleepTimer);
+    }
+  }, [sleepTimer]);
+
+  return (
                     <button
                       key={r.id}
                       onClick={() => {
