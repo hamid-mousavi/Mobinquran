@@ -169,6 +169,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             question: textToSend,
             candidates: nextCandidates.map(({ ref, text_fa }) => ({ ref, text_fa })),
             lang: 'fa',
+            agent: selectedAgentId,
           }),
           });
         } finally {

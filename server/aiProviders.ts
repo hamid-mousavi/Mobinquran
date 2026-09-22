@@ -39,7 +39,7 @@ function configuredProviders(): ProviderName[] {
 function modelFor(provider: ProviderName): string {
   return env(`AI_MODEL_${provider.toUpperCase()}`) || {
     gemini: 'gemini-2.5-flash',
-    groq: 'openai/gpt-oss-120b',
+    groq: 'llama-3.3-70b-versatile',
     deepseek: 'deepseek-chat',
     openrouter: 'deepseek/deepseek-chat-v3-0324',
   }[provider];
@@ -69,7 +69,8 @@ async function callOpenAiStyle(provider: Exclude<ProviderName, 'gemini'>, key: s
   });
 
   if (!response.ok) {
-    throw new ProviderError(provider, response.status, `${provider} returned ${response.status}`);
+    const errText = await response.text().catch(() => '');
+    throw new ProviderError(provider, response.status, `${provider} returned ${response.status}: ${errText.slice(0, 100)}`);
   }
   const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const content = body.choices?.[0]?.message?.content?.trim();
@@ -93,9 +94,10 @@ async function callGemini(key: string, request: ProviderRequest): Promise<string
     const content = response.text?.trim();
     if (!content) throw new ProviderError('gemini', 502, 'gemini returned an empty response');
     return content;
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof ProviderError) throw error;
-    throw new ProviderError('gemini', 502, 'gemini request failed');
+    const status = typeof error?.status === 'number' ? error.status : typeof error?.statusCode === 'number' ? error.statusCode : 502;
+    throw new ProviderError('gemini', status, error?.message || 'gemini request failed');
   }
 }
 

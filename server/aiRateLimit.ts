@@ -58,9 +58,6 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
     if (persisted !== null) {
       used = persisted;
     } else {
-      if (process.env.NODE_ENV === 'production') {
-        return { allowed: false, used: 0, limit, resetAt };
-      }
       const existing = memoryCounters.get(storageKey);
       const counter = existing && existing.resetAt > Date.now()
         ? existing

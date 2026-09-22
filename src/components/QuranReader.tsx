@@ -235,12 +235,13 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verses, isLoading, renderCount]);
 
-  // اسکرول خودکار به آیه جاری هنگام پخش ترتیل صوتی
+  // اسکرول خودکار به آیه جاری هنگام پخش ترتیل صوتی (P5-T6)
   useEffect(() => {
     if (activePlayingVerseNumber !== null) {
       const verseEl = document.getElementById(`verse-${activePlayingVerseNumber}`);
       if (isVirtualized && !verseEl && activePlayingVerseNumber > renderCount) {
         setRenderCount(activePlayingVerseNumber);
+        return;
       }
       if (verseEl) {
         verseEl.scrollIntoView({
@@ -249,8 +250,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
         });
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePlayingVerseNumber, renderCount]);
+  }, [activePlayingVerseNumber, renderCount, isVirtualized]);
 
   const arabicFontFamily = getArabicFontFamily(settings.arabicFont);
 

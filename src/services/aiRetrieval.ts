@@ -7,13 +7,47 @@ export interface AiCandidateForRequest {
   verse: Verse;
 }
 
+const STOP_WORDS = new Set([
+  'برای', 'درباره', 'مورد', 'قرآن', 'قرآنی', 'آیه', 'آیات', 'سوره', 'کدام', 'چیست',
+  'هست', 'بود', 'شد', 'راهنمایی', 'بگو', 'کن', 'کنید', 'دارد', 'دارند', 'چگونه',
+  'چطور', 'یک', 'این', 'آن', 'با', 'از', 'تا', 'در', 'به', 'بر', 'که', 'و',
+]);
+
+const SYNONYM_MAP: Record<string, string[]> = {
+  آرامش: ['سکینة', 'اطمینان', 'قلب', 'طمانینة', 'شفا'],
+  نگرانی: ['سکینة', 'اطمینان', 'قلب', 'غم'],
+  صبر: ['صابرین', 'استقامت', 'شکیبایی', 'عسر', 'یسر'],
+  سختی: ['عسر', 'یسر', 'صبر', 'بلاء', 'ابتلاء'],
+  امید: ['رحمت', 'فضل', 'مغفرت', 'روح', 'یاس'],
+  ناامیدی: ['یاس', 'قنوط', 'رحمت', 'استغفار'],
+  رزق: ['روزی', 'برکت', 'انفاق', 'فضل', 'رزقناهم'],
+  روزی: ['رزق', 'برکت', 'انفاق', 'کسب', 'طیب'],
+  خانواده: ['والدین', 'احسان', 'همسر', 'مودت', 'ذرية'],
+  والدین: ['والدین', 'احسان', 'پدر', 'مادر', 'بر'],
+  دعا: ['استجابت', 'ربنا', 'نداء', 'تضرع', 'اجیب'],
+  اخلاق: ['احسان', 'معروف', 'تقوا', 'بر', 'عدل'],
+  عدالت: ['قسط', 'عدل', 'میزان', 'حق'],
+  بحران: ['فرج', 'مخرج', 'توفیق', 'رحمت', 'نصر'],
+  توکل: ['وکیل', 'حسبنا', 'کاف'],
+};
+
 function meaningfulTerms(question: string): string[] {
-  return question
-    .replace(/[؟?!،؛:()\[\]{}"«»]/g, ' ')
+  const words = question
+    .replace(/[؟?!،؛:()\[\]{}"«»\-–]/g, ' ')
     .split(/\s+/)
     .map((term) => term.trim())
-    .filter((term) => term.length >= 3)
-    .slice(0, 6);
+    .filter((term) => term.length >= 2 && !STOP_WORDS.has(term));
+
+  const expansions: string[] = [];
+  for (const word of words) {
+    for (const [key, synonyms] of Object.entries(SYNONYM_MAP)) {
+      if (word.includes(key) || key.includes(word)) {
+        expansions.push(...synonyms);
+      }
+    }
+  }
+
+  return [...new Set([...words, ...expansions])].slice(0, 8);
 }
 
 function toCandidate(result: Awaited<ReturnType<typeof searchQuranOffline>>['results'][number]): AiCandidateForRequest {

@@ -277,3 +277,47 @@ export const getAudioSourceUrl = (
   if (sourceIndex < 0 || sourceIndex >= sources.length) return null;
   return sources[sourceIndex].buildUrl(surahId, verseNumber);
 };
+
+// نگهداری ایندکس منبع فعال/پایدار در طول نشست برای هر قاری
+const workingSourceIndices: Partial<Record<ReciterId, number>> = {};
+
+export const getWorkingSourceIndex = (reciterId: ReciterId): number => {
+  return workingSourceIndices[reciterId] ?? 0;
+};
+
+export const setWorkingSourceIndex = (reciterId: ReciterId, index: number): void => {
+  workingSourceIndices[reciterId] = Math.max(0, index);
+};
+
+/**
+ * یافتن خودکار بهترین منبع فعال برای یک آیه:
+ * ابتدا از منبع درخواستی یا آخرین منبع موفق شروع می‌کند؛ اگر برای این آیه منبع غایب بود (مثل منشاوی)،
+ * اولین منبعی که آدرس معتبر دارد را برمی‌گرداند.
+ */
+export const resolveAudioSource = (
+  reciterId: ReciterId,
+  surahId: number,
+  verseNumber: number,
+  startIndex = 0
+): { url: string; sourceIndex: number; source: AudioSource } | null => {
+  const sources = getSourcesForReciter(reciterId);
+  const preferred = Math.max(0, Math.min(startIndex, sources.length - 1));
+
+  // اولویت ۱: شروع از ایندکس انتخابی
+  for (let i = preferred; i < sources.length; i++) {
+    const url = sources[i].buildUrl(surahId, verseNumber);
+    if (url) {
+      return { url, sourceIndex: i, source: sources[i] };
+    }
+  }
+
+  // اولویت ۲: اگر از ایندکس‌های بالاتر چیزی پیدا نشد، بررسی ایندکس‌های قبل از preferred
+  for (let i = 0; i < preferred; i++) {
+    const url = sources[i].buildUrl(surahId, verseNumber);
+    if (url) {
+      return { url, sourceIndex: i, source: sources[i] };
+    }
+  }
+
+  return null;
+};

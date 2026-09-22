@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, User, Repeat, Info, Check, Timer, TimerOff, ListMusic } from 'lucide-react';
 import { Verse, Surah } from '../types';
-import { ReciterId, getSourcesForReciter, getAudioSourceUrl } from '../services/audioSources';
+import {
+  ReciterId,
+  getSourcesForReciter,
+  getAudioSourceUrl,
+  resolveAudioSource,
+  getWorkingSourceIndex,
+  setWorkingSourceIndex,
+} from '../services/audioSources';
 import {
   saveAudioResumePosition,
   loadAudioResumePosition,
@@ -97,7 +104,16 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   const [showReciterModal, setShowReciterModal] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
-  const [sourceIndex, setSourceIndex] = useState(0); // منبع fallback فعال برای آیه جاری
+  const [sourceIndex, setSourceIndex] = useState(() => getWorkingSourceIndex('parhizgar')); // منبع fallback فعال برای آیه جاری
+
+  // نگهداری وضعیت پخش برای جلوگیری از چرخهٔ بازتولید در هوک تغییر آیه
+  const isPlayingRef = useRef(isPlaying);
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  const activeBlobUrlRef = useRef<string | null>(null);
+  const preloadAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // حالت تکرار آیه
   const [repeatTarget, setRepeatTarget] = useState<number>(1); // تعداد کل تکرار هر آیه
@@ -178,16 +194,11 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     };
   }, [currentPlayingVerseNumber, currentSurah.id, currentSurah.namePersian, currentReciter.name, isPlaying]);
 
-  // ریست شمارنده تکرار و منبع fallback هنگام تغییر دستی آیه
+  // تنظیم مجدد منبع به منبع فعال این قاری هنگام تغییر قاری یا آیه
   useEffect(() => {
     setCurrentRepeatIndex(1);
-    setSourceIndex(0);
-  }, [currentPlayingVerseNumber]);
-
-  // ریست fallback هنگام تغییر قاری
-  useEffect(() => {
-    setSourceIndex(0);
-  }, [selectedReciterId]);
+    setSourceIndex(getWorkingSourceIndex(selectedReciterId));
+  }, [currentPlayingVerseNumber, selectedReciterId]);
 
   // ذخیرهٔ موقعیت پخش (P5-T3: ادامه از آخرین آیه در دفعهٔ بعد)
   useEffect(() => {
@@ -198,7 +209,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       playbackRate,
       updatedAt: Date.now(),
     });
-  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId]);
+  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, playbackRate]);
 
   // تایمر خواب بر اساس زمان (P5-T3): شمارش معکوس فقط هنگام پخش
   useEffect(() => {
@@ -225,26 +236,93 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     return () => window.clearInterval(interval);
   }, [sleepTimer, isPlaying]);
 
-  // تغییر سورس هنگام تغییر آیه یا قاری (بدون وابستگی به سرعت — تغییر سرعت src را ریست نکند)
+  // بررسی کش محلی Cache Storage برای پخش آفلاین پایدار و بدون وقفه
+  const resolvePlayableUrl = async (rawUrl: string): Promise<string> => {
+    try {
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        const cache = await caches.open('quran-audio-v1');
+        const match = await cache.match(rawUrl);
+        if (match) {
+          const blob = await match.blob();
+          return URL.createObjectURL(blob);
+        }
+      }
+    } catch {
+      // کش در دسترس نیست؛ استفاده مستقیم از آدرس شبکه
+    }
+    return rawUrl;
+  };
+
+  // تغییر سورس و فایل صوتی هنگام تغییر آیه، قاری یا سورس فال‌بک
+  // توجه: isPlaying در وابستگی‌ها قرار نمی‌گیرد تا تغییر وضعیت پخش موجب قطع فایل صوتی و خطای کاذب نشود
   useEffect(() => {
+    let isCancelled = false;
     setPlaybackError(null);
-    if (audioRef.current) {
-      const url = getAudioSourceUrl(
-        selectedReciterId,
-        currentSurah.id,
-        currentPlayingVerseNumber,
-        Math.min(sourceIndex, currentSources.length - 1)
-      );
-      if (url) {
-        audioRef.current.src = url;
-        if (isPlaying) {
-          audioRef.current.play().catch(() => {
+
+    const resolved = resolveAudioSource(
+      selectedReciterId,
+      currentSurah.id,
+      currentPlayingVerseNumber,
+      sourceIndex
+    );
+
+    if (!resolved) {
+      setIsPlaying(false);
+      setPlaybackError('فایل صوتی برای این آیه یافت نشد.');
+      return;
+    }
+
+    if (resolved.sourceIndex !== sourceIndex) {
+      setSourceIndex(resolved.sourceIndex);
+      setWorkingSourceIndex(selectedReciterId, resolved.sourceIndex);
+    }
+
+    resolvePlayableUrl(resolved.url).then((playableUrl) => {
+      if (isCancelled || !audioRef.current) return;
+
+      if (activeBlobUrlRef.current) {
+        URL.revokeObjectURL(activeBlobUrlRef.current);
+        activeBlobUrlRef.current = null;
+      }
+      if (playableUrl.startsWith('blob:')) {
+        activeBlobUrlRef.current = playableUrl;
+      }
+
+      audioRef.current.src = playableUrl;
+      audioRef.current.playbackRate = playbackRate;
+
+      if (isPlayingRef.current) {
+        const p = audioRef.current.play();
+        if (p !== undefined) {
+          p.catch((err) => {
+            if (err?.name === 'AbortError') return;
+            console.warn('Audio playback error:', err);
             setIsPlaying(false);
           });
         }
       }
+    });
+
+    // پیش‌بارگذاری هوشمند آیه بعدی جهت پخش پیوسته و بدون وقفه
+    const nextVerseNum = currentPlayingVerseNumber + 1;
+    const hasNext = verses.some((v) => v.verseNumber === nextVerseNum);
+    if (hasNext && preloadAudioRef.current) {
+      const nextResolved = resolveAudioSource(
+        selectedReciterId,
+        currentSurah.id,
+        nextVerseNum,
+        sourceIndex
+      );
+      if (nextResolved) {
+        preloadAudioRef.current.src = nextResolved.url;
+        preloadAudioRef.current.load();
+      }
     }
-  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, isPlaying, sourceIndex]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, sourceIndex]);
 
   // اعمال سرعت پخش بدون تغییر منبع (اصلاح باگ M2)
   useEffect(() => {
@@ -259,12 +337,18 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current.play().then(() => {
+      const p = audioRef.current.play();
+      if (p !== undefined) {
+        p.then(() => {
+          setIsPlaying(true);
+        }).catch((err) => {
+          if (err?.name === 'AbortError') return;
+          console.warn('Audio playback error:', err);
+          setIsPlaying(false);
+        });
+      } else {
         setIsPlaying(true);
-      }).catch((err) => {
-        console.warn('Audio playback error:', err);
-        setIsPlaying(false);
-      });
+      }
     }
   };
 
@@ -367,8 +451,10 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     }
 
     if (sourceIndex < sources.length - 1) {
-      // آرایه دارای منبع بعدی است؛ سوئیچ به آن بدون قطع پخش
-      setSourceIndex((prev) => prev + 1);
+      // آرایه دارای منبع بعدی است؛ سوئیچ به آن و ذخیره در نشست
+      const nextIndex = sourceIndex + 1;
+      setSourceIndex(nextIndex);
+      setWorkingSourceIndex(selectedReciterId, nextIndex);
       setPlaybackError(null);
       return;
     }
@@ -385,7 +471,9 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     setPlaybackError(null);
     if (audioRef.current) {
       audioRef.current.load();
-      audioRef.current.play().catch(() => setIsPlaying(false));
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch(() => setIsPlaying(false));
     }
   };
 
@@ -743,6 +831,11 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
           onEnded={handleAudioEnded}
           onTimeUpdate={handleTimeUpdate}
           onError={handleAudioError}
+          className="hidden"
+        />
+        <audio
+          ref={preloadAudioRef}
+          preload="auto"
           className="hidden"
         />
       </div>
