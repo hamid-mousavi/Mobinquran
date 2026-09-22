@@ -21,19 +21,19 @@ export function createApp() {
   app.use(express.json({ limit: '24kb' }));
 
   // اندپوینت سلامتی سرور
-  app.get('/api/health', (req, res) => {
+  app.get(['/api/health', '/health'], (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
   // وضعیت سرویس‌های هوش مصنوعی (بر اساس P0-T5 فقط اعلام فعال بودن کلی)
-  app.get('/api/ai/status', (req, res) => {
+  app.get(['/api/ai/status', '/ai/status'], (req, res) => {
     res.json({
       enabled: isAiEnabled() && !['1', 'true'].includes(getEnvKey('AI_KILL_SWITCH').toLowerCase()) && hasConfiguredProvider(),
     });
   });
 
   // RAG endpoint: the model may select only candidate references; verse text is never returned by the model.
-  app.post('/api/ai/ask', async (req, res) => {
+  app.post(['/api/ai/ask', '/ai/ask'], async (req, res) => {
     const requestId = randomUUID();
     const parsed = aiAskRequestSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -125,7 +125,7 @@ ${agentApproachText}
   const surahCache = new Map<number, any[]>();
 
   // اندپوینت دریافت کامل متن، اعراب و ۳ ترجمه رسمی سوره
-  app.get('/api/quran/surah/:id', async (req, res) => {
+  app.get(['/api/quran/surah/:id', '/quran/surah/:id'], async (req, res) => {
     const surahId = parseInt(req.params.id, 10);
     if (isNaN(surahId) || surahId < 1 || surahId > 114) {
       return res.status(400).json({ error: 'شماره سوره باید عددی بین ۱ تا ۱۱۴ باشد.' });
@@ -216,7 +216,7 @@ ${agentApproachText}
   const searchCache = new Map<string, any>();
 
   // اندپوینت جستجوی پیشرفته در متن عربی، اعراب‌زدایی شده و ترجمه‌ها
-  app.get('/api/quran/search', async (req, res) => {
+  app.get(['/api/quran/search', '/quran/search'], async (req, res) => {
     const rawQuery = (req.query.q as string || '').trim();
     const searchScope = (req.query.scope as string || 'all'); // 'all' | 'arabic' | 'translation'
     const surahFilter = req.query.surahId ? parseInt(req.query.surahId as string, 10) : undefined;
