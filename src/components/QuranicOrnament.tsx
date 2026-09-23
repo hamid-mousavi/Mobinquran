@@ -55,11 +55,12 @@ export const QuranicCorner: React.FC<{
 export const QuranicCard: React.FC<{
   children: React.ReactNode;
   className?: string;
+  contentClassName?: string;
   darkMode?: boolean;
   highlighted?: boolean;
   onClick?: () => void;
   id?: string;
-}> = ({ children, className = '', darkMode = false, highlighted = false, onClick, id }) => {
+}> = ({ children, className = '', contentClassName = '', darkMode = false, highlighted = false, onClick, id }) => {
   return (
     <div
       id={id}
@@ -84,7 +85,7 @@ export const QuranicCard: React.FC<{
       <QuranicCorner position="bottom-left" />
 
       {/* محتوای داخلی کادر */}
-      <div className="relative z-10">{children}</div>
+      <div className={`relative z-10 ${contentClassName}`}>{children}</div>
     </div>
   );
 };

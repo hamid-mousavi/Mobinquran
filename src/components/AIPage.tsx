@@ -298,10 +298,10 @@ export const AIPage: React.FC<AIPageProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 pb-28 space-y-4 relative" dir="rtl">
+    <div className="w-full max-w-4xl min-w-0 mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-28 space-y-4 relative overflow-x-hidden" dir="rtl">
       {/* سربرگ صفحه با دکمه‌های ناوبری و دسترسی به تاریخچه */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-slate-800">
-        <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-3 pb-3 border-b border-stone-200 dark:border-slate-800">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             onClick={onBack}
             className="p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all active:scale-95"
@@ -310,18 +310,18 @@ export const AIPage: React.FC<AIPageProps> = ({
           >
             <ArrowRight className="w-5 h-5" />
           </button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="flex min-w-0 items-center gap-2 text-lg sm:text-2xl font-bold text-slate-800 dark:text-slate-100">
               <Bot className="w-6 h-6 text-teal-600 dark:text-teal-400" />
-              <span>دستیار هوشمند تدبّر قرآنی</span>
+              <span className="min-w-0 truncate">دستیار هوشمند تدبّر قرآنی</span>
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
               پاسخ به پرسش‌های قرآنی، تفسیر، واژه‌شناسی و سبک زندگی با ذخیره خودکار تاریخچه در مرورگر
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <button
             onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
             className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
@@ -446,9 +446,9 @@ export const AIPage: React.FC<AIPageProps> = ({
       </div>
 
       {/* پنجره گفتگو */}
-      <QuranicCard darkMode={darkMode} className="p-4 sm:p-5 flex flex-col min-h-[420px] max-h-[600px]">
+      <QuranicCard darkMode={darkMode} contentClassName="h-full min-h-0 flex flex-col" className="w-full min-w-0 h-[calc(100dvh-12rem)] min-h-[420px] max-h-[600px] p-3 sm:p-5 flex flex-col overflow-hidden">
         {/* لیست پیام‌ها */}
-        <div className="h-[420px] max-h-[50vh] min-h-0 flex-1 overflow-y-auto space-y-4 pr-1 pl-1">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden space-y-4 pr-1 pl-1">
           {messages.map((msg) => {
             const isUser = msg.role === 'user';
             const isCopied = copiedMsgId === msg.id;
@@ -465,7 +465,7 @@ export const AIPage: React.FC<AIPageProps> = ({
                 )}
 
                 <div
-                  className={`max-w-[85%] rounded-3xl p-4 text-xs sm:text-sm leading-relaxed transition-all shadow-xs ${
+                  className={`min-w-0 max-w-[85%] break-words rounded-3xl p-3 sm:p-4 text-xs sm:text-sm leading-relaxed transition-all shadow-xs ${
                     isUser
                       ? 'bg-teal-600 text-white rounded-br-xs'
                       : darkMode
