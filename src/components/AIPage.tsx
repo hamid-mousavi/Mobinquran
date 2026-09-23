@@ -448,7 +448,7 @@ export const AIPage: React.FC<AIPageProps> = ({
       {/* پنجره گفتگو */}
       <QuranicCard darkMode={darkMode} className="p-4 sm:p-5 flex flex-col min-h-[420px] max-h-[600px]">
         {/* لیست پیام‌ها */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1 pl-1">
+        <div className="h-[420px] max-h-[50vh] min-h-0 flex-1 overflow-y-auto space-y-4 pr-1 pl-1">
           {messages.map((msg) => {
             const isUser = msg.role === 'user';
             const isCopied = copiedMsgId === msg.id;

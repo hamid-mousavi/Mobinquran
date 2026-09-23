@@ -18,6 +18,10 @@ function env(name: string): string {
   return (process.env[name] || '').trim();
 }
 
+function isProduction(): boolean {
+  return env('NODE_ENV') === 'production';
+}
+
 function dayWindow(): { start: number; resetAt: number } {
   const now = Date.now();
   const start = new Date(now);
@@ -51,6 +55,11 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
   const limit = Math.max(1, Number(env('AI_DAILY_LIMIT') || 20));
   const { resetAt } = dayWindow();
   const storageKey = `quran-ai:${new Date().toISOString().slice(0, 10)}:${key}`;
+
+  if (isProduction() && (!env('UPSTASH_REDIS_REST_URL') || !env('UPSTASH_REDIS_REST_TOKEN'))) {
+    return { allowed: false, used: 0, limit, resetAt };
+  }
+
   let used: number;
 
   try {
@@ -67,6 +76,10 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
       used = counter.count;
     }
   } catch {
+    if (isProduction()) {
+      return { allowed: false, used: 0, limit, resetAt };
+    }
+
     const existing = memoryCounters.get(storageKey);
     const counter = existing && existing.resetAt > Date.now()
       ? existing
