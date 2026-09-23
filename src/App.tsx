@@ -412,7 +412,7 @@ export default function App() {
   return (
     <div
       id="app-root"
-      className={`min-h-screen flex flex-col font-['Vazirmatn'] transition-colors duration-200 ${
+      className={`min-h-screen min-h-dvh w-full max-w-full overflow-x-hidden flex flex-col font-['Vazirmatn'] transition-colors duration-200 ${
         settings.darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#faf8f5] text-slate-800'
       }`}
       dir="rtl"

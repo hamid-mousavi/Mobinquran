@@ -309,19 +309,19 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
   return (
     <main
       id="quran-home-page"
-      className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-28 space-y-6 sm:space-y-7 animate-fadeIn select-none"
+      className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-3 sm:py-6 pb-28 space-y-4 sm:space-y-6 animate-fadeIn select-none overflow-x-hidden"
       dir="rtl"
     >
       {/* هدر بالای صفحه اصلی: سمت راست آیکن تنظیمات، وسط لوگو، سمت چپ ابزارهای تکمیلی */}
       <header
         id="home-top-header"
-        className="flex items-center justify-between gap-3 pt-1 pb-2 border-b border-amber-500/20"
+        className="flex items-center justify-between gap-2 sm:gap-3 pt-1 pb-2 border-b border-amber-500/20"
       >
         {/* سمت راست: دکمه تنظیمات و تم */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={onOpenSettings}
-            className={`p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center ${
+            className={`p-2 sm:p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/30 text-slate-200 hover:bg-slate-800'
                 : 'bg-white border-amber-700/20 text-slate-700 hover:bg-amber-50/70 shadow-xs'
@@ -329,12 +329,12 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             title="تنظیمات قلم و ترجمه"
             aria-label="تنظیمات"
           >
-            <Settings className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 dark:text-amber-400" />
           </button>
 
           <button
             onClick={onToggleDarkMode}
-            className={`p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center ${
+            className={`p-2 sm:p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/30 text-amber-400 hover:bg-slate-800'
                 : 'bg-white border-amber-700/20 text-slate-700 hover:bg-amber-50/70 shadow-xs'
@@ -342,20 +342,20 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             title={darkMode ? 'حالت روز' : 'حالت شب'}
             aria-label="تغییر تم روز و شب"
           >
-            {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            {darkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
         </div>
 
         {/* وسط: لوگوی زیبا و فاخر قرآن مبین */}
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center min-w-0">
           <QuranLogo size="md" darkMode={darkMode} />
         </div>
 
         {/* سمت چپ: نشان‌شده‌ها و مدیریت دانلود */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={onOpenBookmarks}
-            className={`p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center ${
+            className={`p-2 sm:p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/30 text-amber-400 hover:bg-slate-800'
                 : 'bg-white border-amber-700/20 text-slate-700 hover:bg-amber-50/70 shadow-xs'
@@ -363,41 +363,41 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             title="نشان‌شده‌ها و یادداشت‌ها"
             aria-label="نشان‌شده‌ها"
           >
-            <Bookmark className="w-5 h-5" />
+            <Bookmark className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </header>
 
-      {/* نوار جستجوی صفحه اصلی: کلیک روی آن پنجره اختصاصی فهرست سوره‌ها و جزءها را باز می‌کند */}
+      {/* نوار جستجوی صفحه اصلی: کاملاً فیت در موبایل و دسکتاپ */}
       <section id="home-search-bar" className="relative">
         <div
           onClick={onOpenSurahSelector}
-          className={`relative flex items-center justify-between rounded-2xl border-2 transition-all shadow-sm cursor-pointer p-3 sm:p-3.5 group ${
+          className={`relative flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border-2 transition-all shadow-sm cursor-pointer p-3 sm:p-3.5 group gap-2.5 sm:gap-3 ${
             darkMode
               ? 'bg-slate-900/90 border-amber-500/30 hover:border-amber-500 hover:ring-2 hover:ring-amber-500/20'
               : 'bg-white border-amber-700/25 hover:border-teal-600 hover:ring-2 hover:ring-teal-600/20'
           }`}
         >
-          <div className="flex items-center gap-3 text-slate-400 dark:text-slate-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
-            <Search className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300">
+          <div className="flex items-center gap-2.5 text-slate-400 dark:text-slate-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors min-w-0 flex-1">
+            <Search className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 truncate">
               جستجو در فهرست ۱۱۴ سوره، ۳۰ جزء قرآن و صفحات...
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={onOpenSurahSelector}
-              className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all shrink-0"
+              className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all text-center shrink-0"
             >
               فهرست سوره‌ها
             </button>
             <button
               onClick={() => onOpenSearch()}
-              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold text-xs transition-all border border-amber-500/20 flex items-center gap-1 shrink-0"
+              className="flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold text-xs transition-all border border-amber-500/20 flex items-center justify-center gap-1 shrink-0"
               title="جستجوی پیشرفته متنی در آیات و ترجمه‌ها"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
               <span>پیشرفته</span>
             </button>
           </div>
@@ -410,19 +410,19 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
         darkMode={darkMode}
         className="hover:scale-[1.005]"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-md shrink-0">
-              <BookOpen className="w-6 h-6" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-md shrink-0">
+              <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="text-[11px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wide">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wide truncate">
                 آخرین موقعیت مطالعه شما
               </div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 mt-0.5 truncate">
                 سوره {lastReadSurah.nameArabic} ({lastReadSurah.namePersian})
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                 آیه {toPersianDigits(lastRead ? lastRead.verseNumber : 1)} از {toPersianDigits(lastReadSurah.versesCount)} • جزء {toPersianDigits(lastReadSurah.juzNumber)} • صفحه {toPersianDigits(lastReadSurah.startPage || 1)}
               </p>
             </div>
@@ -430,7 +430,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
 
           <button
             onClick={onContinueReading}
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 shrink-0"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 shrink-0"
           >
             <span>ادامه قرائت</span>
             <ChevronLeft className="w-4 h-4 mr-1" />
@@ -443,29 +443,29 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
         id="home-khatm-progress-card"
         darkMode={darkMode}
       >
-        <div className="flex items-center justify-between mb-3 border-b border-amber-500/20 pb-2.5">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 border-b border-amber-500/20 pb-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400 shrink-0">
               <Calendar className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 truncate">
                   پیشرفت و عهد روزانهٔ ختم قرآن کریم
                 </h3>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/20">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/20 shrink-0">
                   {khatmPlan?.title || 'ختم ۳۰ روزه'}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                روز {toPersianDigits(khatmCurrentDay)} از {toPersianDigits(khatmTargetDays)} • پیگیری منظم بر اساس مرزهای حقیقی مصحف شریف
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                روز {toPersianDigits(khatmCurrentDay)} از {toPersianDigits(khatmTargetDays)} • پیگیری منظم بر اساس مصحف
               </p>
             </div>
           </div>
 
           <button
             onClick={onOpenKhatm}
-            className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1 shrink-0"
+            className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1 shrink-0 self-end sm:self-auto"
           >
             <span>مدیریت ختم</span>
             <ChevronLeft className="w-3.5 h-3.5" />
@@ -528,19 +528,19 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
                 <button
                   onClick={() => onNavigateToMushafPage(khatmTodaySegment.startPage)}
                   className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
                 >
-                  <BookOpen className="w-3.5 h-3.5" />
+                  <BookOpen className="w-3.5 h-3.5 shrink-0" />
                   <span>تلاوت سهمیه امروز (ص {toPersianDigits(khatmTodaySegment.startPage)})</span>
                 </button>
 
                 {!isKhatmTodayCompleted && (
                   <button
                     onClick={handleMarkTodayKhatmCompleted}
-                    className="px-3 py-2 rounded-xl border border-amber-500/30 hover:bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold text-xs transition-all active:scale-95"
+                    className="flex-1 sm:flex-none px-3 py-2 rounded-xl border border-amber-500/30 hover:bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold text-xs transition-all active:scale-95 text-center"
                   >
                     ثبت انجام
                   </button>
@@ -596,10 +596,10 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
         </p>
 
         {/* کنش‌های آیه منتخب */}
-        <div className="mt-4 pt-3 border-t border-amber-500/20 flex items-center justify-end gap-2">
+        <div className="mt-4 pt-3 border-t border-amber-500/20 flex flex-wrap sm:flex-nowrap items-center justify-end gap-2">
           <button
             onClick={() => onPlayVerseAudio(selectedRandomVerse.surahId, selectedRandomVerse.verseNumber)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold text-xs transition-colors"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold text-xs transition-colors"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>استماع ترتیل</span>
@@ -608,7 +608,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           {/* کلیک مستقیماً به آیه دقیق می‌رود نه فقط ابتدای سوره */}
           <button
             onClick={() => onNavigateToVerse(selectedRandomVerse.surahId, selectedRandomVerse.verseNumber)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95"
           >
             <BookOpen className="w-3.5 h-3.5" />
             <span>مشاهده آیه در سوره</span>
@@ -621,16 +621,16 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
         id="home-memorization-progress"
         darkMode={darkMode}
       >
-        <div className="flex items-center justify-between mb-3 border-b border-amber-500/20 pb-2">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-xl bg-emerald-600/15 text-emerald-600 dark:text-emerald-400">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 border-b border-amber-500/20 pb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 rounded-xl bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 shrink-0">
               <GraduationCap className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
                 پیشرفت حفظ و تثبیت قرآن کریم
               </h3>
-              <p className="text-[10px] sm:text-[11px] text-slate-400">
+              <p className="text-[10px] sm:text-[11px] text-slate-400 truncate">
                 پیگیری و مرور روزانه با روش تکرار منظم
               </p>
             </div>
@@ -638,7 +638,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
 
           <button
             onClick={onOpenMemorization}
-            className="text-xs font-bold text-teal-700 dark:text-teal-300 hover:underline flex items-center gap-1"
+            className="text-xs font-bold text-teal-700 dark:text-teal-300 hover:underline flex items-center gap-1 shrink-0 self-end sm:self-auto"
           >
             <span>ورود به بخش حفظ</span>
             <ChevronLeft className="w-3.5 h-3.5" />
@@ -699,148 +699,148 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           <span>امکانات و بخش‌های تخصصی قرآن مبین</span>
         </h2>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
           {/* خواندن آیه به آیه */}
           <button
             onClick={onContinueReading}
-            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+            className={`p-3 sm:p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/25 hover:border-teal-500'
                 : 'bg-white border-amber-700/20 hover:border-teal-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
-              <BookOpen className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="font-bold text-xs sm:text-sm">قرائت آیه به آیه</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">۳ ترجمه + تفسیر و واژگان</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">۳ ترجمه + تفسیر و واژگان</div>
             </div>
           </button>
 
           {/* مصحف صفحه‌ای */}
           <button
             onClick={onOpenMushafPage}
-            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+            className={`p-3 sm:p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/25 hover:border-amber-500'
                 : 'bg-white border-amber-700/20 hover:border-amber-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
-              <FileText className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="font-bold text-xs sm:text-sm">مصحف صفحه‌ای</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">۶۰۴ صفحه خط عثمان طه</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">۶۰۴ صفحه خط عثمان طه</div>
             </div>
           </button>
 
           {/* ترتیل صوتی قاریان */}
           <button
             onClick={() => onPlayVerseAudio(lastReadSurah.id, lastRead ? lastRead.verseNumber : 1)}
-            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+            className={`p-3 sm:p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/25 hover:border-teal-500'
                 : 'bg-white border-amber-700/20 hover:border-teal-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
-              <Headphones className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
+              <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="font-bold text-xs sm:text-sm">ترتیل صوتی</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">پرهیزگار، عبدالباسط و...</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">پرهیزگار، عبدالباسط و...</div>
             </div>
           </button>
 
           {/* دستیار هوشمند تدبّر */}
           <button
             onClick={() => onOpenAI()}
-            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+            className={`p-3 sm:p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/25 hover:border-indigo-500'
                 : 'bg-white border-amber-700/20 hover:border-indigo-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 w-fit mb-2">
-              <Sparkles className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 w-fit mb-2">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="font-bold text-xs sm:text-sm">دستیار تدبّر</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">پاسخگویی قرآنی و تاریخچه</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">پاسخگویی قرآنی و تاریخچه</div>
             </div>
           </button>
 
           {/* حفظ و لایتنر */}
           <button
             onClick={onOpenMemorization}
-            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+            className={`p-3 sm:p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/25 hover:border-emerald-500'
                 : 'bg-white border-amber-700/20 hover:border-emerald-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 w-fit mb-2">
-              <GraduationCap className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 w-fit mb-2">
+              <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="font-bold text-xs sm:text-sm">حفظ قرآن</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">تکرار فاصله، آزمون و آمار</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">تکرار فاصله، آزمون و آمار</div>
             </div>
           </button>
 
           {/* مدیریت دانلود و آفلاین */}
           <button
             onClick={onOpenOfflineDownloads}
-            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+            className={`p-3 sm:p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/25 hover:border-teal-500'
                 : 'bg-white border-amber-700/20 hover:border-teal-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
-              <CheckCircle2 className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="font-bold text-xs sm:text-sm">مدیریت دانلود آفلاین</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">دانلود صوت‌های ترتیل قاریان</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">دانلود صوت‌های ترتیل قاریان</div>
             </div>
           </button>
 
           {/* ختم قرآن */}
           <button
             onClick={onOpenKhatm}
-            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+            className={`p-3 sm:p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/25 hover:border-amber-500'
                 : 'bg-white border-amber-700/20 hover:border-amber-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
-              <Calendar className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="font-bold text-xs sm:text-sm">برنامه ختم قرآن</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">پیگیری منظم جزءخوانی</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">پیگیری منظم جزءخوانی</div>
             </div>
           </button>
 
           {/* نشان‌شده‌ها و بوکمارک‌ها */}
           <button
             onClick={onOpenBookmarks}
-            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+            className={`p-3 sm:p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
               darkMode
                 ? 'bg-slate-900/90 border-amber-500/25 hover:border-amber-500'
                 : 'bg-white border-amber-700/20 hover:border-amber-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
-              <Bookmark className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
+              <Bookmark className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="font-bold text-xs sm:text-sm">نشان‌شده‌ها</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">آیات و یادداشت‌های برگزیده</div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">آیات و یادداشت‌های برگزیده</div>
             </div>
           </button>
         </div>

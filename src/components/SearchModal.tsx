@@ -228,12 +228,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   return (
     <div
       id="search-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-6 sm:pt-12 p-3 bg-black/60 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
       onClick={onClose}
     >
       <div
         id="search-modal-container"
-        className={`w-full max-w-2xl max-h-[88vh] flex flex-col rounded-3xl shadow-2xl border transition-all duration-200 overflow-hidden ${
+        className={`w-full sm:max-w-2xl h-[92vh] sm:h-[86vh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl border transition-all duration-200 overflow-hidden ${
           darkMode
             ? 'bg-slate-900 border-slate-800 text-slate-100'
             : 'bg-[#faf8f5] border-stone-200 text-slate-800'
@@ -242,28 +242,28 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         dir="rtl"
       >
         {/* نوار بالایی جستجو */}
-        <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-slate-800 space-y-3 shrink-0">
+        <div className="p-3.5 sm:p-5 border-b border-stone-200 dark:border-slate-800 space-y-2.5 sm:space-y-3 shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-teal-600/10 text-teal-700 dark:text-teal-400">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="p-2 rounded-xl bg-teal-600/10 text-teal-700 dark:text-teal-400 shrink-0">
                 <Search className="w-5 h-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base sm:text-lg font-bold">جستجوی هوشمند قرآن کریم</h2>
-                  <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-400 font-semibold border border-teal-500/20">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm sm:text-lg font-bold truncate">جستجوی هوشمند قرآن کریم</h2>
+                  <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-400 font-semibold border border-teal-500/20 shrink-0">
                     <Zap className="w-3 h-3 text-amber-500" />
-                    ۱۰۰٪ آفلاین و آنی
+                    ۱۰۰٪ آفلاین
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  جستجوی بی‌درنگ در رسم‌الخط عثمانی، متن ساده و ۳ ترجمه معتبر فارسی
+                <p className="text-[10px] sm:text-[11px] text-slate-400 truncate">
+                  جستجوی بی‌درنگ در رسم‌الخط عثمانی، متن ساده و ۳ ترجمه فارسی
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl hover:bg-stone-200 dark:hover:bg-slate-800 transition-colors text-slate-500"
+              className="p-2 rounded-xl hover:bg-stone-200 dark:hover:bg-slate-800 transition-colors text-slate-500 shrink-0"
               title="بستن"
             >
               <X className="w-5 h-5" />
@@ -279,15 +279,15 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               onChange={(e) => handleQueryChange(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="جستجوی کلمه، شماره صفحه (مثلاً ۴۵) یا جزء (مثلاً جزء ۳۰)..."
-              className={`w-full pr-11 pl-20 py-3 rounded-2xl text-sm font-medium border transition-all outline-none ${
+              className={`w-full pr-11 pl-20 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-medium border transition-all outline-none ${
                 darkMode
                   ? 'bg-slate-800/80 border-slate-700 text-slate-100 focus:border-teal-500 focus:bg-slate-800'
                   : 'bg-white border-stone-300 text-slate-900 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/10'
               }`}
             />
-            <Search className="w-5 h-5 absolute right-3.5 top-3.5 text-slate-400" />
+            <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute right-3.5 top-3 sm:top-3.5 text-slate-400" />
 
-            <div className="absolute left-2 top-2 flex items-center gap-1">
+            <div className="absolute left-2 top-1.5 sm:top-2 flex items-center gap-1">
               {query && (
                 <button
                   onClick={() => {
@@ -302,17 +302,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                   <X className="w-4 h-4" />
                 </button>
               )}
-              {isLoading && <Loader2 className="w-5 h-5 animate-spin text-teal-600 mx-1" />}
+              {isLoading && <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-teal-600 mx-1" />}
             </div>
           </div>
 
           {/* فیلترها: دامنه جستجو، سوره و جزء */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-xs">
             {/* دامنه جستجو (عربی / ترجمه / همه) */}
-            <div className="flex items-center gap-1 bg-stone-200/70 dark:bg-slate-800 p-1 rounded-xl">
+            <div className="flex items-center gap-1 bg-stone-200/70 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto justify-between sm:justify-start">
               <button
                 onClick={() => handleScopeChange('all')}
-                className={`px-3 py-1 rounded-lg transition-all font-semibold ${
+                className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1 rounded-lg transition-all font-semibold text-center text-[11px] sm:text-xs ${
                   scope === 'all'
                     ? 'bg-teal-700 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -322,7 +322,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               </button>
               <button
                 onClick={() => handleScopeChange('arabic')}
-                className={`px-3 py-1 rounded-lg transition-all font-semibold ${
+                className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1 rounded-lg transition-all font-semibold text-center text-[11px] sm:text-xs ${
                   scope === 'arabic'
                     ? 'bg-teal-700 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -332,7 +332,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               </button>
               <button
                 onClick={() => handleScopeChange('translation')}
-                className={`px-3 py-1 rounded-lg transition-all font-semibold ${
+                className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1 rounded-lg transition-all font-semibold text-center text-[11px] sm:text-xs ${
                   scope === 'translation'
                     ? 'bg-teal-700 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -343,22 +343,18 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             </div>
 
             {/* فیلتر سوره و جزء */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
+              <div className="flex-1 sm:flex-none min-w-0 flex items-center gap-1 bg-stone-100 dark:bg-slate-800 rounded-xl px-2 py-0.5 border border-stone-200 dark:border-slate-700">
+                <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <select
                   value={selectedSurahFilter}
                   onChange={(e) => handleSurahFilterChange(Number(e.target.value))}
-                  className={`py-1 px-2 rounded-xl text-xs border outline-none font-medium ${
-                    darkMode
-                      ? 'bg-slate-800 border-slate-700 text-slate-200'
-                      : 'bg-white border-stone-300 text-slate-700'
-                  }`}
+                  className="w-full bg-transparent py-1 text-xs outline-none font-medium truncate"
                 >
                   <option value={0}>تمام سوره‌ها</option>
                   {surahs.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.id}. سوره {s.nameArabic} ({s.namePersian})
+                      {s.id}. {s.nameArabic} ({s.namePersian})
                     </option>
                   ))}
                 </select>
@@ -367,11 +363,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               <select
                 value={selectedJuzFilter}
                 onChange={(e) => handleJuzFilterChange(Number(e.target.value))}
-                className={`py-1 px-2 rounded-xl text-xs border outline-none font-medium ${
-                  darkMode
-                    ? 'bg-slate-800 border-slate-700 text-slate-200'
-                    : 'bg-white border-stone-300 text-slate-700'
-                }`}
+                className="flex-1 sm:flex-none py-1.5 px-2 rounded-xl text-xs border outline-none font-medium truncate bg-stone-100 dark:bg-slate-800 border-stone-200 dark:border-slate-700"
               >
                 <option value={0}>تمام اجزاء</option>
                 {Array.from({ length: 30 }, (_, i) => i + 1).map((j) => (
@@ -420,7 +412,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     <Sparkles className="w-4 h-4 text-amber-500" />
                     <span>انتخاب مستقیم هر یک از ۳۰ جزء قرآن کریم:</span>
                   </div>
-                  <div className="grid grid-cols-5 sm:grid-cols-6 gap-1.5 max-h-48 overflow-y-auto p-1">
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 max-h-48 overflow-y-auto p-1">
                     {Array.from({ length: 30 }, (_, i) => i + 1).map((jNum) => (
                       <button
                         key={jNum}
@@ -439,32 +431,32 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
               {/* کارت پرش به جزء */}
               {detectedJuz && (
-                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">
                       ۞
                     </div>
-                    <div>
-                      <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-amber-900 dark:text-amber-200 block truncate">
                         پرش مستقیم به آغاز جزء {toPersianDigits(detectedJuz)} قرآن کریم
                       </span>
                       {(() => {
                         const jInfo = getJuzStartInfo(detectedJuz);
                         return (
-                          <div className="text-[11px] text-amber-700/90 dark:text-amber-400 mt-0.5">
+                          <div className="text-[11px] text-amber-700/90 dark:text-amber-400 mt-0.5 truncate">
                             سوره {jInfo.surahNameArabic} ({jInfo.surahNamePersian}) • آیه {toPersianDigits(jInfo.ayah)} • صفحه {toPersianDigits(jInfo.page)}
                           </div>
                         );
                       })()}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
                     <button
                       onClick={() => {
                         if (onNavigateToJuz) onNavigateToJuz(detectedJuz, false);
                         onClose();
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0"
+                      className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs transition-all active:scale-95 text-center whitespace-nowrap"
                     >
                       نمای آیه‌ای (آیه {toPersianDigits(getJuzStartInfo(detectedJuz).ayah)})
                     </button>
@@ -473,7 +465,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         if (onNavigateToJuz) onNavigateToJuz(detectedJuz, true);
                         onClose();
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-200 font-bold text-xs border border-amber-500/30 transition-all active:scale-95 shrink-0"
+                      className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-200 font-bold text-xs border border-amber-500/30 transition-all active:scale-95 text-center whitespace-nowrap"
                     >
                       مشاهده در مصحف (صفحه {toPersianDigits(getJuzStartInfo(detectedJuz).page)})
                     </button>
@@ -483,27 +475,27 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
               {/* کارت پرش به صفحه */}
               {detectedPage && (
-                <div className="p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0">
                       📖
                     </div>
-                    <div>
-                      <span className="text-xs font-bold text-teal-900 dark:text-teal-200">
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-teal-900 dark:text-teal-200 block truncate">
                         پرش مستقیم به صفحه {toPersianDigits(detectedPage)} مصحف شریف
                       </span>
-                      <div className="text-[11px] text-teal-700/90 dark:text-teal-400 mt-0.5">
+                      <div className="text-[11px] text-teal-700/90 dark:text-teal-400 mt-0.5 truncate">
                         انتقال دقیق به ابتدای صفحه {toPersianDigits(detectedPage)}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
                     <button
                       onClick={() => {
                         if (onNavigateToPage) onNavigateToPage(detectedPage, false);
                         onClose();
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0"
+                      className="flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 text-center whitespace-nowrap"
                     >
                       نمای آیه‌ای
                     </button>
@@ -512,7 +504,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         if (onNavigateToPage) onNavigateToPage(detectedPage, true);
                         onClose();
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-900 dark:text-teal-200 font-bold text-xs border border-teal-500/30 transition-all active:scale-95 shrink-0"
+                      className="flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-900 dark:text-teal-200 font-bold text-xs border border-teal-500/30 transition-all active:scale-95 text-center whitespace-nowrap"
                     >
                       مشاهده در مصحف
                     </button>
@@ -523,9 +515,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               {/* کارت پرش به سوره */}
               {detectedSurah && (
                 <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <Zap className="w-4 h-4 text-emerald-600 animate-pulse shrink-0" />
-                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 truncate">
                       سوره {detectedSurah.nameArabic} ({detectedSurah.namePersian}) • جزء {toPersianDigits(detectedSurah.juzNumber)} • {toPersianDigits(detectedSurah.versesCount)} آیه
                     </span>
                   </div>
@@ -564,17 +556,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             </div>
           ) : results.length > 0 ? (
             <>
-              <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span>
                     {toPersianDigits(totalCount)} آیه یافت شد
                     {results.length < totalCount ? ` (نمایش ${toPersianDigits(results.length)} مورد برتر)` : ''}
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-100 dark:bg-slate-800 text-slate-500">
-                    زمان جستجو: {toPersianDigits(searchTimeMs)} میلی‌ثانیه
+                    زمان: {toPersianDigits(searchTimeMs)} میلی‌ثانیه
                   </span>
                 </div>
-                <span>کلیک روی هر آیه جهت باز کردن در مصحف</span>
+                <span className="text-[11px] text-slate-400">کلیک روی هر آیه جهت باز کردن در مصحف</span>
               </div>
 
               {results.map((item) => {
@@ -593,8 +585,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     }`}
                   >
                     {/* مشخصات سوره و آیه */}
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between mb-2 gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                         <span className="font-bold text-sm text-teal-700 dark:text-teal-400">
                           سوره {matchedSurah?.nameArabic || item.surahNameArabic}
                         </span>
@@ -602,14 +594,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                           آیه {toPersianDigits(item.verseNumber)}
                         </span>
                         <span className="text-[11px] text-slate-400">
-                          جزء {toPersianDigits(item.juzNumber)} • صفحه {toPersianDigits(item.pageNumber)}
+                          جزء {toPersianDigits(item.juzNumber)} • ص {toPersianDigits(item.pageNumber)}
                         </span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                          {item.matchedIn === 'arabic' ? 'متن قرآن' : 'ترجمه'}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                          {item.matchedIn === 'arabic' ? 'متن' : 'ترجمه'}
                         </span>
                       </div>
-                      <span className="text-xs text-teal-600 dark:text-teal-400 flex items-center gap-0.5 group-hover:translate-x-[-2px] transition-transform">
-                        <span>مشاهده در مصحف</span>
+                      <span className="text-xs text-teal-600 dark:text-teal-400 flex items-center gap-0.5 shrink-0 group-hover:translate-x-[-2px] transition-transform">
+                        <span className="hidden sm:inline">مشاهده در مصحف</span>
                         <ChevronLeft className="w-4 h-4" />
                       </span>
                     </div>

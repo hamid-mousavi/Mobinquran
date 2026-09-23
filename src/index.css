@@ -3,6 +3,17 @@
 /* استفاده از کلاس .dark برای کنترل کامل حالت شب (به‌جای تنظیمات سیستم‌عامل) */
 @custom-variant dark (&:is(.dark *));
 
+/* جلوگیری قطعی از اسکرول افقی و خروج صفحات و مودال‌ها از کادر موبایل */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+  -webkit-text-size-adjust: 100%;
+}
+
 /* فونت پایه واسط کاربری و متون فارسی (Vazirmatn - کاملاً خودمیزبان و بهینه) */
 @font-face {
   font-family: 'Vazirmatn';
