@@ -166,7 +166,7 @@ export interface KhatmPlan {
 /** ابردادهٔ سوره پخش‌شده بدون نیاز به اینترنت (P5-T2) — باینری در Cache Storage (ADR-8) */
 export interface AudioDownloadRecord {
   key: string; // `${reciterId}::${surahId}`
-  reciterId: 'parhizgar' | 'abdulbasit' | 'minshawi' | 'afasy';
+  reciterId: string;
   surahId: number;
   downloadedVerses: number;
   totalVerses: number;

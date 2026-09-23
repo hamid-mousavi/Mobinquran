@@ -1,5 +1,6 @@
 import { db } from '../db/quranDb';
 import { ReciterId, getAudioSourceUrl } from './audioSources';
+import { AudioDownloadRecord } from '../types';
 
 /**
  * P5-T2 — کش آفلاین صوت هر سوره.
@@ -14,16 +15,7 @@ export const AUDIO_CACHE_NAME = 'quran-audio-v1';
 /** حداکثر اشغال مجاز کش صوتی (سقف فضا). به‌صورت HTF قابی تنظیم شده — از تنظیمات کاربر تکمیل می‌شود. */
 export const AUDIO_CACHE_SOFT_LIMIT_BYTES = 500 * 1024 * 1024; // 500 MB سقف نرم
 
-export interface AudioDownloadRecord {
-  key: string; // `${reciterId}::${surahId}`
-  reciterId: ReciterId;
-  surahId: number;
-  downloadedVerses: number;
-  totalVerses: number;
-  bytes: number;
-  downloadedAt: number;
-  sourcesUsed: string[]; // نام منبع برای هر آیة دانلودشده (شفافیت)
-}
+export type { AudioDownloadRecord };
 
 export interface AudioCacheStatus {
   records: AudioDownloadRecord[];

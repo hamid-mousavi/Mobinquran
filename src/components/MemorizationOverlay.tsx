@@ -3,6 +3,7 @@ import { X, Play, Pause, RefreshCw, Check, XCircle, Eye, EyeOff, GraduationCap, 
 import { Verse, Surah, AppSettings } from '../types';
 import { ReciterId, getSourcesForReciter, getAudioSourceUrl } from '../services/audioSources';
 import { getArabicFontFamily } from '../utils/fontHelper';
+import { toPersianDigits } from '../utils/textNormalization';
 import {
   createMemoState,
   buildAyahNumbers,
@@ -272,7 +273,7 @@ export const MemorizationOverlay: React.FC<MemorizationOverlayProps> = ({
                     </div>
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1">
-                    {ayahNumbers.length} آیه در بازه انتخاب شد
+                    {toPersianDigits(ayahNumbers.length)} آیه در بازه انتخاب شد
                   </div>
                 </div>
 
@@ -313,7 +314,7 @@ export const MemorizationOverlay: React.FC<MemorizationOverlayProps> = ({
                             : 'border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                         }`}
                       >
-                        {n}×
+                        {toPersianDigits(n)}×
                       </button>
                     ))}
                   </div>
@@ -331,7 +332,7 @@ export const MemorizationOverlay: React.FC<MemorizationOverlayProps> = ({
                             : 'border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                         }`}
                       >
-                        {g === 0 ? 'بدون' : `${g}s`}
+                        {g === 0 ? 'بدون' : `${toPersianDigits(g)} ثانیه`}
                       </button>
                     ))}
                   </div>
@@ -350,7 +351,7 @@ export const MemorizationOverlay: React.FC<MemorizationOverlayProps> = ({
                 className="w-full py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.99] transition-all disabled:opacity-40"
               >
                 <Play className="w-4 h-4 fill-current" />
-                شروع جلسهٔ حفظ ({ayahNumbers.length} آیه)
+                شروع جلسهٔ حفظ ({toPersianDigits(ayahNumbers.length)} آیه)
               </button>
             </div>
           )}
@@ -364,14 +365,14 @@ export const MemorizationOverlay: React.FC<MemorizationOverlayProps> = ({
               }`}>
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-teal-600 dark:text-teal-400">
-                    {state.currentAyah} / {range.end}
+                    {toPersianDigits(state.currentAyah)} / {toPersianDigits(range.end)}
                   </span>
                   <span className={darkMode ? 'text-slate-400' : 'text-slate-400'}>
-                    تکرار {state.repetition}/{state.repeats}
+                    تکرار {toPersianDigits(state.repetition)}/{toPersianDigits(state.repeats)}
                   </span>
                   {state.mode === 'test' && (
                     <span className="text-teal-600 dark:text-teal-400 font-bold">
-                      ✓ {state.score.correct} • ✗ {state.score.wrong}
+                      ✓ {toPersianDigits(state.score.correct)} • ✗ {toPersianDigits(state.score.wrong)}
                     </span>
                   )}
                 </div>
@@ -392,10 +393,10 @@ export const MemorizationOverlay: React.FC<MemorizationOverlayProps> = ({
                     {state.mode === 'test' ? <GraduationCap className="w-7 h-7" /> : <Check className="w-7 h-7" />}
                   </div>
                   <h4 className="font-bold text-base">جلسهٔ حفظ به پایان رسید</h4>
-                  <p className="text-xs text-slate-500">سوره {currentSurah.nameArabic}، آیات {range.start} تا {range.end}</p>
+                  <p className="text-xs text-slate-500">سوره {currentSurah.nameArabic}، آیات {toPersianDigits(range.start)} تا {toPersianDigits(range.end)}</p>
                   {state.mode === 'test' && (
                     <div className="text-xs font-bold">
-                      خودآزمایی: {state.score.correct} صحیح • {state.score.wrong} نیازمند مرور
+                      خودآزمایی: {toPersianDigits(state.score.correct)} صحیح • {toPersianDigits(state.score.wrong)} نیازمند مرور
                     </div>
                   )}
                   <div className="flex items-center justify-center gap-2 pt-2">
@@ -436,7 +437,7 @@ export const MemorizationOverlay: React.FC<MemorizationOverlayProps> = ({
                           <>
                             {currentVerse.textArabic}
                             <span className="inline-flex items-center justify-center mx-1.5 text-amber-600 dark:text-amber-400 font-bold opacity-85" style={{ fontSize: '0.85em' }}>
-                              ﴿{currentVerse.verseNumber}﴾
+                              ﴿{toPersianDigits(currentVerse.verseNumber)}﴾
                             </span>
                           </>
                         )}

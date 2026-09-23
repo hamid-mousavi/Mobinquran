@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, BookOpen, Layers, Bookmark, Sparkles, Copy, Check, Save } from 'lucide-react';
 import { Verse, Surah, ArabicFont } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
+import { toPersianDigits } from '../utils/textNormalization';
 
 interface VerseDetailModalProps {
   isOpen: boolean;
@@ -60,18 +61,18 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
         }`}>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-amber-400/20 text-amber-300 flex items-center justify-center font-bold text-xs border border-amber-400/30">
-              {verse.verseNumber}
+              {toPersianDigits(verse.verseNumber)}
             </div>
             <div>
               <h3 className="font-bold text-sm sm:text-base flex items-center gap-1.5">
                 <span>سوره {currentSurah.nameArabic}</span>
                 <span className="opacity-70 text-xs">({currentSurah.namePersian})</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 font-normal">
-                  آیه {verse.verseNumber}
+                  آیه {toPersianDigits(verse.verseNumber)}
                 </span>
               </h3>
               <span className="text-[11px] opacity-75">
-                جزء {verse.juzNumber} • صفحه {verse.pageNumber}
+                جزء {toPersianDigits(verse.juzNumber)} • صفحه {toPersianDigits(verse.pageNumber)}
               </span>
             </div>
           </div>

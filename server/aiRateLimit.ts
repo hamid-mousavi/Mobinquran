@@ -67,7 +67,13 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
       used = counter.count;
     }
   } catch {
-    return { allowed: false, used: 0, limit, resetAt };
+    const existing = memoryCounters.get(storageKey);
+    const counter = existing && existing.resetAt > Date.now()
+      ? existing
+      : { count: 0, resetAt };
+    counter.count += 1;
+    memoryCounters.set(storageKey, counter);
+    used = counter.count;
   }
 
   return { allowed: used <= limit, used, limit, resetAt };

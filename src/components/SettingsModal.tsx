@@ -4,6 +4,7 @@ import { AppSettings, Translator, ArabicFont, LineHeight } from '../types';
 import { getArabicFontFamily, ARABIC_FONT_OPTIONS } from '../utils/fontHelper';
 import { getStorageStatus, requestStoragePersistence, StorageStatus } from '../services/pwaManager';
 import { PWAInstallButton } from './PWAInstallButton';
+import { toPersianDigits } from '../utils/textNormalization';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -106,7 +107,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <label htmlFor="range-arabic-font-size" className="cursor-pointer">
                 اندازه متن عربی آیات
               </label>
-              <span className="text-teal-600 dark:text-teal-400 font-mono">{settings.arabicFontSize}px</span>
+              <span className="text-teal-600 dark:text-teal-400 font-bold">{toPersianDigits(settings.arabicFontSize)} پیکسل</span>
             </div>
             <input
               id="range-arabic-font-size"
@@ -262,7 +263,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label htmlFor="range-translation-font-size" className="cursor-pointer">
                   اندازه قلم ترجمه فارسی
                 </label>
-                <span className="text-teal-600 dark:text-teal-400 font-mono">{settings.translationFontSize}px</span>
+                <span className="text-teal-600 dark:text-teal-400 font-bold">{toPersianDigits(settings.translationFontSize)} پیکسل</span>
               </div>
               <input
                 id="range-translation-font-size"
@@ -294,8 +295,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               }`}>
                 <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
                   <span>میزان فضای مصرفی در مرورگر:</span>
-                  <span className="font-mono font-bold text-teal-600 dark:text-teal-400">
-                    {storageStatus.usageMB} MB {Number(storageStatus.quotaMB) > 0 && ` / ${storageStatus.quotaMB} MB`}
+                  <span className="font-bold text-teal-600 dark:text-teal-400">
+                    {toPersianDigits(storageStatus.usageMB)} مگابایت {Number(storageStatus.quotaMB) > 0 && ` از ${toPersianDigits(storageStatus.quotaMB)} مگابایت`}
                   </span>
                 </div>
 

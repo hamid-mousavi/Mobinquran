@@ -1,6 +1,33 @@
 import { ALL_SURAHS } from '../data/surahs';
 
-export type ReciterId = 'parhizgar' | 'abdulbasit' | 'minshawi' | 'afasy';
+export type ReciterId =
+  | 'parhizgar'
+  | 'abdulbasit'
+  | 'minshawi'
+  | 'afasy'
+  | 'husary'
+  | 'ghamadi'
+  | 'muaiqly'
+  | 'shatri'
+  | 'hudhaify'
+  | 'sudais'
+  | 'shuraim'
+  | 'mustafa_ismail';
+
+export const RECITER_NAMES: Record<ReciterId, { name: string; shortName: string; title: string }> = {
+  parhizgar: { name: 'استاد شهریار پرهیزگار', shortName: 'پرهیزگار', title: 'ترتیل آموزشی و تجوید دقیق' },
+  abdulbasit: { name: 'استاد عبدالباسط عبدالصمد', shortName: 'عبدالباسط', title: 'ترتیل مجلسی و لحن حزین' },
+  minshawi: { name: 'استاد محمدصدیق منشاوی', shortName: 'منشاوی', title: 'ترتیل باوقار و خاشعانه' },
+  afasy: { name: 'شیخ مشاری بن راشد العفاسی', shortName: 'العفاسی', title: 'ترتیل استودیویی مدرن' },
+  husary: { name: 'شیخ محمود خلیل الحصری', shortName: 'الحصری', title: 'شیخ القراء و مرجع تجوید جهان اسلام' },
+  ghamadi: { name: 'شیخ سعد الغامدی', shortName: 'الغامدی', title: 'ترتیل دلنشین و آرامش‌بخش' },
+  muaiqly: { name: 'شیخ ماهر المعیقلی', shortName: 'المعیقلی', title: 'امام مسجدالحرام و ترتیل حزین' },
+  shatri: { name: 'شیخ ابوبکر الشاطری', shortName: 'الشاطری', title: 'ترتیل خاشع و پرجاذبه' },
+  hudhaify: { name: 'شیخ علی بن عبدالرحمن الحذیفی', shortName: 'الحذیفی', title: 'امام مسجد النبی (ترتیل شمرده و مسجدی)' },
+  sudais: { name: 'شیخ عبدالرحمن السدیس', shortName: 'السدیس', title: 'امام مسجد الحرام و ترتیل پرشور' },
+  shuraim: { name: 'شیخ سعود الشریم', shortName: 'الشریم', title: 'ترتیل ماندگار و لحن حجازی' },
+  mustafa_ismail: { name: 'استاد مصطفی اسماعیل', shortName: 'مصطفی اسماعیل', title: 'اکبر القراء مصر و الحان ملکوتی' },
+};
 
 /**
  * یک منبع صوت برای یک قاری؛ هر قاری چند منبع با fallback مرتب‌شده بر اساس priority دارد.
@@ -253,6 +280,198 @@ export const RECITER_SOURCES: Record<ReciterId, AudioSource[]> = {
       license: islamicNetworkLicenseNote,
       attribution: 'مشاری العفاسی — alquran.cloud (Islamic Network)',
       priority: 2,
+    },
+  ],
+  husary: [
+    {
+      reciterId: 'husary',
+      name: 'everyayah (Husary_64kbps)',
+      host: 'everyayah',
+      format: 'mp3',
+      bitrate: 64,
+      buildUrl: (s, v) => buildEveryayahUrl('Husary_64kbps', s, v),
+      license: commonLicenseNote,
+      attribution: 'محمود خلیل الحصری — everyayah.com',
+      priority: 0,
+    },
+    {
+      reciterId: 'husary',
+      name: 'Islamic Network CDN (alquran.cloud)',
+      host: 'islamicNetwork',
+      format: 'mp3',
+      bitrate: 128,
+      buildUrl: (s, v) => buildIslamicNetworkUrl('husary', 128, s, v),
+      license: islamicNetworkLicenseNote,
+      attribution: 'محمود خلیل الحصری — alquran.cloud',
+      priority: 1,
+    },
+  ],
+  ghamadi: [
+    {
+      reciterId: 'ghamadi',
+      name: 'everyayah (Ghamadi_40kbps)',
+      host: 'everyayah',
+      format: 'mp3',
+      bitrate: 40,
+      buildUrl: (s, v) => buildEveryayahUrl('Ghamadi_40kbps', s, v),
+      license: commonLicenseNote,
+      attribution: 'سعد الغامدی — everyayah.com',
+      priority: 0,
+    },
+    {
+      reciterId: 'ghamadi',
+      name: 'Islamic Network CDN (alquran.cloud)',
+      host: 'islamicNetwork',
+      format: 'mp3',
+      bitrate: 64,
+      buildUrl: (s, v) => buildIslamicNetworkUrl('ghamadi', 64, s, v),
+      license: islamicNetworkLicenseNote,
+      attribution: 'سعد الغامدی — alquran.cloud',
+      priority: 1,
+    },
+  ],
+  muaiqly: [
+    {
+      reciterId: 'muaiqly',
+      name: 'everyayah (Maher_AlMuaiqly_64kbps)',
+      host: 'everyayah',
+      format: 'mp3',
+      bitrate: 64,
+      buildUrl: (s, v) => buildEveryayahUrl('Maher_AlMuaiqly_64kbps', s, v),
+      license: commonLicenseNote,
+      attribution: 'ماهر المعیقلی — everyayah.com',
+      priority: 0,
+    },
+    {
+      reciterId: 'muaiqly',
+      name: 'Islamic Network CDN (alquran.cloud)',
+      host: 'islamicNetwork',
+      format: 'mp3',
+      bitrate: 128,
+      buildUrl: (s, v) => buildIslamicNetworkUrl('mahermuaiqly', 128, s, v),
+      license: islamicNetworkLicenseNote,
+      attribution: 'ماهر المعیقلی — alquran.cloud',
+      priority: 1,
+    },
+  ],
+  shatri: [
+    {
+      reciterId: 'shatri',
+      name: 'everyayah (Abu_Bakr_Ash-Shaatree_64kbps)',
+      host: 'everyayah',
+      format: 'mp3',
+      bitrate: 64,
+      buildUrl: (s, v) => buildEveryayahUrl('Abu_Bakr_Ash-Shaatree_64kbps', s, v),
+      license: commonLicenseNote,
+      attribution: 'ابوبکر الشاطری — everyayah.com',
+      priority: 0,
+    },
+    {
+      reciterId: 'shatri',
+      name: 'Islamic Network CDN (alquran.cloud)',
+      host: 'islamicNetwork',
+      format: 'mp3',
+      bitrate: 128,
+      buildUrl: (s, v) => buildIslamicNetworkUrl('shaatree', 128, s, v),
+      license: islamicNetworkLicenseNote,
+      attribution: 'ابوبکر الشاطری — alquran.cloud',
+      priority: 1,
+    },
+  ],
+  hudhaify: [
+    {
+      reciterId: 'hudhaify',
+      name: 'everyayah (Hudhaify_64kbps)',
+      host: 'everyayah',
+      format: 'mp3',
+      bitrate: 64,
+      buildUrl: (s, v) => buildEveryayahUrl('Hudhaify_64kbps', s, v),
+      license: commonLicenseNote,
+      attribution: 'علی بن عبدالرحمن الحذیفی — everyayah.com',
+      priority: 0,
+    },
+    {
+      reciterId: 'hudhaify',
+      name: 'Islamic Network CDN (alquran.cloud)',
+      host: 'islamicNetwork',
+      format: 'mp3',
+      bitrate: 128,
+      buildUrl: (s, v) => buildIslamicNetworkUrl('hudhaify', 128, s, v),
+      license: islamicNetworkLicenseNote,
+      attribution: 'علی بن عبدالرحمن الحذیفی — alquran.cloud',
+      priority: 1,
+    },
+  ],
+  sudais: [
+    {
+      reciterId: 'sudais',
+      name: 'everyayah (Abdurrahmaan_As-Sudais_64kbps)',
+      host: 'everyayah',
+      format: 'mp3',
+      bitrate: 64,
+      buildUrl: (s, v) => buildEveryayahUrl('Abdurrahmaan_As-Sudais_64kbps', s, v),
+      license: commonLicenseNote,
+      attribution: 'عبدالرحمن السدیس — everyayah.com',
+      priority: 0,
+    },
+    {
+      reciterId: 'sudais',
+      name: 'Islamic Network CDN (alquran.cloud)',
+      host: 'islamicNetwork',
+      format: 'mp3',
+      bitrate: 128,
+      buildUrl: (s, v) => buildIslamicNetworkUrl('sudais', 128, s, v),
+      license: islamicNetworkLicenseNote,
+      attribution: 'عبدالرحمن السدیس — alquran.cloud',
+      priority: 1,
+    },
+  ],
+  shuraim: [
+    {
+      reciterId: 'shuraim',
+      name: 'everyayah (Saood_ash-Shuraym_64kbps)',
+      host: 'everyayah',
+      format: 'mp3',
+      bitrate: 64,
+      buildUrl: (s, v) => buildEveryayahUrl('Saood_ash-Shuraym_64kbps', s, v),
+      license: commonLicenseNote,
+      attribution: 'سعود الشریم — everyayah.com',
+      priority: 0,
+    },
+    {
+      reciterId: 'shuraim',
+      name: 'Islamic Network CDN (alquran.cloud)',
+      host: 'islamicNetwork',
+      format: 'mp3',
+      bitrate: 128,
+      buildUrl: (s, v) => buildIslamicNetworkUrl('shuraym', 128, s, v),
+      license: islamicNetworkLicenseNote,
+      attribution: 'سعود الشریم — alquran.cloud',
+      priority: 1,
+    },
+  ],
+  mustafa_ismail: [
+    {
+      reciterId: 'mustafa_ismail',
+      name: 'everyayah (Mustafa_Ismail_48kbps)',
+      host: 'everyayah',
+      format: 'mp3',
+      bitrate: 48,
+      buildUrl: (s, v) => buildEveryayahUrl('Mustafa_Ismail_48kbps', s, v),
+      license: commonLicenseNote,
+      attribution: 'مصطفی اسماعیل — everyayah.com',
+      priority: 0,
+    },
+    {
+      reciterId: 'mustafa_ismail',
+      name: 'Islamic Network CDN (alquran.cloud)',
+      host: 'islamicNetwork',
+      format: 'mp3',
+      bitrate: 64,
+      buildUrl: (s, v) => buildIslamicNetworkUrl('mustafaismail', 64, s, v),
+      license: islamicNetworkLicenseNote,
+      attribution: 'مصطفی اسماعیل — alquran.cloud',
+      priority: 1,
     },
   ],
 };

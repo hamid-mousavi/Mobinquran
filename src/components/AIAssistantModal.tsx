@@ -3,6 +3,7 @@ import { X, Send, BookOpen, Heart, RefreshCw, Languages, ShieldCheck, Bot, Serve
 import { Verse, Surah } from '../types';
 import { aiResponseSchema, AiResponse } from '../services/aiContract';
 import { AiCandidateForRequest, retrieveAiCandidates } from '../services/aiRetrieval';
+import { toPersianDigits } from '../utils/textNormalization';
 
 interface AIAssistantModalProps {
   isOpen: boolean;
@@ -410,7 +411,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                             className="w-full text-right rounded-xl border border-teal-500/30 bg-teal-500/5 p-2.5 hover:bg-teal-500/10"
                           >
                             <div className="flex items-center justify-between text-[11px] font-bold text-teal-700 dark:text-teal-300">
-                              <span>{answer.ref}</span>
+                              <span>{toPersianDigits(answer.ref)}</span>
                               <span>متن آیه از حافظهٔ محلی</span>
                             </div>
                             <p className="mt-1 font-['Amiri_Quran'] leading-7 text-slate-700 dark:text-slate-200">{candidate.verse.textArabic}</p>
@@ -419,7 +420,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                           </button>
                         );
                       })}
-                      <div className="text-[10px] text-amber-600">سطح اطمینان: {m.response.confidence} · تولیدشده با هوش مصنوعی</div>
+                      <div className="text-[10px] text-amber-600">سطح اطمینان: {toPersianDigits(m.response.confidence)} · تولیدشده با هوش مصنوعی</div>
                     </div>
                   )}
                   {m.localCandidates && m.localCandidates.length > 0 && (
@@ -432,7 +433,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                           onClick={() => onOpenVerse?.(candidate.verse)}
                           className="w-full text-right rounded-xl border border-slate-400/30 bg-slate-500/5 p-2.5 hover:bg-slate-500/10"
                         >
-                          <div className="text-[11px] font-bold text-teal-700 dark:text-teal-300">{candidate.ref}</div>
+                          <div className="text-[11px] font-bold text-teal-700 dark:text-teal-300">{toPersianDigits(candidate.ref)}</div>
                           <p className="mt-1 font-['Amiri_Quran'] leading-7 text-slate-700 dark:text-slate-200">{candidate.verse.textArabic}</p>
                           <p className="mt-1 text-[11px] text-slate-500">{candidate.text_fa}</p>
                         </button>

@@ -108,3 +108,98 @@ export function calculateMatchScore(normalizedTarget: string, normalizedQuery: s
 
   return maxScore;
 }
+
+/**
+ * تبدیل اعداد انگلیسی و لاتین به ارقام زیبای فارسی (۰ تا ۹)
+ */
+export function toPersianDigits(input: number | string | undefined | null): string {
+  if (input === undefined || input === null) return '';
+  const str = String(input);
+  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  return str.replace(/[0-9]/g, (w) => persianDigits[+w]);
+}
+
+/**
+ * تبدیل ارقام فارسی و عربی به ارقام استاندارد لاتین
+ */
+export function parseAllDigits(str: string): string {
+  return str
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
+}
+
+const PERSIAN_WORDS_TO_NUMBERS: Record<string, number> = {
+  'اول': 1, 'یکم': 1, 'یک': 1,
+  'دوم': 2, 'دو': 2,
+  'سوم': 3, 'سو': 3, 'سه': 3,
+  'چهارم': 4, 'چهار': 4,
+  'پنجم': 5, 'پنج': 5,
+  'ششم': 6, 'شش': 6,
+  'هفتم': 7, 'هفت': 7,
+  'هشتم': 8, 'هشت': 8,
+  'نهم': 9, 'نه': 9,
+  'دهم': 10, 'ده': 10,
+  'یازدهم': 11, 'یازده': 11,
+  'دوازدهم': 12, 'دوازده': 12,
+  'سیزدهم': 13, 'سیزده': 13,
+  'چهاردهم': 14, 'چهارده': 14,
+  'پانزدهم': 15, 'پانزده': 15,
+  'شانزدهم': 16, 'شانزده': 16,
+  'هفدهم': 17, 'هفده': 17,
+  'هجدهم': 18, 'هجده': 18,
+  'نوزدهم': 19, 'نوزده': 19,
+  'بیستم': 20, 'بیست': 20,
+  'بیست و یکم': 21, 'بیست و یک': 21,
+  'بیست و دوم': 22, 'بیست و دو': 22,
+  'بیست و سوم': 23, 'بیست و سه': 23,
+  'بیست و چهارم': 24, 'بیست و چهار': 24,
+  'بیست و پنجم': 25, 'بیست و پنج': 25,
+  'بیست و ششم': 26, 'بیست و شش': 26,
+  'بیست و هفتم': 27, 'بیست و هفت': 27,
+  'بیست و هشتم': 28, 'بیست و هشت': 28,
+  'بیست و نهم': 29, 'بیست و نه': 29,
+  'سی ام': 30, 'سی‌ام': 30, 'سیم': 30, 'سی': 30,
+};
+
+/**
+ * تشخیص هوشمند شماره جزء (۱ تا ۳۰) از عبارت ورودی با پشتیبانی از حروف، ارقام فارسی و پیشوندها
+ */
+export function parseJuzQuery(query: string): number | null {
+  const clean = query.trim();
+  if (!clean) return null;
+
+  const isJuzPrefix = /^(جزء|جوزء|ج)\s*/.test(clean);
+  const withoutPrefix = clean.replace(/^(جزء|جوزء|ج)\s*/, '').trim();
+
+  if (PERSIAN_WORDS_TO_NUMBERS[withoutPrefix]) {
+    return PERSIAN_WORDS_TO_NUMBERS[withoutPrefix];
+  }
+
+  const digitStr = parseAllDigits(withoutPrefix);
+  const num = parseInt(digitStr, 10);
+  if (!isNaN(num) && num >= 1 && num <= 30) {
+    if (isJuzPrefix || /^[۰-۹0-9]+$/.test(clean)) {
+      return num;
+    }
+  }
+  return null;
+}
+
+/**
+ * تشخیص هوشمند شماره صفحه مصحف (۱ تا ۶۰۴) از عبارت ورودی با پشتیبانی از ارقام فارسی و پیشوندها
+ */
+export function parsePageQuery(query: string): number | null {
+  const clean = query.trim();
+  if (!clean) return null;
+
+  const isPagePrefix = /^(صفحه|ص)\s*/.test(clean);
+  const withoutPrefix = clean.replace(/^(صفحه|ص)\s*/, '').trim();
+  const digitStr = parseAllDigits(withoutPrefix);
+  const num = parseInt(digitStr, 10);
+  if (!isNaN(num) && num >= 1 && num <= 604) {
+    if (isPagePrefix || /^[۰-۹0-9]+$/.test(clean)) {
+      return num;
+    }
+  }
+  return null;
+}

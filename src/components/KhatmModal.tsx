@@ -4,6 +4,7 @@ import { KhatmPlan, KhatmType } from '../types';
 import { localDateKey, currentKhatmDay } from '../utils/date';
 import { buildKhatmSegments, KhatmSegment } from '../utils/khatmMath';
 import { QuranService } from '../services/quranService';
+import { toPersianDigits } from '../utils/textNormalization';
 
 interface KhatmModalProps {
   isOpen: boolean;
@@ -106,7 +107,11 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
     setPlan((prev) => {
       if (!prev) return prev;
       const next = updater(prev);
-      QuranService.saveKhatmPlan({ ...next, isActive: true }).catch(() => {});
+      QuranService.saveKhatmPlan({ ...next, isActive: true })
+        .then(() => {
+          window.dispatchEvent(new CustomEvent('mobin-khatm-updated'));
+        })
+        .catch(() => {});
       return next;
     });
   }, []);
@@ -198,6 +203,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
         isActive: true,
       };
       await QuranService.saveKhatmPlan(newPlan);
+      window.dispatchEvent(new CustomEvent('mobin-khatm-updated'));
       setPlan(newPlan);
       setActiveTab('status');
     } catch {
@@ -217,6 +223,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
         isActive: true,
       };
       await QuranService.saveKhatmPlan(newPlan);
+      window.dispatchEvent(new CustomEvent('mobin-khatm-updated'));
       setPlan(newPlan);
       setActiveTab('status');
     }
@@ -319,12 +326,12 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
                         {plan?.title}
                       </h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        روز {currentDay} از {targetDays} • {perDayLabel}
+                        روز {toPersianDigits(currentDay)} از {toPersianDigits(targetDays)} • {toPersianDigits(perDayLabel)}
                       </p>
                     </div>
                     <div className="text-left">
                       <span className="text-2xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400">
-                        {progressPercent}٪
+                        {toPersianDigits(progressPercent)}٪
                       </span>
                       <p className="text-[11px] text-slate-400">پیشرفت کل</p>
                     </div>
@@ -339,8 +346,8 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
                   </div>
 
                   <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                    <span>{completedCount} صفحه خوانده شده</span>
-                    <span>{totalPages - completedCount} صفحه باقیمانده</span>
+                    <span>{toPersianDigits(completedCount)} صفحه خوانده شده</span>
+                    <span>{toPersianDigits(totalPages - completedCount)} صفحه باقیمانده</span>
                   </div>
                 </div>
 
@@ -355,12 +362,12 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Flame className="w-5 h-5 text-amber-500" />
-                      <h4 className="font-bold text-sm">تکلیف تلاوت امروز (روز {currentDay})</h4>
+                      <h4 className="font-bold text-sm">تکلیف تلاوت امروز (روز {toPersianDigits(currentDay)})</h4>
                     </div>
                     {todaySegment && (
                       <span className="text-xs font-bold text-teal-700 dark:text-teal-400">
-                        صفحه {todaySegment.startPage} تا {todaySegment.endPage}
-                        {todaySegment.label ? ` • ${todaySegment.label}` : ''}
+                        صفحه {toPersianDigits(todaySegment.startPage)} تا {toPersianDigits(todaySegment.endPage)}
+                        {todaySegment.label ? ` • ${toPersianDigits(todaySegment.label)}` : ''}
                       </span>
                     )}
                   </div>
@@ -397,7 +404,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
                                 ) : (
                                   <Circle className="w-3.5 h-3.5 opacity-40" />
                                 )}
-                                <span>ص {pageNum}</span>
+                                <span>ص {toPersianDigits(pageNum)}</span>
                               </button>
                             );
                           }
@@ -414,7 +421,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
                           className="w-full sm:w-auto flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow transition-all active:scale-95"
                         >
                           <BookOpen className="w-4 h-4" />
-                          <span>شروع تلاوت امروز (صفحه {todaySegment.startPage})</span>
+                          <span>شروع تلاوت امروز (صفحه {toPersianDigits(todaySegment.startPage)})</span>
                         </button>
 
                         <button
@@ -557,7 +564,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
                         className="w-20 px-2 py-1 rounded-lg border text-sm text-center font-bold bg-white dark:bg-slate-800"
                       />
                       <span className="text-xs text-slate-400">
-                        (روزانه حدود {Math.ceil(604 / (customDays || 1))} صفحه)
+                        (روزانه حدود {toPersianDigits(Math.ceil(604 / (customDays || 1)))} صفحه)
                       </span>
                     </div>
                   )}

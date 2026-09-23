@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   BookOpen,
   FileText,
@@ -9,34 +9,51 @@ import {
   Headphones,
   GraduationCap,
   Play,
-  ArrowLeft,
   ChevronLeft,
-  Layers,
-  Clock,
+  Settings,
+  Moon,
+  Sun,
+  RefreshCw,
   Sparkle,
-  Compass,
+  CheckCircle2,
+  TrendingUp,
+  Circle,
+  Clock,
+  Layers,
 } from 'lucide-react';
-import { Surah, Verse, AppSettings } from '../types';
+import { Surah, Verse, KhatmPlan, KhatmType } from '../types';
 import { AyahEndMarker } from './QuranReader';
+import { QuranLogo, QuranicCard } from './QuranicOrnament';
+import { toPersianDigits } from '../utils/textNormalization';
+import { getMemorizationStats, MemorizationStats } from '../services/memorizationStorage';
+import { QuranService } from '../services/quranService';
+import { buildKhatmSegments, KhatmSegment } from '../utils/khatmMath';
+import { currentKhatmDay, localDateKey } from '../utils/date';
 
 interface QuranHomePageProps {
   surahs: Surah[];
   lastRead: { surahId: number; verseNumber: number; pageNumber?: number } | null;
   onContinueReading: () => void;
   onSelectSurah: (surah: Surah) => void;
+  onNavigateToVerse: (surahId: number, verseNumber: number) => void;
   onNavigateToJuz: (juzNumber: number) => void;
+  onNavigateToMushafPage: (pageNumber: number) => void;
+  onOpenSurahSelector: () => void;
   onOpenMushafPage: () => void;
-  onOpenSearch: () => void;
+  onOpenSearch: (initialQuery?: string) => void;
   onOpenBookmarks: () => void;
   onOpenKhatm: () => void;
   onOpenAI: (verse?: Verse) => void;
   onOpenMemorization: () => void;
+  onOpenOfflineDownloads: () => void;
+  onOpenSettings: () => void;
+  onToggleDarkMode: () => void;
   onPlayVerseAudio: (surahId: number, verseNumber: number) => void;
   darkMode: boolean;
 }
 
-// آیات برگزیده روز جهت ایجاد انس معنوی
-const DAILY_VERSES = [
+// گنجینه آیات برگزیده قرآن برای انتخاب تصادفی
+const POOL_OF_VERSES = [
   {
     surahId: 2,
     surahNameArabic: 'البَقَرَة',
@@ -67,7 +84,7 @@ const DAILY_VERSES = [
     verseNumber: 28,
     textArabic: 'الَّذِينَ آمَنُوا وَتَطْمَئِنُّ قُلُوبُهُم بِذِكْرِ اللَّهِ ۗ أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ',
     translationPersian: 'همان کسانی که ایمان آورده‌اند و دل‌هایشان با یاد خدا آرام می‌گیرد؛ آگاه باشید که با یاد خدا دل‌ها آرامش می‌یابد.',
-    theme: 'آرامش دل با یاد خداوند',
+    theme: 'آرامش دل با یاد پروردگار',
   },
   {
     surahId: 65,
@@ -77,6 +94,46 @@ const DAILY_VERSES = [
     translationPersian: 'و هر کس بر خداوند توکل کند، او برایش کافی است؛ بی‌تردید خداوند فرمان و کار خویش را به سرانجام می‌رساند.',
     theme: 'توکل و کفایت پروردگار',
   },
+  {
+    surahId: 2,
+    surahNameArabic: 'البَقَرَة',
+    verseNumber: 186,
+    textArabic: 'وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ ۖ أُجِيبُ دَعْوَةَ الدَّاعِ إِذَا دَعَانِ',
+    translationPersian: 'و هنگامی که بندگانم از تو درباره من بپرسند، بی‌تردید من نزدیکم؛ دعای دعا کننده را هنگامی که مرا می‌خواند، پاسخ می‌دهم.',
+    theme: 'نزدیکی پروردگار و اجابت دعا',
+  },
+  {
+    surahId: 39,
+    surahNameArabic: 'الزُّمَر',
+    verseNumber: 53,
+    textArabic: 'قُلْ يَا عِبَادِيَ الَّذِينَ أَسْرَفُوا عَلَىٰ أَنفُسِهِمْ لَا تَقْنَطُوا مِن رَّحْمَةِ اللَّهِ ۚ إِنَّ اللَّهَ يَغْفِرُ الذُّنُوبَ جَمِيعًا',
+    translationPersian: 'بگو: ای بندگان من که بر خویشتن زیاده‌روی روا داشته‌اید! از رحمت خدا نومید نشوید؛ همانا خدا همه گناهان را می‌آمرزد.',
+    theme: 'رحمت بی‌کران و امید به مغفرت',
+  },
+  {
+    surahId: 55,
+    surahNameArabic: 'الرَّحْمَٰن',
+    verseNumber: 60,
+    textArabic: 'هَلْ جَزَاءُ الْإِحْسَانِ إِلَّا الْإِحْسَانُ',
+    translationPersian: 'آیا پاداش نیکی جز نیکی است؟',
+    theme: 'قاعده احسان و پاداش نیکوکاران',
+  },
+  {
+    surahId: 3,
+    surahNameArabic: 'آل عِمْرَان',
+    verseNumber: 139,
+    textArabic: 'وَلَا تَهِنُوا وَلَا تَحْزَنُوا وَأَنتُمُ الْأَعْلَوْنَ إِن كُنتُم مُّؤْمِنِينَ',
+    translationPersian: 'و سست نشوید و اندوهگین مباشید، و شما برترید اگر مؤمن باشید.',
+    theme: 'عزت و ایستادگی مؤمنان',
+  },
+  {
+    surahId: 59,
+    surahNameArabic: 'الحَشْر',
+    verseNumber: 22,
+    textArabic: 'هُوَ اللَّهُ الَّذِي لَا إِلَٰهَ إِلَّا هُوَ ۖ عَالِمُ الْغَيْبِ وَالشَّهَادَةِ ۖ هُوَ الرَّحْمَٰنُ الرَّحِيمُ',
+    translationPersian: 'او خدایی است که معبودی جز او نیست؛ دانای نهان و آشکار است، اوست بخشنده و مهربان.',
+    theme: 'اسماء حسنی و علم الهی',
+  },
 ];
 
 // ۳۰ جزء قرآن و آغاز هر جزء
@@ -84,7 +141,7 @@ const JUZ_STARTS = [
   { juz: 1, surahId: 1, surahName: 'حمد', ayah: 1, page: 1 },
   { juz: 2, surahId: 2, surahName: 'بقره', ayah: 142, page: 22 },
   { juz: 3, surahId: 2, surahName: 'بقره', ayah: 253, page: 42 },
-  { juz: 4, surahId: 3, surahName: 'آل عمران', ayah: 93, page: 62 },
+  { juz: 4, surahId: 3, surahName: 'آل عمران', ayah: 92, page: 62 },
   { juz: 5, surahId: 4, surahName: 'نساء', ayah: 24, page: 82 },
   { juz: 6, surahId: 4, surahName: 'نساء', ayah: 148, page: 102 },
   { juz: 7, surahId: 5, surahName: 'مائده', ayah: 82, page: 121 },
@@ -118,26 +175,94 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
   lastRead,
   onContinueReading,
   onSelectSurah,
+  onNavigateToVerse,
   onNavigateToJuz,
+  onNavigateToMushafPage,
+  onOpenSurahSelector,
   onOpenMushafPage,
   onOpenSearch,
   onOpenBookmarks,
   onOpenKhatm,
   onOpenAI,
   onOpenMemorization,
+  onOpenOfflineDownloads,
+  onOpenSettings,
+  onToggleDarkMode,
   onPlayVerseAudio,
   darkMode,
 }) => {
-  const [activeTab, setActiveTab] = useState<'surahs' | 'juz'>('surahs');
-  const [surahFilter, setSurahFilter] = useState<'all' | 'meccan' | 'medinan'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [memoStats, setMemoStats] = useState<MemorizationStats>(getMemorizationStats);
 
-  // آیه منتخب روز بر مبنای تاریخ جاری
-  const dailyVerse = useMemo(() => {
-    const dayOfYear = Math.floor(
-      (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24)
-    );
-    return DAILY_VERSES[dayOfYear % DAILY_VERSES.length];
+  // وضعیت و پیشرفت برنامه ختم قرآن
+  const [khatmPlan, setKhatmPlan] = useState<KhatmPlan | null>(null);
+  const [khatmSegments, setKhatmSegments] = useState<KhatmSegment[]>([]);
+  const [isKhatmLoading, setIsKhatmLoading] = useState(true);
+
+  // اطمینان از اسکرول به ابتدای صفحه هنگام بازگشت به صفحه اصلی (حل باگ اسکرول ناخواسته)
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, []);
+
+  const loadKhatmData = useCallback(async () => {
+    try {
+      const [starts, savedPlan] = await Promise.all([
+        QuranService.getMushafStarts(),
+        QuranService.getKhatmPlan(),
+      ]);
+      const target: KhatmPlan = savedPlan ?? {
+        id: 'ramadan_30_default',
+        title: 'ختم ۳۰ روزه قرآن کریم (جزء به جزء)',
+        type: 'ramadan_30' as KhatmType,
+        startDate: localDateKey(),
+        targetDays: 30,
+        totalPages: 604,
+        completedPages: [],
+        currentDay: 1,
+        isActive: true,
+      };
+      setKhatmPlan(target);
+      const result = buildKhatmSegments(
+        target.type || 'custom',
+        target.targetDays,
+        starts.juzStartPages,
+        starts.quarterStartPages
+      );
+      setKhatmSegments(result.segments);
+    } catch {
+      // fallback
+    } finally {
+      setIsKhatmLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadKhatmData();
+    window.addEventListener('mobin-khatm-updated', loadKhatmData);
+    return () => window.removeEventListener('mobin-khatm-updated', loadKhatmData);
+  }, [loadKhatmData]);
+
+  // آیه منتخب تصادفی
+  const [randomVerseIndex, setRandomVerseIndex] = useState<number>(() =>
+    Math.floor(Math.random() * POOL_OF_VERSES.length)
+  );
+
+  const selectedRandomVerse = POOL_OF_VERSES[randomVerseIndex] || POOL_OF_VERSES[0];
+
+  const handleShuffleVerse = () => {
+    setRandomVerseIndex((prev) => {
+      let next = Math.floor(Math.random() * POOL_OF_VERSES.length);
+      if (next === prev) next = (next + 1) % POOL_OF_VERSES.length;
+      return next;
+    });
+  };
+
+  // گوش فرادادن به تغییرات پیشرفت حفظ
+  useEffect(() => {
+    const handleUpdate = () => {
+      setMemoStats(getMemorizationStats());
+    };
+    window.addEventListener('mobin-memorization-updated', handleUpdate);
+    return () => window.removeEventListener('mobin-memorization-updated', handleUpdate);
   }, []);
 
   // سوره آخرین مطالعه
@@ -146,67 +271,146 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
     return surahs.find((s) => s.id === lastRead.surahId) || surahs[0];
   }, [lastRead, surahs]);
 
-  // فیلتر سوره‌ها
-  const filteredSurahs = useMemo(() => {
-    return surahs.filter((s) => {
-      // فیلتر مکی / مدنی
-      if (surahFilter === 'meccan' && s.revelationType !== 'Meccan') return false;
-      if (surahFilter === 'medinan' && s.revelationType !== 'Medinan') return false;
+  // محاسبات پیشرفت ختم قرآن
+  const khatmTargetDays = khatmPlan?.targetDays || 30;
+  const khatmTotalPages = khatmPlan?.totalPages || 604;
+  const khatmDerivedDay = khatmPlan ? currentKhatmDay(khatmPlan.startDate, khatmTargetDays) : 1;
+  const khatmCurrentDay = Math.min(khatmDerivedDay, Math.max(1, khatmSegments.length || khatmTargetDays));
+  const khatmTodaySegment: KhatmSegment | null = khatmSegments[khatmCurrentDay - 1] || null;
+  const khatmCompletedCount = khatmPlan?.completedPages.length || 0;
+  const khatmProgressPercent = Math.min(100, Math.round((khatmCompletedCount / khatmTotalPages) * 100));
 
-      // فیلتر جستجو
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.trim().toLowerCase();
-      return (
-        s.nameArabic.toLowerCase().includes(q) ||
-        (s.namePersian && s.namePersian.toLowerCase().includes(q)) ||
-        (s.englishName && s.englishName.toLowerCase().includes(q)) ||
-        String(s.id).includes(q)
-      );
-    });
-  }, [surahs, surahFilter, searchQuery]);
+  const isKhatmTodayCompleted =
+    !!khatmTodaySegment &&
+    (() => {
+      const pages = khatmPlan?.completedPages || [];
+      for (let p = khatmTodaySegment.startPage; p <= khatmTodaySegment.endPage; p++) {
+        if (!pages.includes(p)) return false;
+      }
+      return true;
+    })();
+
+  const handleMarkTodayKhatmCompleted = async () => {
+    if (!khatmTodaySegment || !khatmPlan) return;
+    const newPages = new Set(khatmPlan.completedPages);
+    for (let p = khatmTodaySegment.startPage; p <= khatmTodaySegment.endPage; p++) {
+      newPages.add(p);
+    }
+    const updatedPlan: KhatmPlan = {
+      ...khatmPlan,
+      completedPages: Array.from(newPages).sort((a, b) => a - b),
+      lastReadDate: localDateKey(),
+    };
+    await QuranService.saveKhatmPlan(updatedPlan);
+    setKhatmPlan(updatedPlan);
+    window.dispatchEvent(new CustomEvent('mobin-khatm-updated'));
+  };
 
   return (
-    <div
+    <main
       id="quran-home-page"
-      className="max-w-4xl mx-auto px-3 sm:px-6 py-6 pb-28 space-y-7 animate-fadeIn"
+      className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-28 space-y-6 sm:space-y-7 animate-fadeIn select-none"
       dir="rtl"
     >
-      {/* ۱. کتیبه معنوی سردر صفحه اصلی */}
-      <section
-        id="home-hero-banner"
-        className={`relative overflow-hidden rounded-3xl p-6 sm:p-8 text-center border-2 shadow-lg transition-all ${
-          darkMode
-            ? 'bg-gradient-to-b from-slate-900 via-teal-950/50 to-slate-900 border-amber-500/35 text-slate-100 shadow-teal-950/40'
-            : 'bg-gradient-to-b from-amber-50/80 via-stone-50 to-teal-50/40 border-amber-600/30 text-slate-800 shadow-stone-200'
-        }`}
+      {/* هدر بالای صفحه اصلی: سمت راست آیکن تنظیمات، وسط لوگو، سمت چپ ابزارهای تکمیلی */}
+      <header
+        id="home-top-header"
+        className="flex items-center justify-between gap-3 pt-1 pb-2 border-b border-amber-500/20"
       >
-        <div className="absolute inset-1.5 rounded-2xl border border-dashed border-amber-500/25 pointer-events-none" />
+        {/* سمت راست: دکمه تنظیمات و تم */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onOpenSettings}
+            className={`p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/30 text-slate-200 hover:bg-slate-800'
+                : 'bg-white border-amber-700/20 text-slate-700 hover:bg-amber-50/70 shadow-xs'
+            }`}
+            title="تنظیمات قلم و ترجمه"
+            aria-label="تنظیمات"
+          >
+            <Settings className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          </button>
 
-        {/* سرآغاز بسم الله */}
-        <div
-          className="text-2xl sm:text-3xl font-bold text-amber-600 dark:text-amber-300 drop-shadow-xs mb-2 tracking-wide"
-          style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
-        >
-          بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+          <button
+            onClick={onToggleDarkMode}
+            className={`p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/30 text-amber-400 hover:bg-slate-800'
+                : 'bg-white border-amber-700/20 text-slate-700 hover:bg-amber-50/70 shadow-xs'
+            }`}
+            title={darkMode ? 'حالت روز' : 'حالت شب'}
+            aria-label="تغییر تم روز و شب"
+          >
+            {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-teal-800 dark:text-teal-200 mt-1">
-          مصحف جامع و هوشمند قرآن مبین
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-lg mx-auto leading-relaxed">
-          همراه تدبّر در کلام وحی، ترتیل اساتید، مصحف عثمان طه و دستیار هوشمند قرآنی
-        </p>
-      </section>
+        {/* وسط: لوگوی زیبا و فاخر قرآن مبین */}
+        <div className="flex items-center justify-center">
+          <QuranLogo size="md" darkMode={darkMode} />
+        </div>
 
-      {/* ۲. کارت شاخص «ادامهٔ آخرین تلاوت» (Continue Reading) */}
-      <section id="home-last-read-card">
+        {/* سمت چپ: نشان‌شده‌ها و مدیریت دانلود */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onOpenBookmarks}
+            className={`p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/30 text-amber-400 hover:bg-slate-800'
+                : 'bg-white border-amber-700/20 text-slate-700 hover:bg-amber-50/70 shadow-xs'
+            }`}
+            title="نشان‌شده‌ها و یادداشت‌ها"
+            aria-label="نشان‌شده‌ها"
+          >
+            <Bookmark className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      {/* نوار جستجوی صفحه اصلی: کلیک روی آن پنجره اختصاصی فهرست سوره‌ها و جزءها را باز می‌کند */}
+      <section id="home-search-bar" className="relative">
         <div
-          className={`p-5 sm:p-6 rounded-3xl border-2 transition-all shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+          onClick={onOpenSurahSelector}
+          className={`relative flex items-center justify-between rounded-2xl border-2 transition-all shadow-sm cursor-pointer p-3 sm:p-3.5 group ${
             darkMode
-              ? 'bg-slate-900/90 border-teal-600/40 hover:border-teal-500 shadow-slate-950/60'
-              : 'bg-white border-teal-600/30 hover:border-teal-600/50 shadow-teal-900/5'
+              ? 'bg-slate-900/90 border-amber-500/30 hover:border-amber-500 hover:ring-2 hover:ring-amber-500/20'
+              : 'bg-white border-amber-700/25 hover:border-teal-600 hover:ring-2 hover:ring-teal-600/20'
           }`}
         >
+          <div className="flex items-center gap-3 text-slate-400 dark:text-slate-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+            <Search className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300">
+              جستجو در فهرست ۱۱۴ سوره، ۳۰ جزء قرآن و صفحات...
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={onOpenSurahSelector}
+              className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all shrink-0"
+            >
+              فهرست سوره‌ها
+            </button>
+            <button
+              onClick={() => onOpenSearch()}
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold text-xs transition-all border border-amber-500/20 flex items-center gap-1 shrink-0"
+              title="جستجوی پیشرفته متنی در آیات و ترجمه‌ها"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>پیشرفته</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* کارت شاخص «ادامهٔ آخرین مطالعه» */}
+      <QuranicCard
+        id="home-last-read-card"
+        darkMode={darkMode}
+        className="hover:scale-[1.005]"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-md shrink-0">
               <BookOpen className="w-6 h-6" />
@@ -219,7 +423,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
                 سوره {lastReadSurah.nameArabic} ({lastReadSurah.namePersian})
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                آیه {lastRead ? lastRead.verseNumber.toLocaleString('fa-IR') : '۱'} از {lastReadSurah.versesCount.toLocaleString('fa-IR')} • جزء {lastReadSurah.juzNumber.toLocaleString('fa-IR')} • صفحه {lastReadSurah.startPage?.toLocaleString('fa-IR') || '۱'}
+                آیه {toPersianDigits(lastRead ? lastRead.verseNumber : 1)} از {toPersianDigits(lastReadSurah.versesCount)} • جزء {toPersianDigits(lastReadSurah.juzNumber)} • صفحه {toPersianDigits(lastReadSurah.startPage || 1)}
               </p>
             </div>
           </div>
@@ -232,79 +436,277 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             <ChevronLeft className="w-4 h-4 mr-1" />
           </button>
         </div>
-      </section>
+      </QuranicCard>
 
-      {/* ۳. حکمت و آیهٔ منتخب روز (Daily Verse & Reflection) */}
-      <section
-        id="home-daily-verse-card"
-        className={`p-5 sm:p-6 rounded-3xl border transition-all ${
-          darkMode
-            ? 'bg-slate-900/60 border-amber-500/25'
-            : 'bg-gradient-to-br from-amber-50/50 to-stone-50 border-amber-500/20'
-        }`}
+      {/* کارت حرفه‌ای و جامع پیشرفت ختم قرآن کریم */}
+      <QuranicCard
+        id="home-khatm-progress-card"
+        darkMode={darkMode}
       >
-        <div className="flex items-center justify-between mb-3 border-b border-stone-200/60 dark:border-slate-800 pb-2.5">
-          <div className="flex items-center gap-2">
-            <Sparkle className="w-4 h-4 text-amber-500" />
-            <span className="text-xs font-bold text-amber-700 dark:text-amber-300">
-              آیهٔ منتخب روز • {dailyVerse.theme}
-            </span>
+        <div className="flex items-center justify-between mb-3 border-b border-amber-500/20 pb-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100">
+                  پیشرفت و عهد روزانهٔ ختم قرآن کریم
+                </h3>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/20">
+                  {khatmPlan?.title || 'ختم ۳۰ روزه'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                روز {toPersianDigits(khatmCurrentDay)} از {toPersianDigits(khatmTargetDays)} • پیگیری منظم بر اساس مرزهای حقیقی مصحف شریف
+              </p>
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400">
-            سوره {dailyVerse.surahNameArabic} : آیه {dailyVerse.verseNumber.toLocaleString('fa-IR')}
-          </span>
+
+          <button
+            onClick={onOpenKhatm}
+            className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1 shrink-0"
+          >
+            <span>مدیریت ختم</span>
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        {/* متن عربی آیه روز با خط مصحفی */}
+        {/* نوار پیشرفت درصد کل */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold">
+            <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4 text-amber-500" />
+              <span>
+                {toPersianDigits(khatmCompletedCount)} صفحه تلاوت شده از {toPersianDigits(khatmTotalPages)} صفحه کل
+              </span>
+            </span>
+            <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 font-sans">
+              {toPersianDigits(khatmProgressPercent)}٪
+            </span>
+          </div>
+
+          <div className="w-full h-3 bg-stone-200/80 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-stone-300/50 dark:border-slate-700">
+            <div
+              className="h-full bg-gradient-to-l from-amber-500 via-amber-400 to-teal-600 rounded-full transition-all duration-500 shadow-xs"
+              style={{ width: `${Math.max(1, khatmProgressPercent)}%` }}
+            />
+          </div>
+
+          {/* کارت وضعیت تکلیف تلاوت امروز */}
+          {khatmTodaySegment && (
+            <div className={`mt-3 p-3.5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+              isKhatmTodayCompleted
+                ? darkMode
+                  ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                  : 'bg-emerald-50/70 border-emerald-300 text-emerald-900'
+                : darkMode
+                ? 'bg-slate-800/60 border-slate-700'
+                : 'bg-stone-50 border-stone-200'
+            }`}>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold flex items-center gap-1 ${
+                    isKhatmTodayCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
+                  }`}>
+                    {isKhatmTodayCompleted ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>سهمیه تلاوت امروز خوانده شد ✓</span>
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="w-4 h-4" />
+                        <span>سهمیه تلاوت امروز (روز {toPersianDigits(khatmCurrentDay)})</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-700 dark:text-slate-300 font-semibold">
+                  صفحه {toPersianDigits(khatmTodaySegment.startPage)} تا {toPersianDigits(khatmTodaySegment.endPage)}
+                  {khatmTodaySegment.label ? ` • ${toPersianDigits(khatmTodaySegment.label)}` : ''}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={() => onNavigateToMushafPage(khatmTodaySegment.startPage)}
+                  className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>تلاوت سهمیه امروز (ص {toPersianDigits(khatmTodaySegment.startPage)})</span>
+                </button>
+
+                {!isKhatmTodayCompleted && (
+                  <button
+                    onClick={handleMarkTodayKhatmCompleted}
+                    className="px-3 py-2 rounded-xl border border-amber-500/30 hover:bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold text-xs transition-all active:scale-95"
+                  >
+                    ثبت انجام
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </QuranicCard>
+
+      {/* آیه منتخب تصادفی با دکمه تغییر تصادفی و پرش به همان آیه */}
+      <QuranicCard
+        id="home-daily-verse-card"
+        darkMode={darkMode}
+        highlighted
+      >
+        <div className="flex items-center justify-between mb-3 border-b border-amber-500/20 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Sparkle className="w-4 h-4 text-amber-500 animate-pulse" />
+            <span className="text-xs font-bold text-amber-700 dark:text-amber-300">
+              آیهٔ منتخب • {selectedRandomVerse.theme}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              سوره {selectedRandomVerse.surahNameArabic} : آیه {toPersianDigits(selectedRandomVerse.verseNumber)}
+            </span>
+            <button
+              onClick={handleShuffleVerse}
+              className="p-1 rounded-lg hover:bg-amber-500/15 text-amber-700 dark:text-amber-300 transition-transform active:rotate-180"
+              title="آیه تصادفی دیگر"
+              aria-label="تغییر آیه تصادفی"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* متن عربی آیه روز */}
         <p
           className="text-right text-lg sm:text-xl font-medium leading-loose text-slate-900 dark:text-slate-100 my-2"
-          style={{ fontFamily: "'Amiri', serif" }}
+          style={{ fontFamily: "'Amiri', 'Amiri Quran', serif" }}
           dir="rtl"
         >
-          {dailyVerse.textArabic}
-          <AyahEndMarker verseNumber={dailyVerse.verseNumber} />
+          {selectedRandomVerse.textArabic}
+          <AyahEndMarker verseNumber={selectedRandomVerse.verseNumber} />
         </p>
 
         {/* ترجمه فارسی */}
         <p className="text-xs sm:text-sm text-stone-600 dark:text-slate-300 leading-relaxed text-right mt-2" dir="rtl">
-          «{dailyVerse.translationPersian}»
+          «{selectedRandomVerse.translationPersian}»
         </p>
 
-        {/* کنش‌های سریع آیه روز */}
-        <div className="mt-4 pt-3 border-t border-stone-200/50 dark:border-slate-800 flex items-center justify-end gap-2">
+        {/* کنش‌های آیه منتخب */}
+        <div className="mt-4 pt-3 border-t border-amber-500/20 flex items-center justify-end gap-2">
           <button
-            onClick={() => onPlayVerseAudio(dailyVerse.surahId, dailyVerse.verseNumber)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold text-xs transition-colors"
+            onClick={() => onPlayVerseAudio(selectedRandomVerse.surahId, selectedRandomVerse.verseNumber)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold text-xs transition-colors"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>استماع ترتیل</span>
           </button>
 
+          {/* کلیک مستقیماً به آیه دقیق می‌رود نه فقط ابتدای سوره */}
           <button
-            onClick={() => {
-              const s = surahs.find((x) => x.id === dailyVerse.surahId);
-              if (s) onSelectSurah(s);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600/10 hover:bg-teal-600/20 text-teal-700 dark:text-teal-300 font-bold text-xs transition-colors"
+            onClick={() => onNavigateToVerse(selectedRandomVerse.surahId, selectedRandomVerse.verseNumber)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95"
           >
             <BookOpen className="w-3.5 h-3.5" />
-            <span>مشاهده در سوره</span>
+            <span>مشاهده آیه در سوره</span>
           </button>
         </div>
-      </section>
+      </QuranicCard>
 
-      {/* ۴. دسترسی سریع به امکانات (خدمات قرآنی در کاشی‌های منظم) */}
+      {/* بخش پیشرفت حفظ قرآن برای کاربر */}
+      <QuranicCard
+        id="home-memorization-progress"
+        darkMode={darkMode}
+      >
+        <div className="flex items-center justify-between mb-3 border-b border-amber-500/20 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-xl bg-emerald-600/15 text-emerald-600 dark:text-emerald-400">
+              <GraduationCap className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
+                پیشرفت حفظ و تثبیت قرآن کریم
+              </h3>
+              <p className="text-[10px] sm:text-[11px] text-slate-400">
+                پیگیری و مرور روزانه با روش تکرار منظم
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onOpenMemorization}
+            className="text-xs font-bold text-teal-700 dark:text-teal-300 hover:underline flex items-center gap-1"
+          >
+            <span>ورود به بخش حفظ</span>
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* نوار پیشرفت کل حفظ */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold">
+            <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1">
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
+              <span>
+                {toPersianDigits(memoStats.totalMemorized)} آیه از {toPersianDigits(memoStats.totalVerses)} آیه کل قرآن
+              </span>
+            </span>
+            <span className="text-amber-600 dark:text-amber-400 font-sans font-bold">
+              {toPersianDigits(memoStats.percentage)}٪
+            </span>
+          </div>
+
+          <div className="w-full h-3 bg-stone-200/80 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-stone-300/50 dark:border-slate-700">
+            <div
+              className="h-full bg-gradient-to-l from-amber-500 via-teal-500 to-emerald-600 rounded-full transition-all duration-500 shadow-xs"
+              style={{ width: `${Math.max(1, memoStats.percentage)}%` }}
+            />
+          </div>
+
+          {/* آماره‌های سریع حفظ */}
+          <div className="grid grid-cols-3 gap-2 pt-2 text-center">
+            <div className="p-2 rounded-xl bg-stone-100/70 dark:bg-slate-800/60 border border-stone-200/60 dark:border-slate-800">
+              <div className="text-[11px] text-slate-400">آیات نشان‌شده حفظ</div>
+              <div className="text-sm font-bold text-teal-700 dark:text-teal-300 mt-0.5">
+                {toPersianDigits(memoStats.totalMemorized)}
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-stone-100/70 dark:bg-slate-800/60 border border-stone-200/60 dark:border-slate-800">
+              <div className="text-[11px] text-slate-400">جلسات اخیر</div>
+              <div className="text-sm font-bold text-amber-700 dark:text-amber-300 mt-0.5">
+                {toPersianDigits(memoStats.recentSessions.length)} جلسه
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-stone-100/70 dark:bg-slate-800/60 border border-stone-200/60 dark:border-slate-800">
+              <div className="text-[11px] text-slate-400">هدف تثبیت</div>
+              <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">
+                جزء ۳۰
+              </div>
+            </div>
+          </div>
+        </div>
+      </QuranicCard>
+
+      {/* دسترسی سریع به امکانات (کاشی‌های منظم با بوردرهای قرآنی) */}
       <section id="home-quick-actions" className="space-y-3">
-        <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300">
-          امکانات و خدمات قرآنی
+        <h2 className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+          <Sparkles className="w-4 h-4 text-amber-500" />
+          <span>امکانات و بخش‌های تخصصی قرآن مبین</span>
         </h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {/* خواندن آیه به آیه */}
           <button
             onClick={onContinueReading}
-            className={`p-4 rounded-2xl border text-right transition-all flex flex-col justify-between hover:scale-[1.02] ${
-              darkMode ? 'bg-slate-900 border-slate-800 hover:border-teal-500' : 'bg-white border-stone-200 hover:border-teal-600 shadow-xs'
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/25 hover:border-teal-500'
+                : 'bg-white border-amber-700/20 hover:border-teal-600'
             }`}
           >
             <div className="p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
@@ -319,8 +721,10 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           {/* مصحف صفحه‌ای */}
           <button
             onClick={onOpenMushafPage}
-            className={`p-4 rounded-2xl border text-right transition-all flex flex-col justify-between hover:scale-[1.02] ${
-              darkMode ? 'bg-slate-900 border-slate-800 hover:border-amber-500' : 'bg-white border-stone-200 hover:border-amber-600 shadow-xs'
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/25 hover:border-amber-500'
+                : 'bg-white border-amber-700/20 hover:border-amber-600'
             }`}
           >
             <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
@@ -335,8 +739,10 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           {/* ترتیل صوتی قاریان */}
           <button
             onClick={() => onPlayVerseAudio(lastReadSurah.id, lastRead ? lastRead.verseNumber : 1)}
-            className={`p-4 rounded-2xl border text-right transition-all flex flex-col justify-between hover:scale-[1.02] ${
-              darkMode ? 'bg-slate-900 border-slate-800 hover:border-teal-500' : 'bg-white border-stone-200 hover:border-teal-600 shadow-xs'
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/25 hover:border-teal-500'
+                : 'bg-white border-amber-700/20 hover:border-teal-600'
             }`}
           >
             <div className="p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
@@ -348,30 +754,70 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             </div>
           </button>
 
-          {/* جستجوی پیشرفته */}
+          {/* دستیار هوشمند تدبّر */}
           <button
-            onClick={onOpenSearch}
-            className={`p-4 rounded-2xl border text-right transition-all flex flex-col justify-between hover:scale-[1.02] ${
-              darkMode ? 'bg-slate-900 border-slate-800 hover:border-blue-500' : 'bg-white border-stone-200 hover:border-blue-600 shadow-xs'
+            onClick={() => onOpenAI()}
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/25 hover:border-indigo-500'
+                : 'bg-white border-amber-700/20 hover:border-indigo-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 w-fit mb-2">
-              <Search className="w-5 h-5" />
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 w-fit mb-2">
+              <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <div className="font-bold text-xs sm:text-sm">جستجوی پیشرفته</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">در آیات، ترجمه‌ها و ریشه‌ها</div>
+              <div className="font-bold text-xs sm:text-sm">دستیار تدبّر</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">پاسخگویی قرآنی و تاریخچه</div>
+            </div>
+          </button>
+
+          {/* حفظ و لایتنر */}
+          <button
+            onClick={onOpenMemorization}
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/25 hover:border-emerald-500'
+                : 'bg-white border-amber-700/20 hover:border-emerald-600'
+            }`}
+          >
+            <div className="p-2.5 rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 w-fit mb-2">
+              <GraduationCap className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-bold text-xs sm:text-sm">حفظ قرآن</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">تکرار فاصله، آزمون و آمار</div>
+            </div>
+          </button>
+
+          {/* مدیریت دانلود و آفلاین */}
+          <button
+            onClick={onOpenOfflineDownloads}
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/25 hover:border-teal-500'
+                : 'bg-white border-amber-700/20 hover:border-teal-600'
+            }`}
+          >
+            <div className="p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-bold text-xs sm:text-sm">مدیریت دانلود آفلاین</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">دانلود صوت‌های ترتیل قاریان</div>
             </div>
           </button>
 
           {/* ختم قرآن */}
           <button
             onClick={onOpenKhatm}
-            className={`p-4 rounded-2xl border text-right transition-all flex flex-col justify-between hover:scale-[1.02] ${
-              darkMode ? 'bg-slate-900 border-slate-800 hover:border-emerald-500' : 'bg-white border-stone-200 hover:border-emerald-600 shadow-xs'
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/25 hover:border-amber-500'
+                : 'bg-white border-amber-700/20 hover:border-amber-600'
             }`}
           >
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 w-fit mb-2">
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
               <Calendar className="w-5 h-5" />
             </div>
             <div>
@@ -380,27 +826,13 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             </div>
           </button>
 
-          {/* دستیار هوشمند تدبّر */}
-          <button
-            onClick={() => onOpenAI()}
-            className={`p-4 rounded-2xl border text-right transition-all flex flex-col justify-between hover:scale-[1.02] ${
-              darkMode ? 'bg-slate-900 border-slate-800 hover:border-indigo-500' : 'bg-white border-stone-200 hover:border-indigo-600 shadow-xs'
-            }`}
-          >
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 w-fit mb-2">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="font-bold text-xs sm:text-sm">دستیار تدبّر</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">پاسخگویی قرآنی هوشمند</div>
-            </div>
-          </button>
-
           {/* نشان‌شده‌ها و بوکمارک‌ها */}
           <button
             onClick={onOpenBookmarks}
-            className={`p-4 rounded-2xl border text-right transition-all flex flex-col justify-between hover:scale-[1.02] ${
-              darkMode ? 'bg-slate-900 border-slate-800 hover:border-amber-500' : 'bg-white border-stone-200 hover:border-amber-600 shadow-xs'
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between hover:scale-[1.02] shadow-2xs ${
+              darkMode
+                ? 'bg-slate-900/90 border-amber-500/25 hover:border-amber-500'
+                : 'bg-white border-amber-700/20 hover:border-amber-600'
             }`}
           >
             <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
@@ -411,179 +843,8 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
               <div className="text-[11px] text-slate-400 mt-0.5">آیات و یادداشت‌های برگزیده</div>
             </div>
           </button>
-
-          {/* جعبه لایتنر و حفظ قرآن */}
-          <button
-            onClick={onOpenMemorization}
-            className={`p-4 rounded-2xl border text-right transition-all flex flex-col justify-between hover:scale-[1.02] ${
-              darkMode ? 'bg-slate-900 border-slate-800 hover:border-teal-500' : 'bg-white border-stone-200 hover:border-teal-600 shadow-xs'
-            }`}
-          >
-            <div className="p-2.5 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
-              <GraduationCap className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="font-bold text-xs sm:text-sm">حفظ و لایتنر</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">تکرار فاصله و تثبیت آیه</div>
-            </div>
-          </button>
         </div>
       </section>
-
-      {/* ۵. مرورگر جامع سوره‌ها و ۳۰ جزء */}
-      <section id="home-surahs-navigator" className="space-y-4">
-        {/* تب‌های انتخاب: ۱۱۴ سوره یا ۳۰ جزء */}
-        <div className="flex items-center justify-between gap-2 border-b border-stone-200 dark:border-slate-800 pb-2">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('surahs')}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                activeTab === 'surahs'
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
-              }`}
-            >
-              فهرست ۱۱۴ سوره
-            </button>
-            <button
-              onClick={() => setActiveTab('juz')}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                activeTab === 'juz'
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
-              }`}
-            >
-              فهرست ۳۰ جزء
-            </button>
-          </div>
-
-          {/* فیلتر مکی و مدنی (فقط در تب سوره‌ها) */}
-          {activeTab === 'surahs' && (
-            <div className="hidden sm:flex items-center gap-1 text-xs">
-              <button
-                onClick={() => setSurahFilter('all')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                  surahFilter === 'all'
-                    ? 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                همه ({surahs.length})
-              </button>
-              <button
-                onClick={() => setSurahFilter('meccan')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                  surahFilter === 'meccan'
-                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                مکی
-              </button>
-              <button
-                onClick={() => setSurahFilter('medinan')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                  surahFilter === 'medinan'
-                    ? 'bg-teal-500/20 text-teal-700 dark:text-teal-300 font-bold'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                مدنی
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* فیلد جستجوی سریع سوره */}
-        {activeTab === 'surahs' && (
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="جستجوی سوره با نام یا شماره..."
-              className={`w-full pr-10 pl-4 py-2.5 rounded-2xl text-xs sm:text-sm border focus:outline-hidden focus:ring-2 focus:ring-teal-500 ${
-                darkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-stone-200 text-slate-800'
-              }`}
-            />
-            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
-          </div>
-        )}
-
-        {/* محتوای تب: شبکهٔ سوره‌ها */}
-        {activeTab === 'surahs' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[600px] overflow-y-auto pr-1">
-            {filteredSurahs.map((surah) => {
-              const isCurrent = lastRead && lastRead.surahId === surah.id;
-              return (
-                <button
-                  key={surah.id}
-                  onClick={() => onSelectSurah(surah)}
-                  className={`p-3.5 rounded-2xl border text-right transition-all flex items-center justify-between group hover:scale-[1.01] ${
-                    isCurrent
-                      ? darkMode
-                        ? 'bg-teal-950/40 border-teal-600'
-                        : 'bg-teal-50/80 border-teal-500'
-                      : darkMode
-                      ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
-                      : 'bg-white border-stone-200/90 hover:border-stone-300 shadow-xs'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
-                        isCurrent
-                          ? 'bg-teal-600 text-white'
-                          : darkMode
-                          ? 'bg-slate-800 text-slate-300'
-                          : 'bg-stone-100 text-slate-700'
-                      }`}
-                    >
-                      {surah.id}
-                    </span>
-                    <div>
-                      <div className="font-bold text-sm text-slate-900 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
-                        سوره {surah.nameArabic}
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        {surah.namePersian} • {surah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-left text-[11px] text-slate-400">
-                    <div className="font-medium">{surah.versesCount} آیه</div>
-                    <div>جزء {surah.juzNumber}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          /* محتوای تب: فهرست ۳۰ جزء */
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 max-h-[600px] overflow-y-auto pr-1">
-            {JUZ_STARTS.map((j) => (
-              <button
-                key={j.juz}
-                onClick={() => onNavigateToJuz(j.juz)}
-                className={`p-3.5 rounded-2xl border text-center transition-all hover:scale-[1.02] ${
-                  darkMode ? 'bg-slate-900 border-slate-800 hover:border-teal-500' : 'bg-white border-stone-200 hover:border-teal-600 shadow-xs'
-                }`}
-              >
-                <div className="text-xs font-bold text-teal-700 dark:text-teal-300 mb-1">
-                  جزء {j.juz.toLocaleString('fa-IR')}
-                </div>
-                <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  سوره {j.surahName}
-                </div>
-                <div className="text-[10px] text-slate-400 mt-1">
-                  آیه {j.ayah.toLocaleString('fa-IR')} • صفحه {j.page.toLocaleString('fa-IR')}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
+    </main>
   );
 };

@@ -1,9 +1,36 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Bookmark, Sparkles, Copy, BookOpen, Play, Volume2, Loader2, AlertCircle, RefreshCw, Share2 } from 'lucide-react';
 import { Verse, Surah, AppSettings } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
 import { prefersReducedMotion } from '../utils/motion';
 import { shareAyah } from '../utils/shareAyah';
+import { QuranicSurahBanner } from './QuranicOrnament';
+import { toPersianDigits } from '../utils/textNormalization';
+
+export interface VerseCandidate {
+  verse: Verse;
+  top: number;
+  bottom: number;
+}
+
+export function pickReadingVerse(
+  candidates: VerseCandidate[],
+  readingLineY: number
+): Verse | null {
+  let best: VerseCandidate | null = null;
+  let bestScore = Infinity;
+
+  for (const candidate of candidates) {
+    const center = (candidate.top + candidate.bottom) / 2;
+    const distance = Math.abs(center - readingLineY);
+    if (distance < bestScore) {
+      bestScore = distance;
+      best = candidate;
+    }
+  }
+
+  return best?.verse ?? null;
+}
 
 /**
  * نشان سنتی و گل مصحفی انتهای آیه شبیه به مصحف شریف عثمان طه و نسخه‌های نفیس کتب قرآن
@@ -13,7 +40,7 @@ export const AyahEndMarker: React.FC<{
   className?: string;
   isCurrentlyPlaying?: boolean;
 }> = ({ verseNumber, className = '', isCurrentlyPlaying }) => {
-  const persianNumber = verseNumber.toLocaleString('fa-IR');
+  const persianNumber = toPersianDigits(verseNumber);
   return (
     <span
       className={`inline-flex items-center justify-center align-middle mx-1.5 select-none relative group/marker ${className}`}
@@ -77,50 +104,12 @@ interface QuranReaderProps {
   onInitialScrollHandled?: () => void;
 }
 
-// مجازی‌سازی لیست (P3-T8): مت‌ریال‌سازی تدریجی آیه‌ها برای سوره‌های بلند.
-// بار اول فقط INITIAL_CHUNK آیه رندر می‌شود؛ با نزدیک‌شدن به انتها، chunk بعدی اضافه می‌شود
-// و پرش به آیهٔ دلخواه (شروع/پخش/مودال) از طریق متد سراسری کار می‌کند.
-const VIRTUALIZE_THRESHOLD = 200;
-const INITIAL_CHUNK = 40;
-const CHUNK_SIZE = 30;
-
+// ثبت شنوندگان سراسری اسکرول (برای هماهنگی بین کامپوننت‌ها)
 const scrollListeners = new Set<(verseNumber: number) => void>();
 
-/** درخواست اسکرول به آیه از خارج از کامپوننت (App.tsx) */
+/** درخواست اسکرول مستقیم به آیه از خارج از کامپوننت (App.tsx) */
 export function requestQuranScrollToVerse(verseNumber: number): void {
   scrollListeners.forEach((listener) => listener(verseNumber));
-}
-
-/**
- * انتخاب «آیهٔ در حال مطالعه» از میان آیات قابل‌مشاهده (P3-T1).
- * آیه‌ای برنده است که بیشترین پوشش را روی «خط مرجع مطالعه» (reading line) داشته باشد؛
- * یعنی آیه‌ای که در حال عبور از ناحیهٔ مرکزی دید کاربر است.
- * برخلاف حالت قبلی، انتخاب بر اساس هندسهٔ «همین دسته» انجام می‌شود و
- * آیه‌ای که زمانی در بالای صفحه بوده (ratio=1) برای همیشه برنده نمی‌ماند.
- */
-export interface VerseCandidate {
-  verse: Verse;
-  top: number;
-  bottom: number;
-}
-
-export function pickReadingVerse(
-  candidates: VerseCandidate[],
-  readingLineY: number
-): Verse | null {
-  let best: VerseCandidate | null = null;
-  let bestScore = Infinity;
-
-  for (const candidate of candidates) {
-    const center = (candidate.top + candidate.bottom) / 2;
-    const distance = Math.abs(center - readingLineY);
-    if (distance < bestScore) {
-      bestScore = distance;
-      best = candidate;
-    }
-  }
-
-  return best?.verse ?? null;
 }
 
 export const QuranReader: React.FC<QuranReaderProps> = ({
@@ -141,169 +130,181 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   initialScrollToVerseNumber,
   onInitialScrollHandled,
 }) => {
-  // مرجع جدیدترین تابع جهت استفاده در observer بدون وابستگی‌های رندر
+  // مرجع جدیدترین تابع جهت استفاده در شنوندهٔ اسکرول
   const onReadingPositionChangeRef = useRef(onReadingPositionChange);
   useEffect(() => {
     onReadingPositionChangeRef.current = onReadingPositionChange;
   }, [onReadingPositionChange]);
 
-  // مرجع وضعیت «بازگشت به آخرین مطالعه در حال انجام» برای observer؛
-  // تا بستن لغو شود، observer فقط با آخرین مقدار آن کار می‌کند و نیازی به بازسازی observable نیست.
-  const resumePendingRef = useRef(Boolean(initialScrollToVerseNumber));
-  useEffect(() => {
-    resumePendingRef.current = Boolean(initialScrollToVerseNumber);
-  }, [initialScrollToVerseNumber]);
+  // پرچم قفل‌کردن ردیاب مطالعه در هنگام اسکرول برنامه‌ای (جلوگیری از ثبت اشتباه آیات میانی)
+  const isProgrammaticScrollRef = useRef(false);
+  const programmaticScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // --- مجازی‌سازی لیست (P3-T8) ---
-  const isVirtualized = verses.length > VIRTUALIZE_THRESHOLD;
-  const [renderCount, setRenderCount] = useState(0);
-  useEffect(() => {
-    // هنگام تغییر سوره/آیات، پنجرهٔ متریال‌سازی ریست می‌شود ولی کوچک نمی‌شود
-    setRenderCount((prev) => (prev === 0 ? INITIAL_CHUNK : Math.max(prev, INITIAL_CHUNK)));
-  }, [verses]);
+  const visibleVerses = verses;
 
-  const visibleVerses = isVirtualized ? verses.slice(0, renderCount) : verses;
+  // اسکرول کاملاً پایدار، دقیق و مقاوم در برابر بارگذاری فونت و ریفلاو به آیه مورد نظر
+  const performScrollToVerse = useCallback((verseNumber: number) => {
+    const el = document.getElementById(`verse-${verseNumber}`);
+    if (!el) return false;
 
-  // پرش به آیهٔ مشخص: مطمین می‌شویم تعداد رندر کافی است، سپس اسکرول
-  const scrollToVerse = (verseNumber: number, behavior: 'auto' | 'smooth') => {
-    const el2 = document.getElementById(`verse-${verseNumber}`);
-    if (el2) {
-      el2.scrollIntoView({ behavior, block: 'center' });
-      return;
+    // قفل ردیاب موقعیت تا زمانی که تمام تثبیت‌های اسکرول به پایان برسد
+    isProgrammaticScrollRef.current = true;
+    if (programmaticScrollTimerRef.current) {
+      clearTimeout(programmaticScrollTimerRef.current);
     }
-    if (isVirtualized && verseNumber >= 1 && verseNumber <= verses.length) {
-      setRenderCount((prev) => Math.max(prev, verseNumber, INITIAL_CHUNK));
-      // بعد از رندر تعداد کافی، اسکرول انجام می‌شود
-      const tryScroll = () => {
-        const el3 = document.getElementById(`verse-${verseNumber}`);
-        if (el3) {
-          el3.scrollIntoView({ behavior: behavior === 'smooth' && !prefersReducedMotion() ? 'smooth' : 'auto', block: 'center' });
-        }
-      };
-      requestAnimationFrame(() => requestAnimationFrame(tryScroll));
-    }
-  };
 
-  // سرویس درخواست اسکرول از خارج (App.tsx: پخش صوتی/ونمودار/انتخاب از مودال)
+    const pinToReadingLine = () => {
+      const currentEl = document.getElementById(`verse-${verseNumber}`);
+      if (!currentEl) return;
+      const rect = currentEl.getBoundingClientRect();
+      const currentScrollY = window.pageYOffset || document.documentElement.scrollTop;
+      // هدایت آیه به فاصله دقیق ۱۰۰ پیکسل از بالای صفحه (زیر هدر ثابت)
+      const targetY = Math.max(0, currentScrollY + rect.top - 100);
+      window.scrollTo({
+        top: targetY,
+        behavior: 'auto',
+      });
+    };
+
+    // پرش فوری و مستقیم (بدون تأخیر انیمیشن که در صفحات بلند لغو شود)
+    pinToReadingLine();
+
+    // تصحیح مکرر موقعیت جهت همگامی ۱۰۰٪ با بارگذاری قلم‌های عثمانی و متون ترجمه
+    setTimeout(pinToReadingLine, 50);
+    setTimeout(pinToReadingLine, 150);
+    setTimeout(pinToReadingLine, 350);
+    setTimeout(pinToReadingLine, 650);
+    setTimeout(pinToReadingLine, 1000);
+
+    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        pinToReadingLine();
+      });
+    }
+
+    // جلوه بصری تأکید روی آیه هدف
+    el.classList.add('ring-4', 'ring-amber-500/80', 'bg-amber-500/15');
+    setTimeout(() => {
+      el.classList.remove('ring-4', 'ring-amber-500/80', 'bg-amber-500/15');
+    }, 3500);
+
+    // باز کردن قفل ردیاب پس از ثبات کامل المان‌ها
+    programmaticScrollTimerRef.current = setTimeout(() => {
+      pinToReadingLine();
+      isProgrammaticScrollRef.current = false;
+    }, 1200);
+
+    return true;
+  }, []);
+
+  // سرویس درخواست اسکرول از خارج (App.tsx: پخش صوتی/مودال/صفحه اصلی)
   useEffect(() => {
-    const listener = (verseNumber: number) => scrollToVerse(verseNumber, 'smooth');
+    const listener = (verseNumber: number) => {
+      performScrollToVerse(verseNumber);
+    };
     scrollListeners.add(listener);
     return () => {
       scrollListeners.delete(listener);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVirtualized, verses, renderCount]);
+  }, [performScrollToVerse]);
 
-  // سنتینل پایین: وقتی به انتهای پنجرهٔ متریال‌شده نزدیک شویم، chunk بعدی اضافه می‌شود
-  useEffect(() => {
-    if (!isVirtualized || isLoading || verses.length === 0) return;
-    if (renderCount >= verses.length) return;
-    const sentinel = document.getElementById('reader-virtual-sentinel');
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          observer.disconnect();
-          setRenderCount((prev) => Math.min(prev + CHUNK_SIZE, verses.length));
-        }
-      },
-      { rootMargin: '800px 0px', threshold: 0 }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [isVirtualized, renderCount, verses, isLoading]);
-
-  // اسکرول بازگشت به آیهٔ آخرین مطالعه پس از بارگذاری آیات (P3-T1)
+  // اسکرول مطمئن و بدون لغزش به آیهٔ آخرین مطالعه یا آیه منتخب پس از بارگذاری آیات سوره
   useEffect(() => {
     if (isLoading || verses.length === 0 || !initialScrollToVerseNumber) return;
-    if (initialScrollToVerseNumber < 1 || initialScrollToVerseNumber > verses.length) {
+    const targetNum = initialScrollToVerseNumber;
+    if (targetNum < 1 || targetNum > verses.length) {
       onInitialScrollHandled?.();
       return;
     }
-    // اگر سوره بلند است و آیهٔ مقصد هنوز متریال نشده، تعداد را افزایش بده
-    const targetEl = document.getElementById(`verse-${initialScrollToVerseNumber}`);
-    if (isVirtualized && !targetEl && initialScrollToVerseNumber > renderCount) {
-      setRenderCount(initialScrollToVerseNumber);
-    }
-    if (!targetEl) return; // در commit بعدی (مثلاً پنجره‌سازی) دوباره تلاش می‌شود
-    targetEl.scrollIntoView({
-      behavior: 'auto',
-      block: 'center',
-    });
-    onInitialScrollHandled?.();
-  }, [verses, isLoading, renderCount, initialScrollToVerseNumber]);
 
-  // ثبت «آخرین محل مطالعه» با IntersectionObserver + debounce (P3-T1)
+    let attempts = 0;
+    let done = false;
+    const interval = setInterval(() => {
+      attempts++;
+      const success = performScrollToVerse(targetNum);
+      if (success) {
+        clearInterval(interval);
+        done = true;
+        setTimeout(() => {
+          onInitialScrollHandled?.();
+        }, 1300);
+      } else if (attempts >= 40) {
+        clearInterval(interval);
+        if (!done) onInitialScrollHandled?.();
+      }
+    }, 35);
+
+    return () => clearInterval(interval);
+  }, [verses, isLoading, initialScrollToVerseNumber, onInitialScrollHandled, performScrollToVerse]);
+
+  // تشخیص کاملاً دقیق و بلادرنگ «آیه در حال مطالعه» با اسکرول کاربر (P3-T1)
   useEffect(() => {
-    const handler = onReadingPositionChangeRef.current;
-    if (!handler || isLoading || verses.length === 0) return;
+    if (isLoading || verses.length === 0) return;
 
     const verseMap = new Map<number, Verse>();
     verses.forEach((v) => verseMap.set(v.verseNumber, v));
 
-    let bestVerse: Verse | null = null;
     let scrollDebounce: ReturnType<typeof setTimeout> | null = null;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // هنگام بازگشت به آخرین مطالعه (still pending)، موقعیت فعلی (بالای صفحه/آیه ۱)
-        // را ثبت نکن تا آخرین آیهٔ واقعی حفظ شود.
-        if (resumePendingRef.current) return;
+    const checkCurrentReadingVerse = () => {
+      if (isProgrammaticScrollRef.current) return;
 
-        // برای هر دسته، برنده را صرفاً از روی همین ورودی‌ها و با هندسهٔ لحظهٔ فعلی
-        // محاسبه می‌کنیم تا انتخاب قبلی (مثلاً آیهٔ ۱ بالای صفحه) برندهٔ همیشگی نماند.
-        const candidates: VerseCandidate[] = [];
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          const vn = Number((entry.target as HTMLElement).dataset.verseNumber);
-          const verse = verseMap.get(vn);
-          if (!verse) continue;
-          const rect = entry.boundingClientRect;
-          candidates.push({ verse, top: rect.top, bottom: rect.bottom });
+      const elements = document.querySelectorAll<HTMLElement>('[data-reader-verse-element]');
+      if (elements.length === 0) return;
+
+      // خط فرضی دید کاربر: حدود ۱۴۰ پیکسل از بالای پنجره (زیر هدر)
+      const readingLineY = 140;
+      let matchedVerse: Verse | null = null;
+
+      for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= readingLineY && rect.bottom >= readingLineY) {
+          const vn = Number(el.dataset.verseNumber);
+          matchedVerse = verseMap.get(vn) || null;
+          break;
         }
+      }
 
-        const picked = pickReadingVerse(
-          candidates,
-          (window.innerHeight || document.documentElement.clientHeight || 800) * 0.3
-        );
-        if (!picked) return;
-        bestVerse = picked;
-
-        if (scrollDebounce) clearTimeout(scrollDebounce);
-        scrollDebounce = setTimeout(() => {
-          if (bestVerse && onReadingPositionChangeRef.current) {
-            onReadingPositionChangeRef.current(bestVerse);
+      // در صورت قرارگیری در فواصل کارت‌ها، نزدیک‌ترین کارت به خط دید انتخاب می‌شود
+      if (!matchedVerse) {
+        let minDistance = Infinity;
+        for (let i = 0; i < elements.length; i++) {
+          const el = elements[i];
+          const rect = el.getBoundingClientRect();
+          const dist = Math.abs(rect.top - readingLineY);
+          if (dist < minDistance) {
+            minDistance = dist;
+            const vn = Number(el.dataset.verseNumber);
+            matchedVerse = verseMap.get(vn) || null;
           }
-        }, 800);
-      },
-      { rootMargin: '0px 0px 0px 0px', threshold: [0, 0.2, 0.5, 1] }
-    );
+        }
+      }
 
-    document.querySelectorAll('[data-reader-verse-element]').forEach((el) => observer.observe(el));
+      if (matchedVerse && onReadingPositionChangeRef.current) {
+        onReadingPositionChangeRef.current(matchedVerse);
+      }
+    };
+
+    const onWindowScroll = () => {
+      if (scrollDebounce) clearTimeout(scrollDebounce);
+      scrollDebounce = setTimeout(checkCurrentReadingVerse, 150);
+    };
+
+    window.addEventListener('scroll', onWindowScroll, { passive: true });
 
     return () => {
-      observer.disconnect();
+      window.removeEventListener('scroll', onWindowScroll);
       if (scrollDebounce) clearTimeout(scrollDebounce);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verses, isLoading, renderCount]);
+  }, [verses, isLoading]);
 
   // اسکرول خودکار به آیه جاری هنگام پخش ترتیل صوتی (P5-T6)
   useEffect(() => {
     if (activePlayingVerseNumber !== null) {
-      const verseEl = document.getElementById(`verse-${activePlayingVerseNumber}`);
-      if (isVirtualized && !verseEl && activePlayingVerseNumber > renderCount) {
-        setRenderCount(activePlayingVerseNumber);
-        return;
-      }
-      if (verseEl) {
-        verseEl.scrollIntoView({
-          behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-          block: 'center',
-        });
-      }
+      performScrollToVerse(activePlayingVerseNumber, 'smooth');
     }
-  }, [activePlayingVerseNumber, renderCount, isVirtualized]);
+  }, [activePlayingVerseNumber, performScrollToVerse]);
 
   const arabicFontFamily = getArabicFontFamily(settings.arabicFont);
 
@@ -336,91 +337,8 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
       id="quran-reader-container"
       className="max-w-3xl mx-auto px-3 sm:px-4 py-6 pb-28 space-y-6"
     >
-      {/* کتیبه مذهب سرسوره به سبک مصاحف نفیس کهن و عثمان طه */}
-      <div
-        id="surah-header-banner"
-        className={`relative overflow-hidden rounded-3xl p-5 sm:p-7 text-center border-2 shadow-md transition-all select-none ${
-          darkMode
-            ? 'bg-gradient-to-b from-slate-900 via-teal-950/60 to-slate-900 border-amber-500/40 text-slate-100 shadow-teal-950/40'
-            : 'bg-gradient-to-b from-amber-50/70 via-stone-50 to-amber-50/60 border-amber-600/35 text-slate-900 shadow-stone-200'
-        }`}
-      >
-        {/* نقوش هندسی و قاب بیرونی کتیبه */}
-        <div className="absolute inset-1.5 rounded-2xl border border-dashed border-amber-500/30 pointer-events-none" />
-
-        {/* گوشه‌های اسلیمی سنتی تذهیب */}
-        <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-amber-500/60" />
-        <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-amber-500/60" />
-        <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-500/60" />
-        <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-500/60" />
-
-        {/* نوار متادیتا و مدال‌های طرفین */}
-        <div className="flex items-center justify-between gap-2 max-w-lg mx-auto mb-3">
-          {/* مدال سمت راست: محل نزول */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 shadow-xs">
-            <span>{currentSurah.revelationType === 'Meccan' ? 'مَكِّيَّة' : 'مَدَنِيَّة'}</span>
-            <span className="text-[10px] opacity-70">({currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'})</span>
-          </div>
-
-          {/* پلاک مرکزی شماره سوره */}
-          <div className="text-xs font-bold text-teal-700 dark:text-teal-300 px-2.5 py-0.5 rounded-lg bg-teal-500/10 border border-teal-500/20">
-            سوره {currentSurah.id} از ۱۱۴
-          </div>
-
-          {/* مدال سمت چپ: تعداد آیات */}
-          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 shadow-xs">
-            <span>{currentSurah.versesCount.toLocaleString('fa-IR')} آیه</span>
-          </div>
-        </div>
-
-        {/* قاب عنوان سوره با خط ثلث و امیری */}
-        <div className="relative py-2 my-1">
-          <div className="flex items-center justify-center gap-3">
-            <span className="hidden sm:inline-block w-12 sm:w-16 h-px bg-gradient-to-r from-transparent via-amber-500/70 to-amber-500" />
-            <h1
-              className="text-3xl sm:text-5xl font-bold tracking-normal text-amber-600 dark:text-amber-300 drop-shadow-xs"
-              style={{ fontFamily: "'Amiri', 'Amiri Quran', serif" }}
-            >
-              سُورَةُ {currentSurah.nameArabic}
-            </h1>
-            <span className="hidden sm:inline-block w-12 sm:w-16 h-px bg-gradient-to-l from-transparent via-amber-500/70 to-amber-500" />
-          </div>
-        </div>
-
-        {/* زیرنویس و اطلاعات مصحف (نام فارسی، جزء و صفحه) */}
-        <div className="mt-2 pt-2.5 border-t border-amber-500/20 flex items-center justify-center gap-3 sm:gap-6 text-xs text-slate-500 dark:text-slate-400 font-medium">
-          <span>نام فارسی: <strong className="text-slate-700 dark:text-slate-200">{currentSurah.namePersian}</strong> ({currentSurah.englishName})</span>
-          <span>•</span>
-          <span>جزء {currentSurah.juzNumber.toLocaleString('fa-IR')}</span>
-          <span>•</span>
-          <span>صفحه {currentSurah.startPage?.toLocaleString('fa-IR') || '۱'}</span>
-        </div>
-      </div>
-
-      {/* سرآغاز بسم‌الله الرحمن الرحیم در کادر مزین سنتی (به جز سوره توبه - شماره ۹) */}
-      {currentSurah.id !== 9 && (
-        <div
-          id="bismillah-banner"
-          className={`relative max-w-xl mx-auto my-6 py-4 px-6 rounded-2xl text-center select-none border shadow-xs ${
-            darkMode
-              ? 'bg-gradient-to-r from-slate-900 via-teal-950/40 to-slate-900 border-amber-500/30 text-amber-200'
-              : 'bg-gradient-to-r from-amber-50/40 via-stone-50 to-amber-50/40 border-amber-500/25 text-teal-950'
-          }`}
-          dir="rtl"
-        >
-          {/* تزئین خطوط طرفین */}
-          <div className="flex items-center justify-center gap-4">
-            <span className="w-8 sm:w-14 h-px bg-gradient-to-r from-transparent to-amber-500/60" />
-            <div
-              className="text-2xl sm:text-3xl font-medium tracking-wide drop-shadow-xs"
-              style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
-            >
-              بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
-            </div>
-            <span className="w-8 sm:w-14 h-px bg-gradient-to-l from-transparent to-amber-500/60" />
-          </div>
-        </div>
-      )}
+      {/* کتیبه فشرده و فاخر سرسوره قرآنی */}
+      <QuranicSurahBanner surah={currentSurah} darkMode={darkMode} />
 
       {/* لیست آیات */}
       <div id="verses-list" className="space-y-4">
@@ -476,23 +394,46 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                 id={`verse-${verse.verseNumber}`}
                 data-reader-verse-element=""
                 data-verse-number={verse.verseNumber}
-                className={`reader-verse-card p-4 sm:p-5 rounded-2xl border transition-all duration-200 relative group ${
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('button, a, input, select')) return;
+                  onPlayVerseAudio(verse.verseNumber);
+                  const el = document.getElementById(`verse-${verse.verseNumber}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+                className={`reader-verse-card p-4 sm:p-5 rounded-2xl border transition-all duration-200 relative group cursor-pointer ${
                   isCurrentlyPlaying
                     ? darkMode
                       ? 'bg-teal-950/40 border-teal-500 ring-2 ring-teal-500/30'
                       : 'bg-teal-50/70 border-teal-400 ring-2 ring-teal-500/20'
                     : darkMode
                     ? 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
-                    : 'bg-white border-stone-200/90 hover:border-stone-300 shadow-sm'
+                    : 'bg-white border-stone-200/90 hover:border-stone-300 shadow-xs'
                 }`}
               >
-                {/* نوار بالایی آیه: نشان سنتی آیه و ابزارها */}
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-stone-100 dark:border-slate-800/80">
-                  <div className="flex items-center gap-2">
-                    <AyahEndMarker verseNumber={verse.verseNumber} isCurrentlyPlaying={isCurrentlyPlaying} />
-                    <span className="text-[11px] text-slate-400 font-medium">
-                      جزء {verse.juzNumber.toLocaleString('fa-IR')} • صفحه {verse.pageNumber.toLocaleString('fa-IR')}
-                    </span>
+                {/* بسم الله درون کارت آیه اول (برای تمام سوره‌ها به جز سوره ۱ و ۹) با همان فونت و بدون شماره آیه */}
+                {verse.verseNumber === 1 && currentSurah.id !== 1 && currentSurah.id !== 9 && (
+                  <div
+                    className={`text-center py-2.5 mb-3 border-b border-stone-200/50 dark:border-slate-800 font-medium select-none ${arabicLineHeightClass} ${
+                      darkMode ? 'text-amber-300/90' : 'text-amber-800'
+                    }`}
+                    style={{
+                      fontFamily: arabicFontFamily,
+                      fontSize: `${settings.arabicFontSize}px`,
+                    }}
+                    dir="rtl"
+                  >
+                    بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                  </div>
+                )}
+
+                {/* نوار بالایی آیه: فقط جزء و صفحه در هدر کارت (شماره آیه حذف شد و فقط انتهای متن می‌آید) */}
+                <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-stone-100 dark:border-slate-800/80">
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
+                    <span>جزء {toPersianDigits(verse.juzNumber)}</span>
+                    <span>•</span>
+                    <span>صفحه {toPersianDigits(verse.pageNumber)}</span>
                   </div>
 
                   {/* دکمه‌های کنشی روی هر آیه */}
@@ -609,16 +550,6 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
               </article>
             );
             })}
-            {/* سنتینل مجازی‌سازی: افزودن chunk بعدی هنگام نزدیک‌شدن به انتهای رندر فعلی */}
-            {isVirtualized && renderCount < verses.length && (
-              <div
-                id="reader-virtual-sentinel"
-                className="flex items-center justify-center py-3 text-xs text-slate-400"
-                aria-hidden="true"
-              >
-                در حال بارگذاری آیات بعدی…
-              </div>
-            )}
           </>
         )}
       </div>

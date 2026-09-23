@@ -5,25 +5,30 @@ import { MushafPageView } from './components/MushafPageView';
 import { SurahSelectorModal } from './components/SurahSelectorModal';
 import { SettingsModal } from './components/SettingsModal';
 import { VerseDetailModal } from './components/VerseDetailModal';
-import { AIAssistantModal } from './components/AIAssistantModal';
 import { BookmarksModal } from './components/BookmarksModal';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { SearchModal } from './components/SearchModal';
 import { KhatmModal } from './components/KhatmModal';
-import { OfflineDownloadModal } from './components/OfflineDownloadModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { PWAUpdateBanner } from './components/PWAUpdateBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { AutoScrollControls } from './components/AutoScrollControls';
-import { MemorizationOverlay } from './components/MemorizationOverlay';
 import { QuranHomePage } from './components/QuranHomePage';
+import { AIPage } from './components/AIPage';
+import { MemorizationPage } from './components/MemorizationPage';
+import { OfflinePage } from './components/OfflinePage';
 import { QuranService } from './services/quranService';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
-import { ALL_SURAHS } from './data/surahs';
+import { ALL_SURAHS, getJuzStartInfo } from './data/surahs';
 import { Surah, Verse, AppSettings, ViewMode } from './types';
 import { MushafPageData } from './types/mushafLayout';
 import MushafPrototype from './components/MushafPrototype';
 import { requestQuranScrollToVerse } from './components/QuranReader';
+
+const getInitialSystemDarkMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
+};
 
 const DEFAULT_SETTINGS: AppSettings = {
   arabicFontSize: 28,
@@ -31,7 +36,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   showTranslation: true,
   activeTranslator: 'makarem',
   arabicFont: 'uthman-taha',
-  darkMode: true,
+  darkMode: getInitialSystemDarkMode(),
   themeColor: 'emerald',
   defaultViewMode: 'verse-by-verse',
   lineHeight: 'relaxed',
@@ -44,7 +49,8 @@ export default function App() {
   const [isCorePackageReady, setIsCorePackageReady] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('verse-by-verse');
   const [currentMushafPage, setCurrentMushafPage] = useState<number>(1);
-  const [isHomeView, setIsHomeView] = useState<boolean>(true);
+  const [activePage, setActivePage] = useState<'home' | 'reader' | 'ai' | 'memorization' | 'offline'>('home');
+  const [previousPage, setPreviousPage] = useState<'home' | 'reader'>('home');
   const [lastReadPosition, setLastReadPosition] = useState<{ surahId: number; verseNumber: number; pageNumber?: number } | null>(null);
 
   // پروتوتایپ P3-T3: نمایش چیدمان ۱۵ خطی واقعی (دادهٔ MIT) از طریق ?proto=mushaf
@@ -54,15 +60,19 @@ export default function App() {
   const [prototypePages, setPrototypePages] = useState<MushafPageData[]>([]);
 
   const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem('quran_settings');
-    if (saved) {
-      try {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
-      } catch {
-        return DEFAULT_SETTINGS;
+    const systemDark = getInitialSystemDarkMode();
+    const defaultWithSystem = { ...DEFAULT_SETTINGS, darkMode: systemDark };
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('quran_settings');
+      if (saved) {
+        try {
+          return { ...defaultWithSystem, ...JSON.parse(saved) };
+        } catch {
+          return defaultWithSystem;
+        }
       }
     }
-    return DEFAULT_SETTINGS;
+    return defaultWithSystem;
   });
 
   const [bookmarkedVerseIds, setBookmarkedVerseIds] = useState<Set<number>>(new Set());
@@ -73,14 +83,11 @@ export default function App() {
   const [isVerseDetailOpen, setIsVerseDetailOpen] = useState(false);
   const [selectedVerseForDetail, setSelectedVerseForDetail] = useState<Verse | null>(null);
 
-  // مودال‌های فازهای جدید: جستجو، ختم قرآن، دانلود آفلاین
+  // مودال‌های جستجو و ختم قرآن
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isKhatmModalOpen, setIsKhatmModalOpen] = useState(false);
-  const [isOfflineModalOpen, setIsOfflineModalOpen] = useState(false);
-  const [isMemoOpen, setIsMemoOpen] = useState(false);
 
-  // مودال دستیار هوش مصنوعی
-  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  // آیه زمینه برای دستیار هوش مصنوعی
   const [aiContextVerse, setAiContextVerse] = useState<Verse | null>(null);
 
   // مودال نشانه‌گذاری‌ها
@@ -230,36 +237,148 @@ export default function App() {
     }
   }, [settings.darkMode]);
 
-  // ناوبری مستقیم به آیه از لیست بوکمارک‌ها یا نتایج جستجو
+  // باز کردن صفحات مستقل (هوش مصنوعی، حفظ، دانلود آفلاین)
+  const handleOpenAI = (verse?: Verse | null) => {
+    setAiContextVerse(verse || null);
+    setPreviousPage(activePage === 'home' ? 'home' : 'reader');
+    setActivePage('ai');
+  };
+
+  const handleOpenMemorization = () => {
+    setIsAudioPlayerOpen(false);
+    setActivePlayingVerseNumber(null);
+    setPreviousPage(activePage === 'home' ? 'home' : 'reader');
+    setActivePage('memorization');
+  };
+
+  const handleOpenOffline = () => {
+    setPreviousPage(activePage === 'home' ? 'home' : 'reader');
+    setActivePage('offline');
+  };
+
+  const handleBackToPrevious = () => {
+    setActivePage(previousPage === 'home' ? 'home' : 'reader');
+  };
+
+  // اسکرول به ابتدای صفحه در زمان بازگشت به صفحه اصلی
+  useEffect(() => {
+    if (activePage === 'home') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+  }, [activePage]);
+
+  // ناوبری مستقیم به آیه از لیست بوکمارک‌ها، نتایج جستجو، یا آیه تصادفی صفحه اصلی
   const handleNavigateToVerse = async (surahId: number, verseNumber: number) => {
     const targetSurah = surahs.find((s) => s.id === surahId);
     if (targetSurah) {
-      setResumeScrollVerse(null);
+      setResumeScrollVerse(verseNumber);
       setCurrentSurah(targetSurah);
       setViewMode('verse-by-verse');
+      setActivePage('reader');
       const targetVerse = await QuranService.getVerseBySurahAndNumber(surahId, verseNumber);
-      QuranService.saveLastRead(
-        surahId,
-        verseNumber,
-        targetVerse?.pageNumber || targetSurah.startPage || 1
-      );
+      const pageNum = targetVerse?.pageNumber || targetSurah.startPage || 1;
+      setCurrentMushafPage(pageNum);
+      QuranService.saveLastRead(surahId, verseNumber, pageNum);
+      setLastReadPosition({ surahId, verseNumber, pageNumber: pageNum });
       setTimeout(() => {
         requestQuranScrollToVerse(verseNumber);
-      }, 400);
+      }, 180);
     }
   };
 
-  // ذخیرهٔ آیهٔ واقعی در حال مشاهده (P3-T1) با debounce در QuranReader
+  // ذخیرهٔ آیهٔ واقعی در حال مشاهده (P3-T1) و همگام‌سازی صفحهٔ مصحف با موقعیت مطالعه
   const handleReadingPositionChange = useCallback((verse: Verse) => {
     QuranService.saveLastRead(verse.surahId, verse.verseNumber, verse.pageNumber);
     setLastReadPosition({ surahId: verse.surahId, verseNumber: verse.verseNumber, pageNumber: verse.pageNumber });
+    if (verse.pageNumber) {
+      setCurrentMushafPage(verse.pageNumber);
+    }
   }, []);
 
-  // پرش به صفحه در مصحف
-  const handleNavigateToMushafPage = (pageNumber: number) => {
-    setCurrentMushafPage(pageNumber);
-    setViewMode('mushaf-page');
-    setIsHomeView(false);
+  // سوئیچ هوشمند و همگام بین نمای آیه‌ای و مصحف صفحه‌ای
+  const handleToggleViewMode = async () => {
+    if (viewMode === 'verse-by-verse') {
+      // تغییر به مصحف صفحه‌ای: رفتن دقیق به صفحه‌ای که آیه در حال مطالعه در آن است
+      const targetPage = lastReadPosition?.pageNumber || currentMushafPage || currentSurah.startPage || 1;
+      setCurrentMushafPage(targetPage);
+      setViewMode('mushaf-page');
+    } else {
+      // تغییر به نمای آیه‌ای: دریافت آیات صفحهٔ جاری و اسکرول به نخستین آیه آن صفحه
+      const targetPage = currentMushafPage || 1;
+      const pageVerses = await QuranService.getVersesByPage(targetPage);
+      if (pageVerses.length > 0) {
+        const firstVerse = pageVerses[0];
+        const targetSurah = surahs.find((s) => s.id === firstVerse.surahId) || currentSurah;
+        setCurrentSurah(targetSurah);
+        setResumeScrollVerse(firstVerse.verseNumber);
+        QuranService.saveLastRead(firstVerse.surahId, firstVerse.verseNumber, targetPage);
+        setLastReadPosition({ surahId: firstVerse.surahId, verseNumber: firstVerse.verseNumber, pageNumber: targetPage });
+        setTimeout(() => requestQuranScrollToVerse(firstVerse.verseNumber), 180);
+      }
+      setViewMode('verse-by-verse');
+    }
+  };
+
+  // پرش مستقیم به صفحه مصحف شریف یا نمای آیه‌ای آن صفحه
+  const handleNavigateToMushafPage = async (pageNumber: number, forcePageMode: boolean = false) => {
+    const safePage = Math.max(1, Math.min(604, pageNumber));
+    setCurrentMushafPage(safePage);
+
+    const pageVerses = await QuranService.getVersesByPage(safePage);
+    const firstVerse = pageVerses.length > 0 ? pageVerses[0] : null;
+
+    if (firstVerse) {
+      const targetSurah = surahs.find((s) => s.id === firstVerse.surahId) || currentSurah;
+      setCurrentSurah(targetSurah);
+      setResumeScrollVerse(firstVerse.verseNumber);
+      QuranService.saveLastRead(firstVerse.surahId, firstVerse.verseNumber, safePage);
+      setLastReadPosition({ surahId: firstVerse.surahId, verseNumber: firstVerse.verseNumber, pageNumber: safePage });
+    } else {
+      let foundSurah = surahs[0];
+      for (const s of surahs) {
+        if (s.startPage && s.startPage <= safePage) {
+          foundSurah = s;
+        } else if (s.startPage && s.startPage > safePage) {
+          break;
+        }
+      }
+      setCurrentSurah(foundSurah);
+      QuranService.saveLastRead(foundSurah.id, 1, safePage);
+      setLastReadPosition({ surahId: foundSurah.id, verseNumber: 1, pageNumber: safePage });
+    }
+
+    if (forcePageMode) {
+      setViewMode('mushaf-page');
+    } else {
+      setViewMode('verse-by-verse');
+      if (firstVerse) {
+        setTimeout(() => {
+          requestQuranScrollToVerse(firstVerse.verseNumber);
+        }, 180);
+      }
+    }
+    setActivePage('reader');
+  };
+
+  // پرش دقیق و حقیقی به آغاز جزء (آیه، صفحه و سوره آغازین جزء)
+  const handleNavigateToJuz = (juzNumber: number, forcePageMode: boolean = false) => {
+    const info = getJuzStartInfo(juzNumber);
+    const targetSurah = surahs.find((s) => s.id === info.surahId) || surahs[0];
+    setCurrentMushafPage(info.page);
+    setCurrentSurah(targetSurah);
+    setResumeScrollVerse(info.ayah);
+    QuranService.saveLastRead(info.surahId, info.ayah, info.page);
+    setLastReadPosition({ surahId: info.surahId, verseNumber: info.ayah, pageNumber: info.page });
+
+    if (forcePageMode) {
+      setViewMode('mushaf-page');
+    } else {
+      setViewMode('verse-by-verse');
+      setTimeout(() => {
+        requestQuranScrollToVerse(info.ayah);
+      }, 100);
+    }
+    setActivePage('reader');
   };
 
   // تغییر و انتخاب سوره
@@ -267,7 +386,7 @@ export default function App() {
     setResumeScrollVerse(null);
     setCurrentSurah(surah);
     setCurrentMushafPage(surah.startPage || 1);
-    setIsHomeView(false);
+    setActivePage('reader');
     // فقط وقتی کاربر سوره را تغییر داد موقعیت ابتدای سوره ثبت می‌شود
     QuranService.saveLastRead(surah.id, 1, surah.startPage || 1);
     setLastReadPosition({ surahId: surah.id, verseNumber: 1, pageNumber: surah.startPage || 1 });
@@ -301,44 +420,36 @@ export default function App() {
       {/* بنر نصب اپلیکیشن PWA روی دستگاه */}
       <PWAInstallBanner darkMode={settings.darkMode} />
 
-      {/* هدر بالایی با ابزارهای ناوبری، حالت مصحف، ختم قرآن، جستجو و هوش مصنوعی */}
-      <Header
-        currentSurah={currentSurah}
-        viewMode={viewMode}
-        onToggleViewMode={() =>
-          setViewMode((prev) => (prev === 'verse-by-verse' ? 'mushaf-page' : 'verse-by-verse'))
-        }
-        onOpenSurahList={() => setIsSurahModalOpen(true)}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onOpenSearch={() => setIsSearchModalOpen(true)}
-        onOpenBookmarks={() => setIsBookmarksModalOpen(true)}
-        onOpenKhatm={() => setIsKhatmModalOpen(true)}
-        onOpenOffline={() => setIsOfflineModalOpen(true)}
-        onOpenAI={() => {
-          setAiContextVerse(null);
-          setIsAIModalOpen(true);
-        }}
-        onOpenMemorization={() => {
-          // بستن پلیر صوتی برای جلوگیری از تداخل دو صوت همزمان
-          setIsAudioPlayerOpen(false);
-          setActivePlayingVerseNumber(null);
-          setIsMemoOpen(true);
-        }}
-        darkMode={settings.darkMode}
-        onToggleDarkMode={handleToggleDarkMode}
-        isAutoScrollActive={isAutoScrollActive}
-        onToggleAutoScroll={() => setIsAutoScrollActive((prev) => !prev)}
-        isHomeView={isHomeView}
-        onToggleHomeView={() => setIsHomeView((prev) => !prev)}
-      />
+      {/* هدر بالایی با ابزارهای ناوبری، حالت مصحف، ختم قرآن، جستجو و هوش مصنوعی (تنها در صفحات غیر صفحه اصلی) */}
+      {activePage !== 'home' && (
+        <Header
+          currentSurah={currentSurah}
+          viewMode={viewMode}
+          onToggleViewMode={handleToggleViewMode}
+          onOpenSurahList={() => setIsSurahModalOpen(true)}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenSearch={() => setIsSearchModalOpen(true)}
+          onOpenBookmarks={() => setIsBookmarksModalOpen(true)}
+          onOpenKhatm={() => setIsKhatmModalOpen(true)}
+          onOpenOffline={handleOpenOffline}
+          onOpenAI={() => handleOpenAI(null)}
+          onOpenMemorization={handleOpenMemorization}
+          darkMode={settings.darkMode}
+          onToggleDarkMode={handleToggleDarkMode}
+          isAutoScrollActive={isAutoScrollActive}
+          onToggleAutoScroll={() => setIsAutoScrollActive((prev) => !prev)}
+          isHomeView={false}
+          onToggleHomeView={() => setActivePage('home')}
+        />
+      )}
 
-      {/* ناحیه نمایش اصلی: صفحه اصلی یا خوانش قرآن */}
-      {isHomeView ? (
+      {/* ناحیه نمایش اصلی: صفحه اصلی، صفحات مستقل یا خوانش قرآن */}
+      {activePage === 'home' ? (
         <QuranHomePage
           surahs={surahs}
           lastRead={lastReadPosition}
           onContinueReading={() => {
-            setIsHomeView(false);
+            setActivePage('reader');
             if (lastReadPosition?.verseNumber) {
               setResumeScrollVerse(lastReadPosition.verseNumber);
               setTimeout(() => requestQuranScrollToVerse(lastReadPosition.verseNumber), 200);
@@ -347,26 +458,24 @@ export default function App() {
           onSelectSurah={(surah) => {
             handleSelectSurah(surah);
           }}
-          onNavigateToJuz={(juzNumber) => {
-            const target = surahs.find((s) => s.juzNumber === juzNumber) || surahs[0];
-            handleSelectSurah(target);
+          onNavigateToVerse={(sId, vNum) => {
+            handleNavigateToVerse(sId, vNum);
           }}
+          onNavigateToJuz={handleNavigateToJuz}
+          onNavigateToMushafPage={(pageNum) => handleNavigateToMushafPage(pageNum, false)}
+          onOpenSurahSelector={() => setIsSurahModalOpen(true)}
           onOpenMushafPage={() => {
             setViewMode('mushaf-page');
-            setIsHomeView(false);
+            setActivePage('reader');
           }}
           onOpenSearch={() => setIsSearchModalOpen(true)}
           onOpenBookmarks={() => setIsBookmarksModalOpen(true)}
           onOpenKhatm={() => setIsKhatmModalOpen(true)}
-          onOpenAI={(verse) => {
-            if (verse) setAiContextVerse(verse);
-            setIsAIModalOpen(true);
-          }}
-          onOpenMemorization={() => {
-            setIsAudioPlayerOpen(false);
-            setActivePlayingVerseNumber(null);
-            setIsMemoOpen(true);
-          }}
+          onOpenAI={(verse) => handleOpenAI(verse)}
+          onOpenMemorization={handleOpenMemorization}
+          onOpenOfflineDownloads={handleOpenOffline}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onToggleDarkMode={handleToggleDarkMode}
           onPlayVerseAudio={(sId, vNum) => {
             const s = surahs.find((x) => x.id === sId);
             if (s) setCurrentSurah(s);
@@ -374,6 +483,37 @@ export default function App() {
             setIsAudioPlayerOpen(true);
           }}
           darkMode={settings.darkMode}
+        />
+      ) : activePage === 'ai' ? (
+        <AIPage
+          currentVerse={aiContextVerse}
+          currentSurah={currentSurah}
+          surahs={surahs}
+          darkMode={settings.darkMode}
+          onBack={handleBackToPrevious}
+          onNavigateToVerse={(sId, vNum) => {
+            handleNavigateToVerse(sId, vNum);
+          }}
+        />
+      ) : activePage === 'memorization' ? (
+        <MemorizationPage
+          surahs={surahs}
+          currentSurah={currentSurah}
+          verses={verses}
+          onSelectSurah={(surah) => {
+            setResumeScrollVerse(null);
+            setCurrentSurah(surah);
+            setCurrentMushafPage(surah.startPage || 1);
+            // کاربر در همان صفحه حفظ می‌ماند و خارج نمی‌شود
+          }}
+          settings={settings}
+          darkMode={settings.darkMode}
+          onBack={handleBackToPrevious}
+        />
+      ) : activePage === 'offline' ? (
+        <OfflinePage
+          darkMode={settings.darkMode}
+          onBack={handleBackToPrevious}
         />
       ) : isLayoutPrototype ? (
         <MushafPrototype
@@ -399,8 +539,7 @@ export default function App() {
             setIsVerseDetailOpen(true);
           }}
           onOpenAIFortVerse={(verse) => {
-            setAiContextVerse(verse);
-            setIsAIModalOpen(true);
+            handleOpenAI(verse);
           }}
           onPlayVerseAudio={handlePlayVerseAudio}
           onReadingPositionChange={handleReadingPositionChange}
@@ -420,14 +559,20 @@ export default function App() {
             setIsVerseDetailOpen(true);
           }}
           onOpenAIForVerse={(verse) => {
-            setAiContextVerse(verse);
-            setIsAIModalOpen(true);
+            handleOpenAI(verse);
           }}
           onPlayVerseAudio={handlePlayVerseAudio}
           onPageChange={(p, surahId, verseNumber) => {
             setCurrentMushafPage(p);
             if (surahId) {
-              QuranService.saveLastRead(surahId, verseNumber || 1, p);
+              const targetSurah = surahs.find((s) => s.id === surahId);
+              if (targetSurah && targetSurah.id !== currentSurah.id) {
+                setCurrentSurah(targetSurah);
+              }
+              const vNum = verseNumber || 1;
+              QuranService.saveLastRead(surahId, vNum, p);
+              setLastReadPosition({ surahId, verseNumber: vNum, pageNumber: p });
+              setResumeScrollVerse(vNum);
             }
           }}
         />
@@ -492,26 +637,9 @@ export default function App() {
         darkMode={settings.darkMode}
         arabicFont={settings.arabicFont}
         onOpenAIForVerse={(verse) => {
-          setAiContextVerse(verse);
-          setIsAIModalOpen(true);
+          handleOpenAI(verse);
         }}
         onSaveNote={handleSaveNote}
-      />
-
-      {/* دستیار هوشمند تدبّر قرآنی (DeepSeek / Gemini) */}
-      <AIAssistantModal
-        isOpen={isAIModalOpen}
-        onClose={() => {
-          setIsAIModalOpen(false);
-          setAiContextVerse(null);
-        }}
-        currentVerse={aiContextVerse}
-        currentSurah={currentSurah}
-        darkMode={settings.darkMode}
-        onOpenVerse={(verse) => {
-          setIsAIModalOpen(false);
-          void handleNavigateToVerse(verse.surahId, verse.verseNumber);
-        }}
       />
 
       {/* مودال جستجوی پیشرفته متنی و ترجمه */}
@@ -520,6 +648,8 @@ export default function App() {
         onClose={() => setIsSearchModalOpen(false)}
         surahs={surahs}
         onSelectResult={handleNavigateToVerse}
+        onNavigateToPage={(pageNum, forcePage) => handleNavigateToMushafPage(pageNum, forcePage ?? true)}
+        onNavigateToJuz={handleNavigateToJuz}
         darkMode={settings.darkMode}
       />
 
@@ -528,26 +658,7 @@ export default function App() {
         isOpen={isKhatmModalOpen}
         onClose={() => setIsKhatmModalOpen(false)}
         darkMode={settings.darkMode}
-        onNavigateToPage={handleNavigateToMushafPage}
-      />
-
-      {/* مودال مدیریت ذخیره‌سازی و دانلود آفلاین */}
-      <OfflineDownloadModal
-        isOpen={isOfflineModalOpen}
-        onClose={() => setIsOfflineModalOpen(false)}
-        darkMode={settings.darkMode}
-        currentSurahId={currentSurah.id}
-      />
-
-      {/* حالت حفظ (P5-T4): بازهٔ انتخابی با تکرار و خودآزمایی */}
-      <MemorizationOverlay
-        isOpen={isMemoOpen}
-        onClose={() => setIsMemoOpen(false)}
-        currentSurah={currentSurah}
-        verses={verses}
-        darkMode={settings.darkMode}
-        settings={settings}
-        initialVerseNumber={activePlayingVerseNumber || null}
+        onNavigateToPage={(pageNum) => handleNavigateToMushafPage(pageNum, false)}
       />
 
       {/* مودال بوکمارک‌ها و یادداشت‌های شخصی */}
@@ -566,6 +677,11 @@ export default function App() {
         surahs={surahs}
         currentSurahId={currentSurah.id}
         onSelectSurah={handleSelectSurah}
+        onSelectJuz={handleNavigateToJuz}
+        onOpenAdvancedSearch={() => {
+          setIsSurahModalOpen(false);
+          setIsSearchModalOpen(true);
+        }}
         darkMode={settings.darkMode}
       />
 

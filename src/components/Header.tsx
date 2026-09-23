@@ -21,6 +21,7 @@ import {
   Home,
 } from 'lucide-react';
 import { Surah, ViewMode } from '../types';
+import { toPersianDigits } from '../utils/textNormalization';
 
 interface HeaderProps {
   currentSurah: Surah;
@@ -119,11 +120,11 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm leading-tight truncate">
                 <span>سوره {currentSurah.nameArabic}</span>
                 <span className="text-[10px] sm:text-xs px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 font-normal shrink-0">
-                  {currentSurah.versesCount} آیه
+                  {toPersianDigits(currentSurah.versesCount)} آیه
                 </span>
               </div>
               <span className="text-[10px] sm:text-[11px] opacity-80 leading-none mt-0.5 truncate">
-                جزء {currentSurah.juzNumber} • {currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'}
+                جزء {toPersianDigits(currentSurah.juzNumber)} • {currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'}
               </span>
             </div>
             <ChevronDown className="w-3.5 h-3.5 opacity-70 shrink-0 mr-0.5" />

@@ -116,3 +116,52 @@ export const ALL_SURAHS: Surah[] = [
   { id: 113, nameArabic: 'الفَلَق', namePersian: 'فلق', englishName: 'Al-Falaq', revelationType: 'Meccan', versesCount: 5, startPage: 604, juzNumber: 30 },
   { id: 114, nameArabic: 'النَّاس', namePersian: 'ناس', englishName: 'An-Naas', revelationType: 'Meccan', versesCount: 6, startPage: 604, juzNumber: 30 }
 ];
+
+export interface JuzStartInfo {
+  juz: number;
+  surahId: number;
+  surahNameArabic: string;
+  surahNamePersian: string;
+  ayah: number;
+  page: number;
+  startWordsArabic: string;
+}
+
+export const JUZ_STARTS: JuzStartInfo[] = [
+  { juz: 1, surahId: 1, surahNameArabic: 'الفَاتِحَة', surahNamePersian: 'حمد', ayah: 1, page: 1, startWordsArabic: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ' },
+  { juz: 2, surahId: 2, surahNameArabic: 'البَقَرَة', surahNamePersian: 'بقره', ayah: 142, page: 22, startWordsArabic: 'سَيَقُولُ السُّفَهَاءُ مِنَ النَّاسِ' },
+  { juz: 3, surahId: 2, surahNameArabic: 'البَقَرَة', surahNamePersian: 'بقره', ayah: 253, page: 42, startWordsArabic: 'تِلْكَ الرُّسُلُ فَضَّلْنَا بَعْضَهُمْ' },
+  { juz: 4, surahId: 3, surahNameArabic: 'آل عِمْرَان', surahNamePersian: 'آل عمران', ayah: 92, page: 62, startWordsArabic: 'لَنْ تَنَالُوا الْبِرَّ حَتَّىٰ تُنْفِقُوا مِمَّا تُحِبُّونَ' },
+  { juz: 5, surahId: 4, surahNameArabic: 'النِّسَاء', surahNamePersian: 'نساء', ayah: 24, page: 82, startWordsArabic: 'وَالْمُحْصَنَاتُ مِنَ النِّسَاءِ' },
+  { juz: 6, surahId: 4, surahNameArabic: 'النِّسَاء', surahNamePersian: 'نساء', ayah: 148, page: 102, startWordsArabic: 'لَا يُحِبُّ اللَّهُ الْجَهْرَ بِالسُّوءِ' },
+  { juz: 7, surahId: 5, surahNameArabic: 'المَائِدَة', surahNamePersian: 'مائده', ayah: 82, page: 121, startWordsArabic: 'لَتَجِدَنَّ أَشَدَّ النَّاسِ عَدَاوَةً' },
+  { juz: 8, surahId: 6, surahNameArabic: 'الأَنْعَام', surahNamePersian: 'انعام', ayah: 111, page: 142, startWordsArabic: 'وَلَوْ أَنَّنَا نَزَّلْنَا إِلَيْهِمُ الْمَلَائِكَةَ' },
+  { juz: 9, surahId: 7, surahNameArabic: 'الأَعْرَاف', surahNamePersian: 'اعراف', ayah: 88, page: 162, startWordsArabic: 'قَالَ الْمَلَأُ الَّذِينَ اسْتَكْبَرُوا' },
+  { juz: 10, surahId: 8, surahNameArabic: 'الأَنْفَال', surahNamePersian: 'انفال', ayah: 41, page: 182, startWordsArabic: 'وَاعْلَمُوا أَنَّمَا غَنِمْتُمْ مِنْ شَيْءٍ' },
+  { juz: 11, surahId: 9, surahNameArabic: 'التَّوْبَة', surahNamePersian: 'توبه', ayah: 93, page: 201, startWordsArabic: 'إِنَّمَا السَّبِيلُ عَلَى الَّذِينَ يَسْتَأْذِنُونَكَ' },
+  { juz: 12, surahId: 11, surahNameArabic: 'هُود', surahNamePersian: 'هود', ayah: 6, page: 222, startWordsArabic: 'وَمَا مِنْ دَابَّةٍ فِي الْأَرْضِ' },
+  { juz: 13, surahId: 12, surahNameArabic: 'يُوسُف', surahNamePersian: 'یوسف', ayah: 53, page: 242, startWordsArabic: 'وَمَا أُبَرِّئُ نَفْسِي ۚ إِنَّ النَّفْسَ لَأَمَّارَةٌ' },
+  { juz: 14, surahId: 15, surahNameArabic: 'الحِجْر', surahNamePersian: 'حجر', ayah: 1, page: 262, startWordsArabic: 'الر ۚ تِلْكَ آيَاتُ الْكِتَابِ' },
+  { juz: 15, surahId: 17, surahNameArabic: 'الإِسْرَاء', surahNamePersian: 'اسراء', ayah: 1, page: 282, startWordsArabic: 'سُبْحَانَ الَّذِي أَسْرَىٰ بِعَبْدِهِ' },
+  { juz: 16, surahId: 18, surahNameArabic: 'الكَهْف', surahNamePersian: 'کهف', ayah: 75, page: 302, startWordsArabic: 'قَالَ أَلَمْ أَقُلْ لَكَ إِنَّكَ لَنْ تَسْتَطِيعَ' },
+  { juz: 17, surahId: 21, surahNameArabic: 'الأَنْبِيَاء', surahNamePersian: 'انبیاء', ayah: 1, page: 322, startWordsArabic: 'اقْتَرَبَ لِلنَّاسِ حِسَابُهُمْ' },
+  { juz: 18, surahId: 23, surahNameArabic: 'المُؤْمِنُون', surahNamePersian: 'مؤمنون', ayah: 1, page: 342, startWordsArabic: 'قَدْ أَفْلَحَ الْمُؤْمِنُونَ' },
+  { juz: 19, surahId: 25, surahNameArabic: 'الفُرْقَان', surahNamePersian: 'فرقان', ayah: 21, page: 362, startWordsArabic: 'وَقَالَ الَّذِينَ لَا يَرْجُونَ لِقَاءَنَا' },
+  { juz: 20, surahId: 27, surahNameArabic: 'النَّمْل', surahNamePersian: 'نمل', ayah: 56, page: 382, startWordsArabic: 'فَمَا كَانَ جَوَابَ قَوْمِهِ إِلَّا أَنْ قَالُوا' },
+  { juz: 21, surahId: 29, surahNameArabic: 'العَنْكَبُوت', surahNamePersian: 'عنکبوت', ayah: 46, page: 402, startWordsArabic: 'وَلَا تُجَادِلُوا أَهْلَ الْكِتَابِ' },
+  { juz: 22, surahId: 33, surahNameArabic: 'الأَحْزَاب', surahNamePersian: 'احزاب', ayah: 31, page: 422, startWordsArabic: 'وَمَنْ يَقْنُتْ مِنْكُنَّ لِلَّهِ وَرَسُولِهِ' },
+  { juz: 23, surahId: 36, surahNameArabic: 'يس', surahNamePersian: 'یس', ayah: 28, page: 442, startWordsArabic: 'وَمَا أَنْزَلْنَا عَلَىٰ قَوْمِهِ مِنْ بَعْدِهِ' },
+  { juz: 24, surahId: 39, surahNameArabic: 'الزُّمَر', surahNamePersian: 'زمر', ayah: 32, page: 462, startWordsArabic: 'فَمَنْ أَظْلَمُ مِمَّنْ كَذَبَ عَلَى اللَّهِ' },
+  { juz: 25, surahId: 41, surahNameArabic: 'فُصِّلَت', surahNamePersian: 'فصلت', ayah: 47, page: 482, startWordsArabic: 'إِلَيْهِ يُرَدُّ عِلْمُ السَّاعَةِ' },
+  { juz: 26, surahId: 46, surahNameArabic: 'الأَحْقَاف', surahNamePersian: 'احقاف', ayah: 1, page: 502, startWordsArabic: 'حم ۚ تَنْزِيلُ الْكِتَابِ مِنَ اللَّهِ' },
+  { juz: 27, surahId: 51, surahNameArabic: 'الذَّارِيَات', surahNamePersian: 'ذاریات', ayah: 31, page: 522, startWordsArabic: 'قَالَ فَمَا خَطْبُكُمْ أَيُّهَا الْمُرْسَلُونَ' },
+  { juz: 28, surahId: 58, surahNameArabic: 'المُجَادلَة', surahNamePersian: 'مجادله', ayah: 1, page: 542, startWordsArabic: 'قَدْ سَمِعَ اللَّهُ قَوْلَ الَّتِي تُجَادِلُكَ' },
+  { juz: 29, surahId: 67, surahNameArabic: 'المُلْك', surahNamePersian: 'ملک', ayah: 1, page: 562, startWordsArabic: 'تَبَارَكَ الَّذِي بِيَدِهِ الْمُلْكُ' },
+  { juz: 30, surahId: 78, surahNameArabic: 'النَّبَأ', surahNamePersian: 'نبأ', ayah: 1, page: 582, startWordsArabic: 'عَمَّ يَتَسَاءَلُونَ' },
+];
+
+export const getJuzStartInfo = (juzNumber: number): JuzStartInfo => {
+  const safe = Math.max(1, Math.min(30, juzNumber));
+  return JUZ_STARTS[safe - 1] || JUZ_STARTS[0];
+};
+

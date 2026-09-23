@@ -4,6 +4,9 @@ import { Surah, Verse, AppSettings } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
 import { shareAyah } from '../utils/shareAyah';
 import { QuranService } from '../services/quranService';
+import { QuranicSurahBanner } from './QuranicOrnament';
+import { AyahEndMarker } from './QuranReader';
+import { toPersianDigits } from '../utils/textNormalization';
 
 interface MushafPageViewProps {
   initialPageNumber: number;
@@ -178,11 +181,11 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
 
         {/* سربرگ صفحه مصحف */}
         <div className="flex items-center gap-3 text-xs sm:text-sm font-bold text-center">
-          <span className="text-teal-700 dark:text-teal-400">جزء {currentJuz}</span>
+          <span className="text-teal-700 dark:text-teal-400">جزء {toPersianDigits(currentJuz)}</span>
           {currentHizbQuarter ? (
             <>
               <span className="opacity-30">•</span>
-              <span className="text-slate-500 dark:text-slate-400">ربع {currentHizbQuarter}</span>
+              <span className="text-slate-500 dark:text-slate-400">ربع {toPersianDigits(currentHizbQuarter)}</span>
             </>
           ) : null}
           <span className="opacity-30">•</span>
@@ -213,7 +216,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
               className="px-2 py-0.5 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800 text-amber-600 dark:text-amber-400"
               title="کلیک جهت پرش به صفحه دلخواه"
             >
-              صفحه {currentPage} از ۶۰۴ ✎
+              صفحه {toPersianDigits(currentPage)} از ۶۰۴ ✎
             </button>
           )}
           <span className="opacity-30">•</span>
@@ -274,7 +277,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                     : 'bg-slate-50 border-stone-200 text-slate-600 hover:border-teal-500'
                 }`}
               >
-                جزء {juz}
+                جزء {toPersianDigits(juz)}
               </button>
             ))}
           </div>
@@ -297,7 +300,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                     : 'bg-slate-50 border-stone-200 text-slate-600 hover:border-amber-500'
                 }`}
               >
-                {hizb}
+                {toPersianDigits(hizb)}
               </button>
             ))}
           </div>
@@ -341,32 +344,27 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 <div key={group.surah.id} className="space-y-4">
                   {/* کتیبه سرسوره اگر آیه ۱ در این صفحه باشد */}
                   {isSurahStart && (
-                    <div className="text-center space-y-3 pt-2">
-                      <div
-                        className={`inline-block w-full max-w-lg py-2.5 px-6 rounded-2xl border text-center relative ${
-                          darkMode
-                            ? 'bg-gradient-to-r from-slate-900 via-teal-950/40 to-slate-900 border-amber-500/30'
-                            : 'bg-gradient-to-r from-amber-50 via-[#f7f0df] to-amber-50 border-[#d4b982]'
-                        }`}
-                      >
-                        <h3 className="font-['Amiri_Quran'] font-bold text-xl sm:text-2xl text-amber-800 dark:text-amber-400">
-                          سُورَةُ {group.surah.nameArabic}
-                        </h3>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                          {group.surah.revelationType === 'Meccan' ? 'مَكِّيَّة' : 'مَدَنِيَّة'} • {group.surah.versesCount} آيَات
-                        </p>
-                      </div>
+                    <div className="text-center space-y-2 pt-1 pb-1">
+                      <QuranicSurahBanner surah={group.surah} darkMode={darkMode} />
 
                       {/* بسمله: به جز سورهٔ توبه (بدون بسمله) و فاتحه (آیهٔ ۱ خودش بسمله است - رفع تکرار) */}
                       {group.surah.id !== 1 && group.surah.id !== 9 && (
-                        <p className="font-['Amiri_Quran'] text-lg sm:text-xl text-amber-900 dark:text-amber-300 py-1">
-                          بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
+                        <p
+                          className={`text-center py-1 text-lg sm:text-xl font-medium select-none ${
+                            darkMode ? 'text-amber-300/90' : 'text-amber-800'
+                          }`}
+                          style={{
+                            fontFamily: getArabicFontFamily(settings.arabicFont),
+                          }}
+                          dir="rtl"
+                        >
+                          بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                         </p>
                       )}
                     </div>
                   )}
 
-                  {/* متن پیوسته آیات صفحه (نه چیدمان ۱۵ خطی؛ تا P3-T3) */}
+                  {/* متن پیوسته آیات صفحه */}
                   <div
                     className="text-justify leading-[2.6] tracking-normal text-slate-800 dark:text-slate-100"
                     style={{
@@ -383,15 +381,13 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                           onClick={() => setSelectedVerse(isSelected ? null : v)}
                           className={`inline cursor-pointer px-1 py-0.5 rounded-lg transition-all ${
                             isSelected
-                              ? 'bg-amber-300/40 dark:bg-amber-500/30 text-amber-950 dark:text-amber-200'
+                              ? 'bg-amber-300/40 dark:bg-amber-500/30 text-amber-950 dark:text-amber-200 ring-1 ring-amber-500/40'
                               : 'hover:bg-stone-200/50 dark:hover:bg-slate-800/60'
                           }`}
                           title={`سوره ${group.surah.nameArabic} - آیه ${v.verseNumber} (کلیک جهت مشاهده ترجمه و تفاسیر)`}
                         >
-                          {v.textArabic}{' '}
-                          <span className="inline-flex items-center justify-center text-amber-700 dark:text-amber-400 text-sm font-bold select-none px-1">
-                            ﴿{v.verseNumber}﴾
-                          </span>{' '}
+                          {v.textArabic}
+                          <AyahEndMarker verseNumber={v.verseNumber} isCurrentlyPlaying={isSelected} />
                           {renderSajdaMark(v)}
                         </span>
                       );
@@ -405,7 +401,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
 
         {/* فوتر شماره صفحه */}
         <div className="mt-8 pt-4 border-t border-stone-200 dark:border-slate-800 text-center text-xs font-bold text-slate-400">
-          — {currentPage} —
+          — {toPersianDigits(currentPage)} —
         </div>
       </div>
 

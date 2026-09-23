@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Bookmark, Trash2, BookOpen, Clock } from 'lucide-react';
 import { UserBookmark, Surah } from '../types';
 import { QuranService } from '../services/quranService';
+import { toPersianDigits } from '../utils/textNormalization';
 
 interface BookmarksModalProps {
   isOpen: boolean;
@@ -61,7 +62,7 @@ export const BookmarksModal: React.FC<BookmarksModalProps> = ({
             <Bookmark className="w-5 h-5 text-amber-500 fill-amber-500" />
             <h2 className="font-bold text-base">نشانه‌گذاری‌ها و آیات برگزیده</h2>
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
-              {bookmarks.length} آیه
+              {toPersianDigits(bookmarks.length)} آیه
             </span>
           </div>
           <button
@@ -106,14 +107,14 @@ export const BookmarksModal: React.FC<BookmarksModalProps> = ({
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex flex-col items-center justify-center font-bold shrink-0">
-                      <span className="text-xs">{b.verseNumber}</span>
+                      <span className="text-xs">{toPersianDigits(b.verseNumber)}</span>
                       <span className="text-[9px] opacity-75">آیه</span>
                     </div>
 
                     <div>
                       <div className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                        <span>سوره {surah?.nameArabic || `سوره شماره ${b.surahId}`}</span>
+                        <span>سوره {surah?.nameArabic || `سوره شماره ${toPersianDigits(b.surahId)}`}</span>
                         <span className="text-xs opacity-60">({surah?.namePersian})</span>
                       </div>
                       {b.note && (

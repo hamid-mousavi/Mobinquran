@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, X, Gauge, ChevronsDown, Sparkles } from 'lucide-react';
+import { Play, Pause, X, ChevronsDown, Gauge } from 'lucide-react';
+import { toPersianDigits } from '../utils/textNormalization';
 
 interface AutoScrollControlsProps {
   isActive: boolean;
@@ -8,6 +9,18 @@ interface AutoScrollControlsProps {
   onNextPageOrSurah?: () => void;
 }
 
+type SpeedPreset = {
+  id: 'slow' | 'normal' | 'fast';
+  label: string;
+  factor: number;
+};
+
+const SPEED_PRESETS: SpeedPreset[] = [
+  { id: 'slow', label: 'آرام', factor: 0.7 },
+  { id: 'normal', label: 'متوسط', factor: 1.0 },
+  { id: 'fast', label: 'سریع', factor: 1.5 },
+];
+
 export const AutoScrollControls: React.FC<AutoScrollControlsProps> = ({
   isActive,
   onClose,
@@ -15,7 +28,7 @@ export const AutoScrollControls: React.FC<AutoScrollControlsProps> = ({
   onNextPageOrSurah,
 }) => {
   const [isPlaying, setIsPlaying] = useState(true);
-  const [speed, setSpeed] = useState<number>(1); // 0.5, 1, 1.5, 2
+  const [speedFactor, setSpeedFactor] = useState<number>(1.0);
   const [isTemporarilyPaused, setIsTemporarilyPaused] = useState(false);
 
   const reqIdRef = useRef<number | null>(null);
@@ -23,12 +36,9 @@ export const AutoScrollControls: React.FC<AutoScrollControlsProps> = ({
   const userPauseTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fractionalScrollRef = useRef<number>(0);
 
-  const SPEEDS = [0.5, 1, 1.5, 2, 2.5];
-
-  // محاسبه سرعت پیکسل در ثانیه
-  // 1x = 35 پیکسل در ثانیه (حدود ۲ تا ۳ کلمه در ثانیه برای قرائت آرام)
-  const getPixelsPerSecond = useCallback((currentSpeed: number) => {
-    return 36 * currentSpeed;
+  // محاسبه پیکسل بر ثانیه متناسب با سرعت خواندن
+  const getPixelsPerSecond = useCallback((factor: number) => {
+    return 34 * factor;
   }, []);
 
   const handleUserInteraction = useCallback(() => {
@@ -71,7 +81,7 @@ export const AutoScrollControls: React.FC<AutoScrollControlsProps> = ({
       lastTimeRef.current = now;
 
       // محاسبه مسافت اسکرول
-      const pixelsPerSec = getPixelsPerSecond(speed);
+      const pixelsPerSec = getPixelsPerSecond(speedFactor);
       const deltaPixels = pixelsPerSec * deltaTime;
       fractionalScrollRef.current += deltaPixels;
 
@@ -106,79 +116,85 @@ export const AutoScrollControls: React.FC<AutoScrollControlsProps> = ({
       }
       lastTimeRef.current = null;
     };
-  }, [isActive, isPlaying, isTemporarilyPaused, speed, getPixelsPerSecond, onNextPageOrSurah]);
+  }, [isActive, isPlaying, isTemporarilyPaused, speedFactor, getPixelsPerSecond, onNextPageOrSurah]);
 
   if (!isActive) return null;
 
   return (
     <div
       id="auto-scroll-floating-bar"
-      className="fixed bottom-24 sm:bottom-20 left-1/2 -translate-x-1/2 z-40 w-[92%] sm:w-auto min-w-[320px] max-w-lg transition-all animate-in fade-in slide-in-from-bottom-4 duration-300"
+      className="fixed bottom-20 sm:bottom-16 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-sm transition-all duration-300 select-none animate-fadeIn"
+      dir="rtl"
     >
       <div
-        className={`rounded-2xl p-2.5 sm:px-4 border shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 ${
+        className={`rounded-2xl p-2 sm:px-3 border-2 shadow-xl backdrop-blur-md flex items-center justify-between gap-2 ${
           darkMode
-            ? 'bg-slate-900/95 border-teal-500/40 text-slate-100 shadow-teal-950/50'
-            : 'bg-white/95 border-teal-600/30 text-slate-800 shadow-stone-300'
+            ? 'bg-slate-900/95 border-amber-500/40 text-slate-100 shadow-teal-950/60'
+            : 'bg-white/95 border-amber-700/30 text-slate-800 shadow-stone-400/40'
         }`}
       >
-        {/* وضعیت و دکمه توقف/ادامه */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsPlaying((prev) => !prev)}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-md transition-all active:scale-95 ${
-              isPlaying && !isTemporarilyPaused
-                ? 'bg-teal-600 hover:bg-teal-700 text-white'
-                : 'bg-amber-500 hover:bg-amber-600 text-slate-950'
-            }`}
-            title={isPlaying ? 'توقف موقت اسکرول' : 'ادامه اسکرول'}
-          >
-            {isPlaying && !isTemporarilyPaused ? (
-              <Pause className="w-5 h-5 fill-current" />
-            ) : (
-              <Play className="w-5 h-5 fill-current ml-0.5" />
-            )}
-          </button>
+        {/* کلید توقف / پخش */}
+        <button
+          onClick={() => setIsPlaying((prev) => !prev)}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shadow-xs transition-all active:scale-95 shrink-0 ${
+            isPlaying && !isTemporarilyPaused
+              ? 'bg-teal-600 hover:bg-teal-700 text-white'
+              : 'bg-amber-500 hover:bg-amber-600 text-slate-950'
+          }`}
+          title={isPlaying ? 'توقف موقت اسکرول' : 'ادامه اسکرول'}
+          aria-label={isPlaying ? 'توقف اسکرول' : 'ادامه اسکرول'}
+        >
+          {isPlaying && !isTemporarilyPaused ? (
+            <Pause className="w-4 h-4 fill-current" />
+          ) : (
+            <Play className="w-4 h-4 fill-current ml-0.5" />
+          )}
+        </button>
 
-          <div className="text-right">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-teal-700 dark:text-teal-300">
-              <ChevronsDown className={`w-3.5 h-3.5 ${isPlaying && !isTemporarilyPaused ? 'animate-bounce' : ''}`} />
-              <span>
-                {isTemporarilyPaused
-                  ? 'لمس صفحه (توقف کوتاه)...'
-                  : isPlaying
-                  ? 'اسکرول خودکار فعال'
-                  : 'اسکرول متوقف شد'}
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">
-              سرعت تلاوت: {speed}x
-            </div>
+        {/* وضعیت خلاصه */}
+        <div className="flex flex-col min-w-0 flex-1 px-1">
+          <div className="flex items-center gap-1 text-[11px] font-bold text-teal-700 dark:text-teal-300 truncate">
+            <ChevronsDown className={`w-3.5 h-3.5 shrink-0 ${isPlaying && !isTemporarilyPaused ? 'animate-bounce' : ''}`} />
+            <span className="truncate">
+              {isTemporarilyPaused
+                ? 'لمس صفحه (توقف کوتاه)'
+                : isPlaying
+                ? 'اسکرول پیوسته'
+                : 'اسکرول متوقف'}
+            </span>
           </div>
+          <span className="text-[10px] text-slate-400">
+            سرعت: {toPersianDigits(speedFactor)}×
+          </span>
         </div>
 
-        {/* دکمه‌های سرعت */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-          {SPEEDS.map((s) => (
-            <button
-              key={s}
-              onClick={() => setSpeed(s)}
-              className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
-                speed === s
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
-              }`}
-            >
-              {s}x
-            </button>
-          ))}
+        {/* دسته‌بندی سرعت در ۳ حالت شیک و فشرده */}
+        <div className="flex items-center gap-0.5 bg-stone-100/90 dark:bg-slate-800/90 p-0.5 rounded-xl border border-stone-200 dark:border-slate-700 shrink-0">
+          {SPEED_PRESETS.map((p) => {
+            const isActive = speedFactor === p.factor;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setSpeedFactor(p.factor)}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                  isActive
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
+                }`}
+                title={`سرعت ${p.label} (${toPersianDigits(p.factor)} برابر)`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* دکمه بستن */}
         <button
           onClick={onClose}
-          className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+          className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 transition-colors shrink-0"
           title="بستن اسکرول خودکار"
+          aria-label="بستن اسکرول"
         >
           <X className="w-4 h-4" />
         </button>

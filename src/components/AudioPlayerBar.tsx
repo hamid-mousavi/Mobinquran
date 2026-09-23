@@ -40,6 +40,7 @@ import {
   classifyAudioError,
   describeAudioError,
 } from '../services/audioErrorLog';
+import { toPersianDigits } from '../utils/textNormalization';
 
 interface AudioPlayerBarProps {
   currentSurah: Surah;
@@ -91,11 +92,75 @@ const RECITERS: Reciter[] = [
   },
   {
     id: 'afasy',
-    name: 'مشاری بن راشد العفاسی',
+    name: 'شیخ مشاری بن راشد العفاسی',
     subname: 'ترتیل استودیویی مدرن',
     bio: 'امام جماعت مسجد کبیر کویت و قاری سرشناس معاصر با ضبط‌های صوتی دیجیتال باکیفیت و صوت رسا.',
     initials: 'م‌ع',
     avatarColor: 'bg-teal-700 text-white',
+  },
+  {
+    id: 'husary',
+    name: 'شیخ محمود خلیل الحصری',
+    subname: 'شیخ القراء و مرجع تجوید جهان اسلام',
+    bio: 'بزرگ‌ترین استاد تجوید و ترتیل جهان اسلام از مصر؛ نخستین قاری که قرآن کامل را به سبک ترتیل آموزشی ضبط و در سراسر جهان منتشر نمود.',
+    initials: 'م‌ح',
+    avatarColor: 'bg-emerald-800 text-white',
+  },
+  {
+    id: 'ghamadi',
+    name: 'شیخ سعد الغامدی',
+    subname: 'ترتیل روان، دلنشین و آرامش‌بخش',
+    bio: 'امام و خطیب مشهور با تلاوتی زلال و آرامش‌بخش؛ از محبوب‌ترین ترتیل‌ها در میان جوانان و خانواده‌ها.',
+    initials: 'س‌غ',
+    avatarColor: 'bg-cyan-700 text-white',
+  },
+  {
+    id: 'muaiqly',
+    name: 'شیخ ماهر المعیقلی',
+    subname: 'امام مسجدالحرام و لحن حزین',
+    bio: 'امام و خطیب سرشناس حرم امن الهی در مکه مکرمه با صوتی دلنشین، خاشع و طنین‌انداز در نمازهای تراویح و جماعت.',
+    initials: 'م‌م',
+    avatarColor: 'bg-purple-700 text-white',
+  },
+  {
+    id: 'shatri',
+    name: 'شیخ ابوبکر الشاطری',
+    subname: 'ترتیل خاشع و پرجاذبه',
+    bio: 'قاری ممتاز از جده عربستان با لحن ویژهٔ بم، اثرگذار و خاشعانه که معانی آیات را در دل مستمع زنده می‌کند.',
+    initials: 'ا‌ش',
+    avatarColor: 'bg-indigo-700 text-white',
+  },
+  {
+    id: 'hudhaify',
+    name: 'شیخ علی بن عبدالرحمن الحذیفی',
+    subname: 'امام مسجد النبی (ترتیل شمرده و مسجدی)',
+    bio: 'امام جماعت باسابقه مسجد مطهر نبوی در مدینه منوره؛ تلاوت آرام، دقیق و شمرده مناسب حفظ و روان‌خوانی.',
+    initials: 'ع‌ح',
+    avatarColor: 'bg-slate-700 text-white',
+  },
+  {
+    id: 'sudais',
+    name: 'شیخ عبدالرحمن السدیس',
+    subname: 'امام مسجد الحرام و ترتیل پرشور',
+    bio: 'رئیس کل امور مسجدالحرام و مسجدالنبی و نام‌آشناترین صدای نمازهای مکه مکرمه با لحنی حماسی و پرحرارت.',
+    initials: 'ع‌س',
+    avatarColor: 'bg-rose-700 text-white',
+  },
+  {
+    id: 'shuraim',
+    name: 'شیخ سعود الشریم',
+    subname: 'ترتیل ماندگار و لحن اصیل حجازی',
+    bio: 'امام و خطیب پیشین مسجدالحرام با بیش از ۳۰ سال امامت و ترتیلی تند، روان و لحن ماندگار حجازی.',
+    initials: 'س‌ش',
+    avatarColor: 'bg-violet-700 text-white',
+  },
+  {
+    id: 'mustafa_ismail',
+    name: 'استاد مصطفی اسماعیل',
+    subname: 'اکبر القراء مصر و الحان ملکوتی',
+    bio: 'قاری اسطوره‌ای و نابغهٔ مقامات صوتی جهان اسلام؛ ترتیلی نادر و سرشار از معنویت و وقار قرآنی.',
+    initials: 'م‌ا',
+    avatarColor: 'bg-amber-800 text-white',
   },
 ];
 
@@ -559,13 +624,13 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               onClick={() => setShowReciterModal(true)}
             >
               <div className="font-bold text-xs sm:text-sm truncate hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
-                سوره {currentSurah.nameArabic} : آیه {currentPlayingVerseNumber}
+                سوره {currentSurah.nameArabic} : آیه {toPersianDigits(currentPlayingVerseNumber)}
               </div>
               <div className="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1.5 truncate">
                 <span className="truncate">{currentReciter.name}</span>
                 {repeatTarget > 1 && (
                   <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-1 rounded">
-                    تکرار {currentRepeatIndex}/{repeatTarget >= 999 ? '∞' : repeatTarget}
+                    تکرار {toPersianDigits(currentRepeatIndex)}/{repeatTarget >= 999 ? '∞' : toPersianDigits(repeatTarget)}
                   </span>
                 )}
               </div>
@@ -979,38 +1044,10 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               </button>
             </div>
 
-            {/* کارت قاری فعال کنونی با بیوگرافی و منبع صوت */}
-            <div className="p-4 rounded-2xl bg-teal-500/10 border border-teal-600/30 mb-4 flex items-start gap-3">
-              <div
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-sm border-2 border-teal-600 shrink-0 shadow ${currentReciter.avatarColor}`}
-              >
-                {currentReciter.initials}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-sm text-teal-700 dark:text-teal-300">
-                    {currentReciter.name}
-                  </h4>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-600 text-white font-medium">
-                    قاری فعال
-                  </span>
-                </div>
-                <div className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-                  {currentReciter.subname}
-                </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
-                  {currentReciter.bio}
-                </p>
-                <div className="text-[10px] text-slate-400 mt-2 pt-2 border-t border-stone-100 dark:border-slate-800">
-                  منبع صوتی: {currentAudioSource.name}
-                </div>
-              </div>
-            </div>
-
             {/* لیست قاریان جهت تغییر سریع */}
             <div className="space-y-2">
               <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
-                انتخاب قاری دیگر:
+                قاری مورد نظر را انتخاب کنید:
               </div>
               <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
                 {RECITERS.map((r) => {

@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, X, BookOpen, Loader2, ChevronLeft, Sparkles, Filter, Zap } from 'lucide-react';
 import { Surah, SearchResultItem } from '../types';
 import { QuranService } from '../services/quranService';
+import { toPersianDigits, parseJuzQuery, parsePageQuery } from '../utils/textNormalization';
+import { getJuzStartInfo } from '../data/surahs';
 
 interface SearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   surahs: Surah[];
   onSelectResult: (surahId: number, verseNumber: number) => void;
+  onNavigateToPage?: (pageNumber: number, forcePageMode?: boolean) => void;
+  onNavigateToJuz?: (juzNumber: number, forcePageMode?: boolean) => void;
   darkMode: boolean;
 }
 
@@ -35,6 +39,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   onClose,
   surahs,
   onSelectResult,
+  onNavigateToPage,
+  onNavigateToJuz,
   darkMode,
 }) => {
   const [query, setQuery] = useState('');
@@ -160,6 +166,63 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     );
   };
 
+  // تشخیص هوشمند پرش به صفحه (صفحه ۲۵۰، ص ۱۲، یا عدد ۱ تا ۶۰۴)
+  const detectedPage = useMemo(() => {
+    return parsePageQuery(query);
+  }, [query]);
+
+  // تشخیص هوشمند پرش به جزء (جزء ۱۵، ج ۳، جزء چهارم، یا عدد ۱ تا ۳۰)
+  const detectedJuz = useMemo(() => {
+    return parseJuzQuery(query);
+  }, [query]);
+
+  // آیا کاربر کلمه «جزء» را برای مرور فهرست اجزاء وارد کرده است؟
+  const isBrowsingAllJuz = useMemo(() => {
+    const q = query.trim();
+    return q === 'جزء' || q === 'جزء ها' || q === 'جزءها' || q === 'اجزاء';
+  }, [query]);
+
+  // تشخیص هوشمند سوره (یس، الرحمن، کهف یا شماره سوره)
+  const detectedSurah = useMemo(() => {
+    const q = query.trim();
+    if (q.length < 2) return null;
+    const cleanNum = q.replace(/^سوره\s*/, '').replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776));
+    const num = parseInt(cleanNum, 10);
+    if (!isNaN(num) && num >= 1 && num <= 114) {
+      return surahs.find((s) => s.id === num) || null;
+    }
+    const cleanName = q.replace(/^سوره\s*/, '').trim();
+    return (
+      surahs.find(
+        (s) =>
+          s.nameArabic === cleanName ||
+          s.namePersian === cleanName ||
+          s.nameArabic.includes(cleanName) ||
+          (s.namePersian && s.namePersian.includes(cleanName))
+      ) || null
+    );
+  }, [query, surahs]);
+
+  // مدیریت فشردن کلید اینتر در باکس جستجو جهت پرش فوری
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (detectedJuz && onNavigateToJuz) {
+        onNavigateToJuz(detectedJuz, false);
+        onClose();
+      } else if (detectedPage && onNavigateToPage) {
+        onNavigateToPage(detectedPage, false);
+        onClose();
+      } else if (detectedSurah) {
+        onSelectResult(detectedSurah.id, 1);
+        onClose();
+      } else if (results.length > 0) {
+        onSelectResult(results[0].surahId, results[0].verseNumber);
+        onClose();
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -214,7 +277,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               type="text"
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
-              placeholder="جستجوی کلمه، عبارت قرآنی یا مفاهیم فارسی (صبر، تقوا، انفاق، الصلاة)..."
+              onKeyDown={handleInputKeyDown}
+              placeholder="جستجوی کلمه، شماره صفحه (مثلاً ۴۵) یا جزء (مثلاً جزء ۳۰)..."
               className={`w-full pr-11 pl-20 py-3 rounded-2xl text-sm font-medium border transition-all outline-none ${
                 darkMode
                   ? 'bg-slate-800/80 border-slate-700 text-slate-100 focus:border-teal-500 focus:bg-slate-800'
@@ -312,7 +376,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 <option value={0}>تمام اجزاء</option>
                 {Array.from({ length: 30 }, (_, i) => i + 1).map((j) => (
                   <option key={j} value={j}>
-                    جزء {j}
+                    جزء {toPersianDigits(j)}
                   </option>
                 ))}
               </select>
@@ -346,6 +410,139 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
         {/* لیست نتایج جستجو */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+          {/* کارت‌های پرش مستقیم هوشمند (صفحه، جزء، سوره و فهرست اجزاء) */}
+          {(detectedPage || detectedJuz || detectedSurah || isBrowsingAllJuz) && (
+            <div className="space-y-2.5 mb-3">
+              {/* مرور فهرست کل اجزاء */}
+              {isBrowsingAllJuz && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-900 dark:text-amber-200">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <span>انتخاب مستقیم هر یک از ۳۰ جزء قرآن کریم:</span>
+                  </div>
+                  <div className="grid grid-cols-5 sm:grid-cols-6 gap-1.5 max-h-48 overflow-y-auto p-1">
+                    {Array.from({ length: 30 }, (_, i) => i + 1).map((jNum) => (
+                      <button
+                        key={jNum}
+                        onClick={() => {
+                          if (onNavigateToJuz) onNavigateToJuz(jNum, false);
+                          onClose();
+                        }}
+                        className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-amber-500/30 hover:bg-amber-500 hover:text-slate-950 font-bold text-xs transition-all text-center"
+                      >
+                        جزء {toPersianDigits(jNum)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* کارت پرش به جزء */}
+              {detectedJuz && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">
+                      ۞
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                        پرش مستقیم به آغاز جزء {toPersianDigits(detectedJuz)} قرآن کریم
+                      </span>
+                      {(() => {
+                        const jInfo = getJuzStartInfo(detectedJuz);
+                        return (
+                          <div className="text-[11px] text-amber-700/90 dark:text-amber-400 mt-0.5">
+                            سوره {jInfo.surahNameArabic} ({jInfo.surahNamePersian}) • آیه {toPersianDigits(jInfo.ayah)} • صفحه {toPersianDigits(jInfo.page)}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <button
+                      onClick={() => {
+                        if (onNavigateToJuz) onNavigateToJuz(detectedJuz, false);
+                        onClose();
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0"
+                    >
+                      نمای آیه‌ای (آیه {toPersianDigits(getJuzStartInfo(detectedJuz).ayah)})
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (onNavigateToJuz) onNavigateToJuz(detectedJuz, true);
+                        onClose();
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-200 font-bold text-xs border border-amber-500/30 transition-all active:scale-95 shrink-0"
+                    >
+                      مشاهده در مصحف (صفحه {toPersianDigits(getJuzStartInfo(detectedJuz).page)})
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* کارت پرش به صفحه */}
+              {detectedPage && (
+                <div className="p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0">
+                      📖
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-teal-900 dark:text-teal-200">
+                        پرش مستقیم به صفحه {toPersianDigits(detectedPage)} مصحف شریف
+                      </span>
+                      <div className="text-[11px] text-teal-700/90 dark:text-teal-400 mt-0.5">
+                        انتقال دقیق به ابتدای صفحه {toPersianDigits(detectedPage)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <button
+                      onClick={() => {
+                        if (onNavigateToPage) onNavigateToPage(detectedPage, false);
+                        onClose();
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0"
+                    >
+                      نمای آیه‌ای
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (onNavigateToPage) onNavigateToPage(detectedPage, true);
+                        onClose();
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-900 dark:text-teal-200 font-bold text-xs border border-teal-500/30 transition-all active:scale-95 shrink-0"
+                    >
+                      مشاهده در مصحف
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* کارت پرش به سوره */}
+              {detectedSurah && (
+                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-emerald-600 animate-pulse shrink-0" />
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                      سوره {detectedSurah.nameArabic} ({detectedSurah.namePersian}) • جزء {toPersianDigits(detectedSurah.juzNumber)} • {toPersianDigits(detectedSurah.versesCount)} آیه
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      onSelectResult(detectedSurah.id, 1);
+                      onClose();
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0"
+                  >
+                    باز کردن سوره
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {isLoading ? (
             <div className="py-12 text-center space-y-3">
               <Loader2 className="w-8 h-8 mx-auto animate-spin text-teal-600 dark:text-teal-400" />
@@ -355,7 +552,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             </div>
           ) : error ? (
             <div className="py-8 text-center text-sm text-red-500 font-medium">{error}</div>
-          ) : hasSearched && results.length === 0 ? (
+          ) : hasSearched && results.length === 0 && !detectedPage && !detectedJuz && !detectedSurah && !isBrowsingAllJuz ? (
             <div className="py-12 text-center space-y-2">
               <BookOpen className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
               <h3 className="font-bold text-sm text-slate-700 dark:text-slate-300">
@@ -370,11 +567,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
                 <div className="flex items-center gap-2">
                   <span>
-                    {totalCount} آیه یافت شد
-                    {results.length < totalCount ? ` (نمایش ${results.length} مورد برتر)` : ''}
+                    {toPersianDigits(totalCount)} آیه یافت شد
+                    {results.length < totalCount ? ` (نمایش ${toPersianDigits(results.length)} مورد برتر)` : ''}
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-100 dark:bg-slate-800 text-slate-500">
-                    زمان جستجو: {searchTimeMs} میلی‌ثانیه
+                    زمان جستجو: {toPersianDigits(searchTimeMs)} میلی‌ثانیه
                   </span>
                 </div>
                 <span>کلیک روی هر آیه جهت باز کردن در مصحف</span>
@@ -402,10 +599,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                           سوره {matchedSurah?.nameArabic || item.surahNameArabic}
                         </span>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                          آیه {item.verseNumber}
+                          آیه {toPersianDigits(item.verseNumber)}
                         </span>
                         <span className="text-[11px] text-slate-400">
-                          جزء {item.juzNumber} • صفحه {item.pageNumber}
+                          جزء {toPersianDigits(item.juzNumber)} • صفحه {toPersianDigits(item.pageNumber)}
                         </span>
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                           {item.matchedIn === 'arabic' ? 'متن قرآن' : 'ترجمه'}
