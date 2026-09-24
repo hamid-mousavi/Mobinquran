@@ -83,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       id="app-main-header"
-      className={`sticky top-0 z-30 transition-colors duration-200 border-b select-none ${
+      className={`sticky top-0 z-40 transition-colors duration-200 border-b select-none ${
         darkMode
           ? 'bg-slate-900/95 border-slate-800 text-slate-100 backdrop-blur-md'
           : 'bg-teal-900 text-white border-teal-800 shadow-sm backdrop-blur-md'
@@ -97,15 +97,15 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-header-home-toggle"
               onClick={onToggleHomeView}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all border shrink-0 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all border shrink-0 ${
                 isHomeView
                   ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm'
-                  : 'bg-white/10 hover:bg-white/15 text-white/90 border-white/10'
+                  : 'bg-white/15 hover:bg-white/25 text-white border-white/20 shadow-xs'
               }`}
               title={isHomeView ? 'صفحه اصلی' : 'بازگشت به صفحه اصلی'}
             >
               <Home className="w-4 h-4 shrink-0" />
-              <span className="hidden md:inline">{isHomeView ? 'صفحه اصلی' : 'خانه'}</span>
+              <span>خانه</span>
             </button>
           )}
 

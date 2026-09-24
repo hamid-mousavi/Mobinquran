@@ -12,16 +12,15 @@ import {
   Languages,
   ShieldCheck,
   Loader2,
-  ChevronRight,
-  MessageSquare,
+  Home,
   Copy,
   Check,
-  RotateCcw,
+  X,
+  Share2,
 } from 'lucide-react';
 import { Verse, Surah } from '../types';
-import { QuranService } from '../services/quranService';
-import { aiResponseSchema, AiResponse } from '../services/aiContract';
-import { retrieveAiCandidates, AiCandidateForRequest } from '../services/aiRetrieval';
+import { aiResponseSchema } from '../services/aiContract';
+import { retrieveAiCandidates } from '../services/aiRetrieval';
 import {
   AiChatSession,
   AiChatMessage,
@@ -31,7 +30,6 @@ import {
   clearAllAiHistory,
 } from '../services/aiHistoryStorage';
 import { toPersianDigits } from '../utils/textNormalization';
-import { QuranicCard } from './QuranicOrnament';
 
 interface AIPageProps {
   currentVerse?: Verse | null;
@@ -39,6 +37,7 @@ interface AIPageProps {
   surahs: Surah[];
   darkMode: boolean;
   onBack: () => void;
+  onNavigateHome?: () => void;
   onNavigateToVerse?: (surahId: number, verseNumber: number) => void;
 }
 
@@ -55,28 +54,28 @@ interface AIAgentInfo {
 const AI_AGENTS: AIAgentInfo[] = [
   {
     id: 'moral',
-    name: 'رویکرد کاربردی و اخلاقی',
-    badge: 'تربیت و سبک زندگی',
+    name: 'اخلاقی و کاربردی',
+    badge: 'سبک زندگی و آرامش دل',
     description: 'کاربرد آموزه‌های آیه در زندگی، آرامش دل، امیدبخشی و اخلاق فردی و اجتماعی',
     icon: Heart,
   },
   {
     id: 'conceptual',
-    name: 'رویکرد تدبّر مفهومی',
+    name: 'تدبّر مفهومی',
     badge: 'معارف و توحید',
     description: 'تأمل در پیام‌های کلی، پیوند آیه با سایر آموزه‌های قرآن و معارف توحیدی',
     icon: BookOpen,
   },
   {
     id: 'literary',
-    name: 'رویکرد ادبی و واژه‌شناسی',
+    name: 'ادبی و واژه‌شناسی',
     badge: 'فصاحت و واژگان',
     description: 'بررسی ریشه لغوی واژگان، اشتقاق، تناسب واژه‌ها و وجوه بلاغی آیه شریفه',
     icon: Languages,
   },
   {
     id: 'rational',
-    name: 'رویکرد عقلی و اعتقادی',
+    name: 'عقلی و اعتقادی',
     badge: 'استدلال و باورها',
     description: 'پاسخ‌های استدلالی به پرسش‌های فکری و مبانی اعتقادی در پرتو آیه',
     icon: ShieldCheck,
@@ -96,6 +95,7 @@ export const AIPage: React.FC<AIPageProps> = ({
   surahs,
   darkMode,
   onBack,
+  onNavigateHome,
   onNavigateToVerse,
 }) => {
   const [selectedAgentId, setSelectedAgentId] = useState<AIAgentId>('moral');
@@ -108,8 +108,8 @@ export const AIPage: React.FC<AIPageProps> = ({
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // بارگذاری تاریخچه محلی از مرورگر
   const reloadHistory = () => {
     setHistoryList(getAiHistory());
   };
@@ -118,7 +118,6 @@ export const AIPage: React.FC<AIPageProps> = ({
     reloadHistory();
   }, []);
 
-  // شروع جلسه جدید یا تنظیم پیام خوش‌آمد اولیه
   useEffect(() => {
     if (messages.length === 0) {
       const initialText = currentVerse
@@ -154,6 +153,7 @@ export const AIPage: React.FC<AIPageProps> = ({
       },
     ]);
     setShowHistoryDrawer(false);
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const handleLoadSession = (sess: AiChatSession) => {
@@ -196,13 +196,14 @@ export const AIPage: React.FC<AIPageProps> = ({
     setIsLoading(true);
 
     try {
-      // جمع‌آوری سرنخ‌های تدبر و آیات مشابه
       const candidates = await retrieveAiCandidates(query, currentVerse);
 
       const deviceStorageKey = 'quran_ai_device_id';
       let deviceId = localStorage.getItem(deviceStorageKey);
       if (!deviceId) {
-        deviceId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `dev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        deviceId = typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `dev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         localStorage.setItem(deviceStorageKey, deviceId);
       }
 
@@ -232,7 +233,6 @@ export const AIPage: React.FC<AIPageProps> = ({
           assistantText = 'پاسخ دریافت شد اما قالب آن نامعتبر بود.';
         }
       } else {
-        // حالت پاسخ هوشمند محلی بر پایه گزیده‌های قرآن در صورت عدم دسترسی به سرور
         if (candidates.length > 0) {
           assistantText = `در پرتو پرسش شما و آیات متناظر، این آموزه‌ها را می‌توان تدبّر کرد:\n\n${candidates
             .map(
@@ -257,7 +257,6 @@ export const AIPage: React.FC<AIPageProps> = ({
       const finalMessages = [...updatedMessages, assistantMsg];
       setMessages(finalMessages);
 
-      // ذخیره در تاریخچه محلی مرورگر (بدون نیاز به لاگین)
       const sessionTitle = query.length > 35 ? `${query.slice(0, 35)}…` : query;
       const sessionData: AiChatSession = {
         id: currentSessionId,
@@ -279,7 +278,7 @@ export const AIPage: React.FC<AIPageProps> = ({
       const errorMsg: AiChatMessage = {
         id: `msg_err_${Date.now()}`,
         role: 'assistant',
-        content: 'خطایی در برقراری ارتباط رخ داد. لطفاً دوباره تلاش نمایید.',
+        content: 'متأسفانه در برقراری ارتباط خطایی رخ داد. لطفاً مجدداً امتحان فرمایید.',
         timestamp: Date.now(),
       };
       setMessages([...updatedMessages, errorMsg]);
@@ -288,50 +287,86 @@ export const AIPage: React.FC<AIPageProps> = ({
     }
   };
 
-  const activeAgent = AI_AGENTS.find((a) => a.id === selectedAgentId) || AI_AGENTS[0];
-  const ActiveIcon = activeAgent.icon;
-
-  const copyToClipboard = (text: string, msgId: string) => {
+  const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
-    setCopiedMsgId(msgId);
+    setCopiedMsgId(id);
     setTimeout(() => setCopiedMsgId(null), 2000);
   };
 
+  const activeAgent = AI_AGENTS.find((a) => a.id === selectedAgentId) || AI_AGENTS[0];
+  const ActiveIcon = activeAgent.icon;
+
+  const handleReturnHome = () => {
+    if (onNavigateHome) {
+      onNavigateHome();
+    } else {
+      onBack();
+    }
+  };
+
   return (
-    <div className="w-full max-w-4xl min-w-0 mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-28 space-y-4 relative overflow-x-hidden" dir="rtl">
-      {/* سربرگ صفحه با دکمه‌های ناوبری و دسترسی به تاریخچه */}
-      <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-3 pb-3 border-b border-stone-200 dark:border-slate-800">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+    <div
+      id="ai-fullscreen-chat"
+      className="fixed inset-0 z-50 flex flex-col h-screen h-dvh w-full bg-[#faf8f5] dark:bg-[#070b14] text-slate-800 dark:text-slate-100 overflow-hidden font-['Vazirmatn'] select-none"
+      dir="rtl"
+    >
+      {/* سربرگ اختصاصی و مدرن فول‌اسکرین چت */}
+      <header className="shrink-0 h-16 border-b border-stone-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xs">
+        {/* سمت راست: دکمه صفحه اصلی، دکمه بازگشت و عنوان */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {/* دکمه برجسته رفتن به صفحه اصلی */}
+          <button
+            onClick={handleReturnHome}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0"
+            title="بازگشت به صفحه اصلی"
+            aria-label="صفحه اصلی"
+          >
+            <Home className="w-4 h-4" />
+            <span className="inline">صفحه اصلی</span>
+          </button>
+
+          {/* دکمه بازگشت قبلی */}
           <button
             onClick={onBack}
-            className="p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all active:scale-95"
-            title="بازگشت به قرائت قرآن"
+            className="p-2 rounded-xl border border-stone-200 dark:border-slate-700/80 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-95 shrink-0"
+            title="بازگشت به نمای قبل"
             aria-label="بازگشت"
           >
-            <ArrowRight className="w-5 h-5" />
+            <ArrowRight className="w-4 h-4" />
           </button>
+
+          {/* عنوان و آیکن دستیار */}
           <div className="min-w-0">
-            <h1 className="flex min-w-0 items-center gap-2 text-lg sm:text-2xl font-bold text-slate-800 dark:text-slate-100">
-              <Bot className="w-6 h-6 text-teal-600 dark:text-teal-400" />
-              <span className="min-w-0 truncate">دستیار هوشمند تدبّر قرآنی</span>
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-              پاسخ به پرسش‌های قرآنی، تفسیر، واژه‌شناسی و سبک زندگی با ذخیره خودکار تاریخچه در مرورگر
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+              <h1 className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100 truncate">
+                دستیار تدبّر قرآنی
+              </h1>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+              {currentVerse && currentSurah ? (
+                <span>
+                  در پرتو سوره {currentSurah.nameArabic} (آیه {toPersianDigits(currentVerse.verseNumber)})
+                </span>
+              ) : (
+                <span>پاسخگویی و تدبّر بر مبنای آیات قرآن کریم</span>
+              )}
             </p>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        {/* سمت چپ: ابزارهای تاریخچه و گفتگوی جدید */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
-            className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
               showHistoryDrawer
-                ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
-                : 'border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                : 'border-stone-200 dark:border-slate-700 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
             }`}
-            title="مشاهده تاریخچه گفتگوها"
+            title="تاریخچه گفتگوها"
           >
-            <History className="w-4 h-4" />
+            <History className="w-4 h-4 shrink-0" />
             <span className="hidden sm:inline">تاریخچه</span>
             {historyList.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-teal-500/20 text-teal-700 dark:text-teal-300 text-[10px]">
@@ -342,113 +377,120 @@ export const AIPage: React.FC<AIPageProps> = ({
 
           <button
             onClick={handleStartNewChat}
-            className="p-2 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all active:scale-95"
+            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95"
             title="گفتگوی جدید"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="hidden xs:inline sm:inline">گفتگوی نو</span>
           </button>
+        </div>
+      </header>
+
+      {/* کشوی افقی یا پنل تاریخچه در صورت فعال بودن */}
+      {showHistoryDrawer && (
+        <div className="shrink-0 bg-stone-100/90 dark:bg-slate-900/90 border-b border-stone-200 dark:border-slate-800 p-3 sm:px-6 max-h-56 overflow-y-auto animate-fadeIn">
+          <div className="max-w-3xl mx-auto space-y-2">
+            <div className="flex items-center justify-between pb-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                <History className="w-4 h-4 text-teal-600" />
+                <span>جلسات گذشته گفتگو</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {historyList.length > 0 && (
+                  <button
+                    onClick={handleClearAllHistory}
+                    className="text-[11px] text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>پاک کردن همه</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowHistoryDrawer(false)}
+                  className="p-1 rounded-lg hover:bg-stone-200 dark:hover:bg-slate-800 text-slate-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {historyList.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3 text-center">
+                هنوز گفتگویی در تاریخچه ذخیره نشده است. با ارسال اولین پیام، تاریخچه محلی تشکیل می‌شود.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {historyList.map((sess) => {
+                  const isActive = sess.id === currentSessionId;
+                  const dateStr = new Date(sess.timestamp).toLocaleDateString('fa-IR');
+                  return (
+                    <div
+                      key={sess.id}
+                      onClick={() => handleLoadSession(sess)}
+                      className={`p-2.5 rounded-xl border text-right cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                        isActive
+                          ? 'border-teal-600 bg-teal-500/10 text-teal-900 dark:text-teal-200'
+                          : 'border-stone-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 bg-stone-50 dark:bg-slate-900/60'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-xs truncate">{sess.title}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                          <span>{toPersianDigits(dateStr)}</span>
+                          {sess.verseRef && (
+                            <span>
+                              سوره {sess.verseRef.surahName} (آیه {toPersianDigits(sess.verseRef.verseNumber)})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => handleDeleteSession(sess.id, e)}
+                        className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                        title="حذف"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* نوار انتخاب رویکرد تدبر (Agent Selector) - تمیز و بدون شلوغی */}
+      <div className="shrink-0 bg-white/70 dark:bg-slate-900/50 border-b border-stone-200/60 dark:border-slate-800/60 px-3 sm:px-6 py-2 overflow-x-auto scrollbar-none">
+        <div className="max-w-3xl mx-auto flex items-center gap-1.5 sm:gap-2">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0 ml-1">
+            رویکرد:
+          </span>
+          {AI_AGENTS.map((agent) => {
+            const isSelected = agent.id === selectedAgentId;
+            const Icon = agent.icon;
+            return (
+              <button
+                key={agent.id}
+                onClick={() => setSelectedAgentId(agent.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs transition-all shrink-0 ${
+                  isSelected
+                    ? 'bg-teal-600 text-white font-bold shadow-xs'
+                    : 'bg-stone-100 hover:bg-stone-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
+                }`}
+                title={agent.description}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
+                <span>{agent.name}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* کشوی تاریخچه گفتگوی محلی */}
-      {showHistoryDrawer && (
-        <QuranicCard darkMode={darkMode} className="p-4 space-y-3 animate-fadeIn">
-          <div className="flex items-center justify-between border-b border-stone-200 dark:border-slate-800 pb-2">
-            <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-teal-600" />
-              <h3 className="font-bold text-xs text-slate-800 dark:text-slate-100">
-                تاریخچه گفتگوهای شما (ذخیره‌شده در مرورگر بدون نیاز به ثبت‌نام)
-              </h3>
-            </div>
-            {historyList.length > 0 && (
-              <button
-                onClick={handleClearAllHistory}
-                className="text-[11px] text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>پاک‌سازی کامل</span>
-              </button>
-            )}
-          </div>
-
-          {historyList.length === 0 ? (
-            <div className="text-center py-6 text-xs text-slate-400">
-              هنوز گفتگویی در تاریخچه ذخیره نشده است. با ارسال اولین پرسش، گفتگو به‌طور خودکار در مرورگرتان نگهداری می‌شود.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-              {historyList.map((sess) => {
-                const isActive = sess.id === currentSessionId;
-                const dateStr = new Date(sess.timestamp).toLocaleDateString('fa-IR');
-                return (
-                  <div
-                    key={sess.id}
-                    onClick={() => handleLoadSession(sess)}
-                    className={`p-2.5 rounded-xl border text-right cursor-pointer transition-all flex items-center justify-between gap-2 ${
-                      isActive
-                        ? 'border-teal-600 bg-teal-500/10'
-                        : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 dark:hover:bg-slate-800/50'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">
-                        {sess.title}
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
-                        <span>{toPersianDigits(dateStr)}</span>
-                        {sess.verseRef && (
-                          <span>
-                            سوره {sess.verseRef.surahName} : آیه {toPersianDigits(sess.verseRef.verseNumber)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteSession(sess.id, e)}
-                      className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                      title="حذف این گفتگو"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </QuranicCard>
-      )}
-
-      {/* انتخاب رویکرد تدبر (Agents) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {AI_AGENTS.map((agent) => {
-          const isSelected = agent.id === selectedAgentId;
-          const Icon = agent.icon;
-          return (
-            <button
-              key={agent.id}
-              onClick={() => setSelectedAgentId(agent.id)}
-              className={`p-3 rounded-2xl border text-right transition-all flex flex-col justify-between ${
-                isSelected
-                  ? 'border-teal-600 bg-teal-600 text-white shadow-xs'
-                  : 'border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-teal-500/40'
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <Icon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
-                <span className="font-bold text-xs truncate">{agent.name}</span>
-              </div>
-              <span className={`text-[10px] ${isSelected ? 'text-teal-100' : 'text-slate-400'}`}>
-                {agent.badge}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* پنجره گفتگو */}
-      <QuranicCard darkMode={darkMode} contentClassName="h-full min-h-0 flex flex-col" className="w-full min-w-0 h-[calc(100dvh-12rem)] min-h-[420px] max-h-[600px] p-3 sm:p-5 flex flex-col overflow-hidden">
-        {/* لیست پیام‌ها */}
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden space-y-4 pr-1 pl-1">
+      {/* ناحیه اسکرول پیام‌های گفتگو - فول‌اسکرین در سراسر ارتفاع صفحه */}
+      <main className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 space-y-4">
+        <div className="max-w-3xl mx-auto space-y-4">
           {messages.map((msg) => {
             const isUser = msg.role === 'user';
             const isCopied = copiedMsgId === msg.id;
@@ -456,30 +498,30 @@ export const AIPage: React.FC<AIPageProps> = ({
             return (
               <div
                 key={msg.id}
-                className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
+                className={`flex gap-2.5 sm:gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
               >
                 {!isUser && (
-                  <div className="w-8 h-8 rounded-2xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
                     <ActiveIcon className="w-4 h-4" />
                   </div>
                 )}
 
                 <div
-                  className={`min-w-0 max-w-[85%] break-words rounded-3xl p-3 sm:p-4 text-xs sm:text-sm leading-relaxed transition-all shadow-xs ${
+                  className={`min-w-0 max-w-[88%] sm:max-w-[80%] break-words rounded-2xl p-3.5 sm:p-4 text-xs sm:text-sm leading-relaxed transition-all shadow-xs ${
                     isUser
                       ? 'bg-teal-600 text-white rounded-br-xs'
                       : darkMode
-                      ? 'bg-slate-800/90 text-slate-100 border border-slate-700/80 rounded-bl-xs'
-                      : 'bg-stone-50 text-slate-800 border border-stone-200 rounded-bl-xs'
+                      ? 'bg-slate-900/95 text-slate-100 border border-slate-800 rounded-bl-xs'
+                      : 'bg-white text-slate-800 border border-stone-200/90 rounded-bl-xs'
                   }`}
                 >
-                  <div className="whitespace-pre-line leading-relaxed">{msg.content}</div>
+                  <div className="whitespace-pre-line leading-relaxed font-normal">{msg.content}</div>
 
                   <div
-                    className={`flex items-center justify-between mt-2 pt-1 border-t text-[10px] ${
+                    className={`flex items-center justify-between mt-2 pt-1.5 border-t text-[10px] ${
                       isUser
                         ? 'border-white/20 text-teal-100'
-                        : 'border-black/5 dark:border-white/5 text-slate-400'
+                        : 'border-stone-100 dark:border-slate-800 text-slate-400'
                     }`}
                   >
                     <span>
@@ -517,61 +559,72 @@ export const AIPage: React.FC<AIPageProps> = ({
           })}
 
           {isLoading && (
-            <div className="flex gap-3 justify-start">
-              <div className="w-8 h-8 rounded-2xl bg-teal-600 text-white flex items-center justify-center shrink-0">
+            <div className="flex gap-2.5 sm:gap-3 justify-start items-center">
+              <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0">
                 <Loader2 className="w-4 h-4 animate-spin" />
               </div>
-              <div className="p-3.5 rounded-2xl bg-stone-100 dark:bg-slate-800 text-xs text-slate-500 flex items-center gap-2">
-                <span>دستیار در حال تأمل و نگارش پاسخ است…</span>
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 text-xs text-slate-500 flex items-center gap-2">
+                <span>دستیار در حال بررسی آیات و تنظیم پاسخ است…</span>
               </div>
             </div>
           )}
 
           <div ref={messagesEndRef} />
         </div>
+      </main>
 
-        {/* پرسش‌های پیشنهادی سریع */}
-        <div className="pt-3 border-t border-stone-200 dark:border-slate-800 mt-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none">
-            {SUGGESTED_QUESTIONS.map((q, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSendMessage(q)}
-                disabled={isLoading}
-                className="whitespace-nowrap px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-medium transition-all"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
+      {/* نوار ورودی چت پایین صفحه - کاملاً سازگار با کیبورد مجازی موبایل و ناچ */}
+      <footer className="shrink-0 border-t border-stone-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 10px)' }}>
+        <div className="max-w-3xl mx-auto space-y-2">
+          {/* پرسش‌های پیشنهادی سریع در صورت کم بودن پیام‌ها */}
+          {messages.length <= 3 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {SUGGESTED_QUESTIONS.map((q, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSendMessage(q)}
+                  disabled={isLoading}
+                  className="whitespace-nowrap px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium transition-all shrink-0"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {/* فیلد ورودی متن و ارسال */}
+          {/* فرم ورودی پیام */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSendMessage(inputText);
             }}
-            className="flex items-center gap-2 mt-1"
+            className="flex items-center gap-2"
           >
             <input
+              ref={inputRef}
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="سؤال یا موضوع تدبّر خود را بنویسید…"
+              placeholder="پرسش قرآنی، تفسیر، واژه یا موضوع تدبّر را بنویسید…"
               disabled={isLoading}
-              className="flex-1 px-4 py-3 rounded-2xl border border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-900 text-xs sm:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="flex-1 px-4 py-2.5 sm:py-3 rounded-xl border border-stone-300/80 dark:border-slate-700 bg-stone-50/80 dark:bg-slate-950 text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
             <button
               type="submit"
               disabled={!inputText.trim() || isLoading}
-              className="p-3 rounded-2xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white shadow-md transition-all active:scale-95 shrink-0"
+              className="p-2.5 sm:p-3 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white shadow-xs transition-all active:scale-95 shrink-0"
               title="ارسال پیام"
+              aria-label="ارسال پیام"
             >
-              <Send className="w-5 h-5 rotate-180" />
+              <Send className="w-4 h-4 sm:w-5 sm:h-5 rotate-180" />
             </button>
           </form>
+
+          <p className="text-[10px] text-center text-slate-400">
+            پاسخ‌ها جنبهٔ تدبّر و انس با قرآن دارند و جایگزین فتوای فقهی یا نظرات اجتهادی علما نیستند.
+          </p>
         </div>
-      </QuranicCard>
+      </footer>
     </div>
   );
 };

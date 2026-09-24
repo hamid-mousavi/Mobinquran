@@ -52,6 +52,7 @@ interface AudioPlayerBarProps {
   onAutoAdvanceToNextSurah?: () => void;
   onJumpToSurah?: (surahId: number) => void;
   allSurahs?: { id: number; nameArabic: string; namePersian?: string; versesCount?: number }[];
+  hasBottomNav?: boolean;
 }
 
 export type { ReciterId } from '../services/audioSources';
@@ -185,6 +186,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   onAutoAdvanceToNextSurah,
   onJumpToSurah,
   allSurahs = [],
+  hasBottomNav = true,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>('parhizgar');
@@ -545,7 +547,9 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     <>
       <div
         id="audio-player-bar-container"
-        className={`fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-md transition-all select-none ${
+        className={`fixed left-0 right-0 z-40 border-t backdrop-blur-md transition-all select-none ${
+          hasBottomNav ? 'bottom-[60px]' : 'bottom-0'
+        } ${
           darkMode
             ? 'bg-slate-900/95 border-slate-800 text-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.5)]'
             : 'bg-white/95 border-stone-200 text-slate-800 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]'

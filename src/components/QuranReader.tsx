@@ -143,7 +143,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   const visibleVerses = verses;
 
   // اسکرول کاملاً پایدار، دقیق و مقاوم در برابر بارگذاری فونت و ریفلاو به آیه مورد نظر
-  const performScrollToVerse = useCallback((verseNumber: number) => {
+  const performScrollToVerse = useCallback((verseNumber: number, behavior: ScrollBehavior = 'auto') => {
     const el = document.getElementById(`verse-${verseNumber}`);
     if (!el) return false;
 
@@ -153,7 +153,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
       clearTimeout(programmaticScrollTimerRef.current);
     }
 
-    const pinToReadingLine = () => {
+    const pinToReadingLine = (scrollBehavior: ScrollBehavior = behavior) => {
       const currentEl = document.getElementById(`verse-${verseNumber}`);
       if (!currentEl) return;
       const rect = currentEl.getBoundingClientRect();
@@ -162,7 +162,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
       const targetY = Math.max(0, currentScrollY + rect.top - 100);
       window.scrollTo({
         top: targetY,
-        behavior: 'auto',
+        behavior: scrollBehavior,
       });
     };
 
@@ -335,7 +335,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   return (
     <main
       id="quran-reader-container"
-      className="max-w-3xl mx-auto px-3 sm:px-4 py-6 pb-28 space-y-6"
+      className="max-w-3xl mx-auto px-3 sm:px-4 py-6 pb-36 space-y-6"
     >
       {/* کتیبه فشرده و فاخر سرسوره قرآنی */}
       <QuranicSurahBanner surah={currentSurah} darkMode={darkMode} />

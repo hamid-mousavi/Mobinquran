@@ -56,10 +56,6 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
   const { resetAt } = dayWindow();
   const storageKey = `quran-ai:${new Date().toISOString().slice(0, 10)}:${key}`;
 
-  if (isProduction() && (!env('UPSTASH_REDIS_REST_URL') || !env('UPSTASH_REDIS_REST_TOKEN'))) {
-    return { allowed: false, used: 0, limit, resetAt };
-  }
-
   let used: number;
 
   try {
@@ -76,10 +72,6 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
       used = counter.count;
     }
   } catch {
-    if (isProduction()) {
-      return { allowed: false, used: 0, limit, resetAt };
-    }
-
     const existing = memoryCounters.get(storageKey);
     const counter = existing && existing.resetAt > Date.now()
       ? existing

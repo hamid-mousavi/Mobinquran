@@ -17,6 +17,8 @@ import { QuranHomePage } from './components/QuranHomePage';
 import { AIPage } from './components/AIPage';
 import { MemorizationPage } from './components/MemorizationPage';
 import { OfflinePage } from './components/OfflinePage';
+import { BottomNavigation } from './components/BottomNavigation';
+import { MoreMenuModal } from './components/MoreMenuModal';
 import { QuranService } from './services/quranService';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
 import { ALL_SURAHS, getJuzStartInfo } from './data/surahs';
@@ -92,6 +94,7 @@ export default function App() {
 
   // مودال نشانه‌گذاری‌ها
   const [isBookmarksModalOpen, setIsBookmarksModalOpen] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
   // ترتیل صوتی و پلیر همگام
   const [isAudioPlayerOpen, setIsAudioPlayerOpen] = useState(false);
@@ -412,7 +415,7 @@ export default function App() {
   return (
     <div
       id="app-root"
-      className={`min-h-screen min-h-dvh w-full max-w-full overflow-x-hidden flex flex-col font-['Vazirmatn'] transition-colors duration-200 ${
+      className={`min-h-screen min-h-dvh w-full max-w-full overflow-x-clip flex flex-col font-['Vazirmatn'] transition-colors duration-200 ${
         settings.darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#faf8f5] text-slate-800'
       }`}
       dir="rtl"
@@ -420,8 +423,8 @@ export default function App() {
       {/* بنر نصب اپلیکیشن PWA روی دستگاه */}
       <PWAInstallBanner darkMode={settings.darkMode} />
 
-      {/* هدر بالایی با ابزارهای ناوبری، حالت مصحف، ختم قرآن، جستجو و هوش مصنوعی (تنها در صفحات غیر صفحه اصلی) */}
-      {activePage !== 'home' && (
+      {/* هدر بالایی با ابزارهای ناوبری، حالت مصحف، ختم قرآن، جستجو و هوش مصنوعی (تنها در صفحه قرائت) */}
+      {activePage === 'reader' && (
         <Header
           currentSurah={currentSurah}
           viewMode={viewMode}
@@ -491,6 +494,7 @@ export default function App() {
           surahs={surahs}
           darkMode={settings.darkMode}
           onBack={handleBackToPrevious}
+          onNavigateHome={() => setActivePage('home')}
           onNavigateToVerse={(sId, vNum) => {
             handleNavigateToVerse(sId, vNum);
           }}
@@ -601,6 +605,7 @@ export default function App() {
           }}
           allSurahs={surahs.map((s) => ({ id: s.id, nameArabic: s.nameArabic }))}
           darkMode={settings.darkMode}
+          hasBottomNav={activePage !== 'ai'}
         />
       )}
 
@@ -699,6 +704,43 @@ export default function App() {
 
       {/* نشانگر وضعیت آفلاین در صورت قطع اتصال شبکه */}
       <OfflineIndicator />
+
+      {/* منوی ناوبری دسترسی سریع پایین صفحه */}
+      {activePage !== 'ai' && (
+        <BottomNavigation
+          activePage={activePage}
+          onNavigateHome={() => setActivePage('home')}
+          onNavigateReader={() => {
+            setActivePage('reader');
+            if (lastReadPosition?.verseNumber) {
+              setResumeScrollVerse(lastReadPosition.verseNumber);
+              setTimeout(() => requestQuranScrollToVerse(lastReadPosition.verseNumber), 150);
+            }
+          }}
+          onNavigateAI={() => handleOpenAI(null)}
+          onNavigateMemorization={handleOpenMemorization}
+          onOpenMoreMenu={() => setIsMoreMenuOpen(true)}
+          darkMode={settings.darkMode}
+        />
+      )}
+
+      {/* مودال منوی امکانات و ابزارهای قرآنی */}
+      <MoreMenuModal
+        isOpen={isMoreMenuOpen}
+        onClose={() => setIsMoreMenuOpen(false)}
+        onOpenSurahList={() => setIsSurahModalOpen(true)}
+        onOpenKhatm={() => setIsKhatmModalOpen(true)}
+        onOpenBookmarks={() => setIsBookmarksModalOpen(true)}
+        onOpenSearch={() => setIsSearchModalOpen(true)}
+        onOpenOffline={handleOpenOffline}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onToggleDarkMode={handleToggleDarkMode}
+        onOpenMushafPage={() => {
+          setViewMode('mushaf-page');
+          setActivePage('reader');
+        }}
+        darkMode={settings.darkMode}
+      />
     </div>
   );
 }

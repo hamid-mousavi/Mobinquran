@@ -27,13 +27,20 @@ function env(name: string): string {
   return (process.env[name] || '').trim();
 }
 
+function getProviderKey(provider: ProviderName): string {
+  if (provider === 'gemini') {
+    return env('GEMINI_API_KEY') || env('API_KEY');
+  }
+  return env(`${provider.toUpperCase()}_API_KEY`);
+}
+
 function configuredProviders(): ProviderName[] {
   const configured = env('AI_PROVIDER_ORDER')
     .split(',')
     .map((value) => value.trim())
     .filter((value): value is ProviderName => providerOrder.includes(value as ProviderName));
   const order = configured.length > 0 ? configured : providerOrder;
-  return order.filter((provider) => !!env(`${provider.toUpperCase()}_API_KEY`));
+  return order.filter((provider) => !!getProviderKey(provider));
 }
 
 function modelFor(provider: ProviderName): string {
@@ -102,7 +109,7 @@ async function callGemini(key: string, request: ProviderRequest): Promise<string
 }
 
 async function callProvider(provider: ProviderName, request: ProviderRequest): Promise<string> {
-  const key = env(`${provider.toUpperCase()}_API_KEY`);
+  const key = getProviderKey(provider);
   if (!key) throw new ProviderError(provider, 503, `${provider} is not configured`);
   return provider === 'gemini' ? callGemini(key, request) : callOpenAiStyle(provider, key, request);
 }
