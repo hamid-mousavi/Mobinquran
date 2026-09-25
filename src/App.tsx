@@ -19,6 +19,7 @@ import { MemorizationPage } from './components/MemorizationPage';
 import { OfflinePage } from './components/OfflinePage';
 import { BottomNavigation } from './components/BottomNavigation';
 import { MoreMenuModal } from './components/MoreMenuModal';
+import { SurahSearchModal } from './components/SurahSearchModal';
 import { QuranService } from './services/quranService';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
 import { ALL_SURAHS, getJuzStartInfo } from './data/surahs';
@@ -87,6 +88,7 @@ export default function App() {
 
   // مودال‌های جستجو و ختم قرآن
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isSurahSearchOpen, setIsSurahSearchOpen] = useState(false);
   const [isKhatmModalOpen, setIsKhatmModalOpen] = useState(false);
 
   // آیه زمینه برای دستیار هوش مصنوعی
@@ -430,18 +432,11 @@ export default function App() {
           viewMode={viewMode}
           onToggleViewMode={handleToggleViewMode}
           onOpenSurahList={() => setIsSurahModalOpen(true)}
-          onOpenSettings={() => setIsSettingsModalOpen(true)}
-          onOpenSearch={() => setIsSearchModalOpen(true)}
-          onOpenBookmarks={() => setIsBookmarksModalOpen(true)}
-          onOpenKhatm={() => setIsKhatmModalOpen(true)}
-          onOpenOffline={handleOpenOffline}
-          onOpenAI={() => handleOpenAI(null)}
-          onOpenMemorization={handleOpenMemorization}
+          onOpenSurahSearch={() => setIsSurahSearchOpen(true)}
           darkMode={settings.darkMode}
           onToggleDarkMode={handleToggleDarkMode}
           isAutoScrollActive={isAutoScrollActive}
           onToggleAutoScroll={() => setIsAutoScrollActive((prev) => !prev)}
-          isHomeView={false}
           onToggleHomeView={() => setActivePage('home')}
         />
       )}
@@ -655,6 +650,18 @@ export default function App() {
         onSelectResult={handleNavigateToVerse}
         onNavigateToPage={(pageNum, forcePage) => handleNavigateToMushafPage(pageNum, forcePage ?? true)}
         onNavigateToJuz={handleNavigateToJuz}
+        darkMode={settings.darkMode}
+      />
+
+      {/* مودال جستجوی اختصاصی و سریع در سوره جاری (P5-T2) */}
+      <SurahSearchModal
+        isOpen={isSurahSearchOpen}
+        onClose={() => setIsSurahSearchOpen(false)}
+        currentSurah={currentSurah}
+        verses={verses}
+        onSelectVerse={(verseNum) => {
+          requestQuranScrollToVerse(verseNum);
+        }}
         darkMode={settings.darkMode}
       />
 

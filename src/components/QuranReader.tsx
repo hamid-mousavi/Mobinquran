@@ -142,57 +142,54 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
 
   const visibleVerses = verses;
 
-  // اسکرول کاملاً پایدار، دقیق و مقاوم در برابر بارگذاری فونت و ریفلاو به آیه مورد نظر
-  const performScrollToVerse = useCallback((verseNumber: number, behavior: ScrollBehavior = 'auto') => {
+  // اسکرول کاملاً پایدار، دقیق، نرم و بدون لگ به آیه مورد نظر
+  const performScrollToVerse = useCallback((verseNumber: number, behavior: ScrollBehavior = 'smooth') => {
     const el = document.getElementById(`verse-${verseNumber}`);
     if (!el) return false;
 
-    // قفل ردیاب موقعیت تا زمانی که تمام تثبیت‌های اسکرول به پایان برسد
+    // قفل ردیاب موقعیت در هنگام اسکرول برنامه‌ای
     isProgrammaticScrollRef.current = true;
     if (programmaticScrollTimerRef.current) {
       clearTimeout(programmaticScrollTimerRef.current);
     }
 
-    const pinToReadingLine = (scrollBehavior: ScrollBehavior = behavior) => {
-      const currentEl = document.getElementById(`verse-${verseNumber}`);
-      if (!currentEl) return;
-      const rect = currentEl.getBoundingClientRect();
-      const currentScrollY = window.pageYOffset || document.documentElement.scrollTop;
-      // هدایت آیه به فاصله دقیق ۱۰۰ پیکسل از بالای صفحه (زیر هدر ثابت)
-      const targetY = Math.max(0, currentScrollY + rect.top - 100);
+    const rect = el.getBoundingClientRect();
+    const currentScrollY = window.pageYOffset || document.documentElement.scrollTop;
+    const targetY = Math.max(0, currentScrollY + rect.top - 80);
+
+    if (behavior === 'smooth') {
       window.scrollTo({
         top: targetY,
-        behavior: scrollBehavior,
+        behavior: 'smooth',
       });
-    };
-
-    // پرش فوری و مستقیم (بدون تأخیر انیمیشن که در صفحات بلند لغو شود)
-    pinToReadingLine();
-
-    // تصحیح مکرر موقعیت جهت همگامی ۱۰۰٪ با بارگذاری قلم‌های عثمانی و متون ترجمه
-    setTimeout(pinToReadingLine, 50);
-    setTimeout(pinToReadingLine, 150);
-    setTimeout(pinToReadingLine, 350);
-    setTimeout(pinToReadingLine, 650);
-    setTimeout(pinToReadingLine, 1000);
-
-    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => {
-        pinToReadingLine();
+      programmaticScrollTimerRef.current = setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 700);
+    } else {
+      window.scrollTo({
+        top: targetY,
+        behavior: 'auto',
       });
+      if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => {
+          const freshEl = document.getElementById(`verse-${verseNumber}`);
+          if (freshEl) {
+            const freshRect = freshEl.getBoundingClientRect();
+            const freshY = Math.max(0, (window.pageYOffset || document.documentElement.scrollTop) + freshRect.top - 80);
+            window.scrollTo({ top: freshY, behavior: 'auto' });
+          }
+        });
+      }
+      programmaticScrollTimerRef.current = setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 200);
     }
 
-    // جلوه بصری تأکید روی آیه هدف
-    el.classList.add('ring-4', 'ring-amber-500/80', 'bg-amber-500/15');
+    // افکت ملایم روی آیه انتخاب‌شده
+    el.classList.add('ring-2', 'ring-teal-500/60');
     setTimeout(() => {
-      el.classList.remove('ring-4', 'ring-amber-500/80', 'bg-amber-500/15');
-    }, 3500);
-
-    // باز کردن قفل ردیاب پس از ثبات کامل المان‌ها
-    programmaticScrollTimerRef.current = setTimeout(() => {
-      pinToReadingLine();
-      isProgrammaticScrollRef.current = false;
-    }, 1200);
+      el.classList.remove('ring-2', 'ring-teal-500/60');
+    }, 2000);
 
     return true;
   }, []);
@@ -397,10 +394,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest('button, a, input, select')) return;
                   onPlayVerseAudio(verse.verseNumber);
-                  const el = document.getElementById(`verse-${verse.verseNumber}`);
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
+                  performScrollToVerse(verse.verseNumber, 'smooth');
                 }}
                 className={`reader-verse-card p-4 sm:p-5 rounded-2xl border transition-all duration-200 relative group cursor-pointer ${
                   isCurrentlyPlaying

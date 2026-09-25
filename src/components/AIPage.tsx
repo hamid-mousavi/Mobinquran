@@ -313,26 +313,25 @@ export const AIPage: React.FC<AIPageProps> = ({
       {/* سربرگ اختصاصی و مدرن فول‌اسکرین چت */}
       <header className="shrink-0 h-16 border-b border-stone-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xs">
         {/* سمت راست: دکمه صفحه اصلی، دکمه بازگشت و عنوان */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          {/* دکمه برجسته رفتن به صفحه اصلی */}
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          {/* دکمه آیکونی رفتن به صفحه اصلی */}
           <button
             onClick={handleReturnHome}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 shrink-0"
+            className="p-2 sm:p-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all active:scale-95 shrink-0"
             title="بازگشت به صفحه اصلی"
             aria-label="صفحه اصلی"
           >
-            <Home className="w-4 h-4" />
-            <span className="inline">صفحه اصلی</span>
+            <Home className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
-          {/* دکمه بازگشت قبلی */}
+          {/* دکمه آیکونی بازگشت به نمای قبل */}
           <button
             onClick={onBack}
-            className="p-2 rounded-xl border border-stone-200 dark:border-slate-700/80 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-95 shrink-0"
+            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-700/80 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-95 shrink-0"
             title="بازگشت به نمای قبل"
             aria-label="بازگشت"
           >
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           {/* عنوان و آیکن دستیار */}
@@ -355,21 +354,21 @@ export const AIPage: React.FC<AIPageProps> = ({
           </div>
         </div>
 
-        {/* سمت چپ: ابزارهای تاریخچه و گفتگوی جدید */}
+        {/* سمت چپ: ابزارهای کاملاً آیکونی تاریخچه و گفتگوی جدید */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
+            className={`p-2 sm:p-2.5 rounded-xl border relative transition-all active:scale-95 ${
               showHistoryDrawer
                 ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
                 : 'border-stone-200 dark:border-slate-700 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
             }`}
             title="تاریخچه گفتگوها"
+            aria-label="تاریخچه گفتگوها"
           >
-            <History className="w-4 h-4 shrink-0" />
-            <span className="hidden sm:inline">تاریخچه</span>
+            <History className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
             {historyList.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-teal-500/20 text-teal-700 dark:text-teal-300 text-[10px]">
+              <span className="absolute -top-1 -right-1 px-1 rounded-full bg-amber-500 text-slate-950 font-bold text-[9px] leading-tight min-w-[16px] text-center">
                 {toPersianDigits(historyList.length)}
               </span>
             )}
@@ -377,11 +376,11 @@ export const AIPage: React.FC<AIPageProps> = ({
 
           <button
             onClick={handleStartNewChat}
-            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95"
+            className="p-2 sm:p-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all active:scale-95 shrink-0"
             title="گفتگوی جدید"
+            aria-label="گفتگوی جدید"
           >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span className="hidden xs:inline sm:inline">گفتگوی نو</span>
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
           </button>
         </div>
       </header>

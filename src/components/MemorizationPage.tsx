@@ -216,27 +216,33 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
           </div>
         </div>
 
-        {/* سوییچ تب‌ها */}
+        {/* سوییچ تب‌ها با آیکون‌های تمیز */}
         <div className="flex items-center gap-1 p-1 rounded-2xl bg-stone-100 dark:bg-slate-800 border border-stone-200 dark:border-slate-700">
           <button
             onClick={() => setActiveTab('practice')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'practice'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
             }`}
+            title="جلسه تمرین حفظ"
+            aria-label="جلسه تمرین"
           >
-            جلسه تمرین
+            <BookOpen className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">تمرین</span>
           </button>
           <button
             onClick={() => setActiveTab('progress')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'progress'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
             }`}
+            title="پیشرفت و کارنامه حفظ"
+            aria-label="کارنامه حفظ"
           >
-            پیشرفت و کارنامه
+            <Award className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">کارنامه</span>
           </button>
         </div>
       </div>

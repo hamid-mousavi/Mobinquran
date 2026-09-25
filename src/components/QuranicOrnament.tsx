@@ -178,44 +178,22 @@ export const QuranicSurahBanner: React.FC<{
 
 /**
  * نشان و لوگوی قرآنی اختصاصی قرآن مبین
+ * نمایش منحصربه‌فرد لوگو با ابعاد استاندارد و بدون متن متنی اضافی در کنار آن
  */
 export const QuranLogo: React.FC<{
   size?: 'sm' | 'md' | 'lg';
   darkMode?: boolean;
-  showText?: boolean;
-}> = ({ size = 'md', darkMode = false, showText = true }) => {
-  const imgSize = size === 'sm' ? 'w-7 h-7' : size === 'lg' ? 'w-11 h-11' : 'w-9 h-9';
+}> = ({ size = 'md', darkMode = false }) => {
+  const heightClass = size === 'sm' ? 'h-9 sm:h-10' : size === 'lg' ? 'h-14 sm:h-16' : 'h-11 sm:h-12';
 
   return (
-    <div className="inline-flex items-center gap-2.5 select-none" dir="rtl">
-      <div className="relative shrink-0 flex items-center justify-center">
-        <img
-          src="/quran-logo.jpg"
-          alt="لوگوی قرآن مبین"
-          className={`${imgSize} rounded-xl object-cover shadow-xs border border-teal-600/20 dark:border-teal-400/20`}
-        />
-        <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/10 pointer-events-none" />
-      </div>
-
-      {showText && (
-        <div className="flex flex-col text-right justify-center">
-          <span
-            className="font-extrabold tracking-tight text-teal-800 dark:text-teal-300 leading-none"
-            style={{
-              fontSize: size === 'sm' ? '14px' : size === 'lg' ? '18px' : '16px',
-            }}
-          >
-            قرآن مبین
-          </span>
-          <span
-            className={`text-slate-400 dark:text-slate-500 font-medium leading-none mt-1 ${
-              size === 'sm' ? 'text-[9px]' : 'text-[10px]'
-            }`}
-          >
-            قرائت، ترجمه و تدبّر
-          </span>
-        </div>
-      )}
+    <div className="inline-flex items-center justify-center select-none" dir="rtl">
+      <img
+        src="/quran-logo.png"
+        alt="قرآن مبین"
+        className={`${heightClass} w-auto max-w-[130px] sm:max-w-[150px] object-contain rounded-xl shadow-xs transition-transform hover:scale-105 active:scale-95`}
+        referrerPolicy="no-referrer"
+      />
     </div>
   );
 };
