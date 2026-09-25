@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { randomUUID } from 'node:crypto';
 import { aiAskRequestSchema, aiResponseSchema, extractJsonObject } from './src/services/aiContract';
@@ -23,6 +24,12 @@ export function createApp() {
   // اندپوینت سلامتی سرور
   app.get(['/api/health', '/health'], (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // سرویس استاندارد منیفست PWA با هدر اختصاصی application/manifest+json جهت پذیرش بدون نقص توسط کروم
+  app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+    res.sendFile(path.join(process.cwd(), 'public', 'manifest.json'));
   });
 
   // پروکسی استریم فایل‌های صوتی قرآن جهت رفع مشکل فیلترینگ و عدم نیاز به فیلترشکن

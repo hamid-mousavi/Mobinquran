@@ -2,16 +2,18 @@
   "id": "/",
   "name": "قرآن مبین | قرائت، ترجمه و تدبّر",
   "short_name": "قرآن مبین",
-  "description": "اپلیکیشن جامع قرآن کریم با امکان قرائت متن، ۳ ترجمه، جستجوی آفلاین و تدبّر قرآنی",
+  "description": "اپلیکیشن جامع و آفلاین قرآن کریم با امکان قرائت متن، ۳ ترجمه فارسی، ترتیل صوتی و تدبّر هوشمند",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#0b1120",
   "theme_color": "#134e4a",
   "orientation": "portrait-primary",
   "dir": "rtl",
   "lang": "fa",
-  "categories": ["books", "education"],
+  "categories": ["books", "education", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192.png",
@@ -36,6 +38,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/screen-mobile.png",
+      "sizes": "540x960",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "نمای موبایل قرآن مبین"
+    },
+    {
+      "src": "/screenshots/screen-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "نمای تبلت و دسکتاپ قرآن مبین"
     }
   ],
   "shortcuts": [

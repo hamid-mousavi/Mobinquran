@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   X,
   BookOpen,
@@ -11,7 +11,9 @@ import {
   Sun,
   FileText,
   Sparkles,
+  Smartphone,
 } from 'lucide-react';
+import { PWAInstallModal } from './PWAInstallModal';
 
 interface MoreMenuModalProps {
   isOpen: boolean;
@@ -40,9 +42,20 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
   onOpenMushafPage,
   darkMode,
 }) => {
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+
   if (!isOpen) return null;
 
   const menuItems = [
+    {
+      label: 'نصب نسخه اپلیکیشن (PWA)',
+      desc: 'اجرای مستقل، بدون نوار مرورگر و دسترسی ۱۰۰٪ آفلاین',
+      icon: Smartphone,
+      iconColor: 'text-amber-600 dark:text-amber-400 bg-amber-500/15',
+      action: () => {
+        setIsInstallModalOpen(true);
+      },
+    },
     {
       label: 'فهرست سوره‌ها و ۳۰ جزء',
       desc: 'انتخاب سریع از میان ۱۱۴ سوره و اجزاء',
@@ -180,6 +193,13 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
           })}
         </div>
       </div>
+
+      {/* مودال جامع نصب اپلیکیشن */}
+      <PWAInstallModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+        darkMode={darkMode}
+      />
     </div>
   );
 };
