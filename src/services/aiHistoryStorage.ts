@@ -4,6 +4,8 @@ export interface AiChatMessage {
   content: string;
   timestamp: number;
   agentName?: string;
+  tafsirCitations?: string[];
+  socraticQuestions?: string[];
 }
 
 export interface AiChatSession {

@@ -18,12 +18,14 @@ import {
   Eye,
   EyeOff,
   Filter,
+  Brain,
 } from 'lucide-react';
 import { Surah, Verse, AppSettings } from '../types';
 import { ReciterId, RECITER_NAMES, getAudioSourceUrl } from '../services/audioSources';
 import { getArabicFontFamily } from '../utils/fontHelper';
 import { toPersianDigits } from '../utils/textNormalization';
 import { QuranicCard } from './QuranicOrnament';
+import { MemorizationQuizStudio } from './MemorizationQuizStudio';
 import {
   getMemorizationProgress,
   getSurahMemorizationStats,
@@ -74,8 +76,8 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   darkMode,
   onBack,
 }) => {
-  // تب‌های صفحه: «خط‌بر و تمرین حفظ» یا «کارنامه و پایش پیشرفت»
-  const [activeTab, setActiveTab] = useState<'practice' | 'progress'>('practice');
+  // تب‌های صفحه: «خط‌بر و تمرین حفظ»، «آزمون‌ساز حفظ» یا «کارنامه و پایش پیشرفت»
+  const [activeTab, setActiveTab] = useState<'practice' | 'quiz' | 'progress'>('practice');
 
   // داده‌های پیشرفت حفظ
   const [overallProgress, setOverallProgress] = useState<MemorizationProgress>(getMemorizationProgress());
@@ -216,11 +218,11 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
           </div>
         </div>
 
-        {/* سوییچ تب‌ها با آیکون‌های تمیز */}
+        {/* سوییچ تب‌های سه‌گانه با آیکون‌های تمیز */}
         <div className="flex items-center gap-1 p-1 rounded-2xl bg-stone-100 dark:bg-slate-800 border border-stone-200 dark:border-slate-700">
           <button
             onClick={() => setActiveTab('practice')}
-            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'practice'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -231,9 +233,24 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             <BookOpen className="w-4 h-4 shrink-0" />
             <span className="hidden sm:inline">تمرین</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('quiz')}
+            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'quiz'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+            title="آزمون‌ساز حفظ قرآن"
+            aria-label="آزمون‌ساز"
+          >
+            <Brain className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">آزمون‌ساز</span>
+          </button>
+
           <button
             onClick={() => setActiveTab('progress')}
-            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'progress'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -619,7 +636,18 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
         </div>
       )}
 
-      {/* محتوای تب ۲: کارنامه و پایش پیشرفت حفظ تمام آیات سوره */}
+      {/* محتوای تب ۲: استودیوی آزمون‌ساز هوشمند حفظ قرآن */}
+      {activeTab === 'quiz' && (
+        <MemorizationQuizStudio
+          currentSurah={currentSurah}
+          surahs={surahs}
+          verses={verses}
+          darkMode={darkMode}
+          onSelectSurah={onSelectSurah}
+        />
+      )}
+
+      {/* محتوای تب ۳: کارنامه و پایش پیشرفت حفظ تمام آیات سوره */}
       {activeTab === 'progress' && (
         <div className="space-y-4">
           <div className="p-4 rounded-2xl bg-stone-100/70 dark:bg-slate-900 border border-stone-200 dark:border-slate-800 flex items-center justify-between">

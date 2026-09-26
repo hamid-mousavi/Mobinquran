@@ -88,6 +88,7 @@ export default function App() {
 
   // مودال‌های جستجو و ختم قرآن
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [searchInitialQuery, setSearchInitialQuery] = useState<string>('');
   const [isSurahSearchOpen, setIsSurahSearchOpen] = useState(false);
   const [isKhatmModalOpen, setIsKhatmModalOpen] = useState(false);
 
@@ -466,7 +467,10 @@ export default function App() {
             setViewMode('mushaf-page');
             setActivePage('reader');
           }}
-          onOpenSearch={() => setIsSearchModalOpen(true)}
+          onOpenSearch={(query) => {
+            setSearchInitialQuery(query || '');
+            setIsSearchModalOpen(true);
+          }}
           onOpenBookmarks={() => setIsBookmarksModalOpen(true)}
           onOpenKhatm={() => setIsKhatmModalOpen(true)}
           onOpenAI={(verse) => handleOpenAI(verse)}
@@ -645,12 +649,16 @@ export default function App() {
       {/* مودال جستجوی پیشرفته متنی و ترجمه */}
       <SearchModal
         isOpen={isSearchModalOpen}
-        onClose={() => setIsSearchModalOpen(false)}
+        onClose={() => {
+          setIsSearchModalOpen(false);
+          setSearchInitialQuery('');
+        }}
         surahs={surahs}
         onSelectResult={handleNavigateToVerse}
         onNavigateToPage={(pageNum, forcePage) => handleNavigateToMushafPage(pageNum, forcePage ?? true)}
         onNavigateToJuz={handleNavigateToJuz}
         darkMode={settings.darkMode}
+        initialQuery={searchInitialQuery}
       />
 
       {/* مودال جستجوی اختصاصی و سریع در سوره جاری (P5-T2) */}

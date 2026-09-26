@@ -196,6 +196,10 @@ export const QuranService = {
     return [];
   },
 
+  async getSurahVerses(surahId: number): Promise<Verse[]> {
+    return this.getVersesBySurah(surahId);
+  },
+
   /**
    * خواندن آیات یک صفحهٔ مصحف به‌صورت کاملاً آفلاین از دیتابیس محلی (P3-T2)
    */

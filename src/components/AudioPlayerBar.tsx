@@ -189,16 +189,51 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   hasBottomNav = true,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>('parhizgar');
+  const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>(() => {
+    try {
+      const saved = localStorage.getItem('mobin_selected_reciter') ||
+                    localStorage.getItem('quran_reciter') ||
+                    loadAudioResumePosition()?.reciterId;
+      if (saved && RECITERS.some((r) => r.id === saved)) {
+        return saved as ReciterId;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return 'parhizgar';
+  });
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [audioProgress, setAudioProgress] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
-  const [sourceIndex, setSourceIndex] = useState(() => getWorkingSourceIndex('parhizgar'));
+  const [sourceIndex, setSourceIndex] = useState(() => {
+    try {
+      const saved = localStorage.getItem('mobin_selected_reciter') ||
+                    localStorage.getItem('quran_reciter') ||
+                    loadAudioResumePosition()?.reciterId;
+      if (saved && RECITERS.some((r) => r.id === saved)) {
+        return getWorkingSourceIndex(saved as ReciterId);
+      }
+    } catch (e) {
+      // ignore
+    }
+    return getWorkingSourceIndex('parhizgar');
+  });
+
+  // تضمین ماندگاری انتخاب قاری در حافظه دائمی مرورگر
+  useEffect(() => {
+    try {
+      localStorage.setItem('mobin_selected_reciter', selectedReciterId);
+      localStorage.setItem('quran_reciter', selectedReciterId);
+    } catch (e) {
+      // ignore
+    }
+  }, [selectedReciterId]);
   const [useProxyFallback, setUseProxyFallback] = useState(false);
 
   // مودال‌ها و کشوهای دسته‌بندی‌شده
   const [showReciterModal, setShowReciterModal] = useState(false);
+  const [reciterSearchQuery, setReciterSearchQuery] = useState('');
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showQueueMenu, setShowQueueMenu] = useState(false);
   const [queueSearchQuery, setQueueSearchQuery] = useState('');
@@ -1016,45 +1051,77 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
         </div>
       )}
 
-      {/* ۳. مودال مشخصات و تغییر قاری (رفع کامل باگ صفحه خالی و سیاه) */}
+      {/* ۳. مودال مشخصات و تغییر قاری (بسیار بزرگ، جادار، مدرن و با جستجوی هوشمند) */}
       {showReciterModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/70 backdrop-blur-sm animate-fadeIn"
           onClick={() => setShowReciterModal(false)}
         >
           <div
-            className={`w-full max-w-md rounded-3xl p-5 shadow-2xl border transition-all ${
+            className={`w-full max-w-4xl rounded-3xl p-5 sm:p-7 shadow-2xl border transition-all max-h-[92vh] sm:max-h-[88vh] flex flex-col ${
               darkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-stone-200 text-slate-800'
             }`}
             onClick={(e) => e.stopPropagation()}
             dir="rtl"
           >
-            {/* سربرگ مودال قاری */}
-            <div className="flex items-center justify-between border-b pb-3 mb-4 border-stone-100 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-teal-600/10 text-teal-600 dark:text-teal-400">
-                  <User className="w-5 h-5" />
+            {/* سربرگ بزرگ مودال قاری */}
+            <div className="flex items-center justify-between border-b pb-4 mb-4 border-stone-100 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-teal-600/10 text-teal-600 dark:text-teal-400">
+                  <User className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base">قاریان مصحف شریف</h3>
-                  <p className="text-xs text-slate-400">مشاهده مشخصات و انتخاب صوت دلخواه</p>
+                  <h3 className="font-bold text-lg sm:text-xl text-slate-900 dark:text-slate-100">
+                    انتخاب قاری مصحف شریف
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-400 dark:text-slate-400 mt-0.5">
+                    مجموعهٔ فاخر قاریان جهان اسلام با ترتیل‌های دقیق آموزشی، مجلسی، استودیویی و خاشعانه
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowReciterModal(false)}
-                className="p-1.5 rounded-xl hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-400"
+                className="p-2 sm:p-2.5 rounded-2xl hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                title="بستن"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
 
-            {/* لیست قاریان جهت تغییر سریع */}
-            <div className="space-y-2">
-              <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
-                قاری مورد نظر را انتخاب کنید:
+            {/* فیلد جستجوی سریع قاری */}
+            <div className="mb-4 shrink-0">
+              <div className="relative flex items-center">
+                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute right-3.5 pointer-events-none" />
+                <input
+                  type="text"
+                  value={reciterSearchQuery}
+                  onChange={(e) => setReciterSearchQuery(e.target.value)}
+                  placeholder="جستجوی نام قاری یا سبک تلاوت (مثلاً: پرهیزگار، عبدالباسط، آموزشی، حزین...)"
+                  className="w-full pl-3 pr-11 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm bg-stone-50 dark:bg-slate-800/80 border border-stone-200 dark:border-slate-700 focus:outline-hidden focus:border-teal-500 text-slate-800 dark:text-slate-100 shadow-2xs"
+                />
+                {reciterSearchQuery && (
+                  <button
+                    onClick={() => setReciterSearchQuery('')}
+                    className="absolute left-3 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-              <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
-                {RECITERS.map((r) => {
+            </div>
+
+            {/* لیست شبکه‌ای بزرگ قاریان جهت انتخاب با ذخیره‌سازی دائمی */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                {RECITERS.filter((r) => {
+                  if (!reciterSearchQuery.trim()) return true;
+                  const q = reciterSearchQuery.trim().toLowerCase();
+                  return (
+                    r.name.toLowerCase().includes(q) ||
+                    r.subname.toLowerCase().includes(q) ||
+                    r.bio.toLowerCase().includes(q)
+                  );
+                }).map((r) => {
                   const isSelected = r.id === selectedReciterId;
                   return (
                     <button
@@ -1062,38 +1129,59 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
                       onClick={() => {
                         setSelectedReciterId(r.id);
                         setSourceIndex(getWorkingSourceIndex(r.id));
+                        try {
+                          localStorage.setItem('mobin_selected_reciter', r.id);
+                          localStorage.setItem('quran_reciter', r.id);
+                          window.dispatchEvent(new CustomEvent('mobin-reciter-changed', { detail: r.id }));
+                        } catch (e) {
+                          // ignore
+                        }
                         setShowReciterModal(false);
                       }}
-                      className={`p-3 rounded-2xl border text-right transition-all flex items-center justify-between ${
+                      className={`p-4 sm:p-5 rounded-2xl border text-right transition-all flex flex-col justify-between gap-3 group cursor-pointer ${
                         isSelected
-                          ? 'border-teal-600 bg-teal-600 text-white font-bold shadow-md'
+                          ? 'border-teal-600 bg-teal-50/80 dark:bg-teal-950/50 ring-2 ring-teal-500/50 text-slate-900 dark:text-slate-100 shadow-md'
                           : darkMode
-                          ? 'border-slate-800 bg-slate-800/60 hover:bg-slate-800 text-slate-200'
-                          : 'border-stone-200 bg-stone-50 hover:bg-stone-100 text-slate-800'
+                          ? 'border-slate-800 bg-slate-800/40 hover:bg-slate-800 hover:border-slate-700 text-slate-200'
+                          : 'border-stone-200 bg-white hover:bg-stone-50 hover:border-teal-400 text-slate-800 shadow-xs'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs border shrink-0 ${r.avatarColor}`}
-                        >
-                          {r.initials}
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold">{r.name}</div>
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div
-                            className={`text-[11px] ${
-                              isSelected ? 'text-teal-100' : 'text-slate-400'
-                            }`}
+                            className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm border-2 shrink-0 shadow-sm ${r.avatarColor}`}
                           >
-                            {r.subname}
+                            {r.initials}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 truncate">
+                              {r.name}
+                            </div>
+                            <div
+                              className={`text-xs truncate mt-0.5 ${
+                                isSelected ? 'text-teal-700 dark:text-teal-300 font-semibold' : 'text-slate-400'
+                              }`}
+                            >
+                              {r.subname}
+                            </div>
                           </div>
                         </div>
+
+                        {isSelected ? (
+                          <div className="px-2.5 py-1 rounded-full bg-teal-600 text-white flex items-center gap-1 text-[11px] font-bold shrink-0 shadow-xs">
+                            <Check className="w-3.5 h-3.5" />
+                            <span>انتخاب‌شده</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-teal-600 dark:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity font-bold shrink-0">
+                            انتخاب ↵
+                          </span>
+                        )}
                       </div>
-                      {isSelected ? (
-                        <Check className="w-5 h-5 text-white" />
-                      ) : (
-                        <span className="text-xs opacity-60">انتخاب</span>
-                      )}
+
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-3">
+                        {r.bio}
+                      </p>
                     </button>
                   );
                 })}

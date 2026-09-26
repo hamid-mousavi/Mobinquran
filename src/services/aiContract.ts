@@ -9,7 +9,7 @@ export const aiCandidateSchema = z.object({
 
 export const aiAskRequestSchema = z.object({
   question: z.string().trim().min(1).max(500),
-  candidates: z.array(aiCandidateSchema).min(1).max(12),
+  candidates: z.array(aiCandidateSchema).max(12).default([]),
   lang: z.enum(['fa', 'en', 'ur']).default('fa'),
   agent: z.enum(['moral', 'conceptual', 'literary', 'rational']).optional().default('moral'),
 }).strict();
@@ -22,9 +22,10 @@ export const aiVerseAnswerSchema = z.object({
 
 export const aiResponseSchema = z.object({
   language: z.enum(['fa', 'en', 'ur']).default('fa'),
-  summary: z.string().trim().min(1).max(2500),
-  verses: z.array(aiVerseAnswerSchema).min(1).max(12),
-  tafsir_citations: z.array(z.never()).default([]),
+  summary: z.string().trim().min(1).max(3500),
+  verses: z.array(aiVerseAnswerSchema).max(12).default([]),
+  tafsir_citations: z.array(z.string().trim().min(1).max(300)).default([]),
+  socratic_questions: z.array(z.string().trim().min(1).max(500)).optional().default([]),
   confidence: z
     .string()
     .transform((val) => val.toLowerCase())

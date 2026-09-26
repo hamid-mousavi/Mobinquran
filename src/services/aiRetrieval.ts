@@ -69,6 +69,13 @@ function toCandidate(result: Awaited<ReturnType<typeof searchQuranOffline>>['res
 }
 
 export async function retrieveAiCandidates(question: string, currentVerse?: Verse | null): Promise<AiCandidateForRequest[]> {
+  const cleanQ = question.trim().toLowerCase();
+  const isGreeting = /^(سلام|درود|سلام علیکم|سلام بر شما|خوبی|چطوری|درود بر شما|وقت بخیر|صبح بخیر|عصر بخیر|شب بخیر|یا علی|یا حق)[\s!.,،]*$/i.test(cleanQ);
+
+  if (isGreeting && !currentVerse) {
+    return [];
+  }
+
   const candidates = new Map<string, AiCandidateForRequest>();
   const queries = [question, ...meaningfulTerms(question)];
 

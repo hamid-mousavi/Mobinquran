@@ -222,13 +222,20 @@ export const AIPage: React.FC<AIPageProps> = ({
       });
 
       let assistantText = '';
+      let tafsirCitations: string[] = [];
+      let socraticQuestions: string[] = [];
+
       if (response.ok) {
         const json = await response.json();
         const parsed = aiResponseSchema.safeParse(json);
         if (parsed.success && parsed.data.summary) {
           assistantText = parsed.data.summary;
+          tafsirCitations = parsed.data.tafsir_citations || [];
+          socraticQuestions = parsed.data.socratic_questions || [];
         } else if (json.summary) {
           assistantText = json.summary;
+          tafsirCitations = json.tafsir_citations || [];
+          socraticQuestions = json.socratic_questions || [];
         } else {
           assistantText = 'پاسخ دریافت شد اما قالب آن نامعتبر بود.';
         }
@@ -252,6 +259,8 @@ export const AIPage: React.FC<AIPageProps> = ({
         content: assistantText,
         timestamp: Date.now(),
         agentName: AI_AGENTS.find((a) => a.id === selectedAgentId)?.name,
+        tafsirCitations: tafsirCitations.length > 0 ? tafsirCitations : undefined,
+        socraticQuestions: socraticQuestions.length > 0 ? socraticQuestions : undefined,
       };
 
       const finalMessages = [...updatedMessages, assistantMsg];
@@ -515,6 +524,42 @@ export const AIPage: React.FC<AIPageProps> = ({
                   }`}
                 >
                   <div className="whitespace-pre-line leading-relaxed font-normal">{msg.content}</div>
+
+                  {/* نمایش منابع و مراجع تفسیری معتبر */}
+                  {msg.tafsirCitations && msg.tafsirCitations.length > 0 && (
+                    <div className="mt-3 pt-2.5 border-t border-stone-200/80 dark:border-slate-800 flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="font-bold text-teal-600 dark:text-teal-400 flex items-center gap-1 shrink-0">
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>منابع تفسیری:</span>
+                      </span>
+                      {msg.tafsirCitations.map((cite, cIdx) => (
+                        <span
+                          key={cIdx}
+                          className="px-2 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200/70 dark:border-teal-800/70 text-teal-800 dark:text-teal-300 font-medium"
+                        >
+                          {cite}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* بخش برجسته و زیبای پرسش‌های سقراطی برای تعمیق مفهوم */}
+                  {msg.socraticQuestions && msg.socraticQuestions.length > 0 && (
+                    <div className="mt-3 p-3 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-amber-950 dark:text-amber-200 space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-amber-700 dark:text-amber-400">
+                        <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                        <span>💭 پرسش‌های سقراطی برای تأمل درونی:</span>
+                      </div>
+                      <div className="space-y-1.5 text-xs leading-relaxed pr-1">
+                        {msg.socraticQuestions.map((q, qIdx) => (
+                          <div key={qIdx} className="flex items-start gap-1.5">
+                            <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">•</span>
+                            <span>{q}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div
                     className={`flex items-center justify-between mt-2 pt-1.5 border-t text-[10px] ${

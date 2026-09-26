@@ -13,6 +13,7 @@ interface SearchModalProps {
   onNavigateToPage?: (pageNumber: number, forcePageMode?: boolean) => void;
   onNavigateToJuz?: (juzNumber: number, forcePageMode?: boolean) => void;
   darkMode: boolean;
+  initialQuery?: string;
 }
 
 const POPULAR_SEARCH_KEYWORDS = [
@@ -42,6 +43,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   onNavigateToPage,
   onNavigateToJuz,
   darkMode,
+  initialQuery,
 }) => {
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<'all' | 'arabic' | 'translation'>('all');
@@ -59,6 +61,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      if (initialQuery && initialQuery.trim().length >= 2) {
+        setQuery(initialQuery);
+        executeSearch(initialQuery);
+      }
       setTimeout(() => {
         inputRef.current?.focus();
       }, 100);
@@ -70,7 +76,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       setHasSearched(false);
       setError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialQuery]);
 
   const executeSearch = async (targetQuery: string, currentScope = scope, currentSurah = selectedSurahFilter, currentJuz = selectedJuzFilter) => {
     const clean = targetQuery.trim();
@@ -81,6 +87,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       setHasSearched(false);
       setIsLoading(false);
       return;
+    }
+
+    // ذخیره در تاریخچه جستجوهای اخیر
+    try {
+      const stored = localStorage.getItem('mobin_recent_searches');
+      const list: string[] = stored ? JSON.parse(stored) : [];
+      const updated = [clean, ...list.filter((x) => x !== clean)].slice(0, 10);
+      localStorage.setItem('mobin_recent_searches', JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('mobin-searches-updated'));
+    } catch (e) {
+      // ignore storage error
     }
 
     setIsLoading(true);
