@@ -159,15 +159,6 @@ export async function retrieveRagKnowledge(
       sourceItem: quranSource,
     });
 
-    candidates.push({
-      sourceId: mizanSource.id,
-      type: 'tafsir',
-      title: mizanSource.title,
-      reference: mizanSource.reference,
-      sourceName: mizanSource.sourceName,
-      content: `محور تدبر در المیزان: علامه طباطبایی در این آیه به پیوند توحید قلبی، آرامش مؤمن و غایت بندگی تأکید می‌فرمایند.`,
-      sourceItem: mizanSource,
-    });
   }
 
   // ۲. جستجوی آفلاین در متن قرآن بر اساس کلمات کلیدی و مفاهیم پرسش
@@ -196,19 +187,10 @@ export async function retrieveRagKnowledge(
         sourceItem: qSource,
       });
 
-      // افزودن منبع تفسیری برای اولین آیه منتخب
+      // Keep commentary links available without inventing tafsir content.
       if (sourcesCatalog.filter((s) => s.type === 'tafsir').length < 2) {
         const tSource = createTafsirMizanSource(item.surahId, item.verseNumber);
         sourcesCatalog.push(tSource);
-        candidates.push({
-          sourceId: tSource.id,
-          type: 'tafsir',
-          title: tSource.title,
-          reference: tSource.reference,
-          sourceName: tSource.sourceName,
-          content: `دیدگاه تفسیری علامه طباطبایی در المیزان: توجه به غایت هدایتگری، حکمت الهی و رفع موانع کمال انسان.`,
-          sourceItem: tSource,
-        });
       }
 
       if (candidates.filter((c) => c.type === 'quran').length >= 4) break;

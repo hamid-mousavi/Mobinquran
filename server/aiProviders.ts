@@ -47,7 +47,7 @@ function configuredProviders(): ProviderName[] {
 function modelFor(provider: ProviderName): string {
   return env(`AI_MODEL_${provider.toUpperCase()}`) || {
     gemini: 'gemini-3.8-flash',
-    groq: 'llama-3.3-70b-versatile',
+    groq: 'qwen/qwen3.8-27b',
     deepseek: 'deepseek-chat',
     openrouter: 'deepseek/deepseek-chat-v3-0324',
   }[provider];
@@ -152,7 +152,7 @@ export async function generateWithFallback(request: ProviderRequest): Promise<{ 
       return { content: res.content, provider, webChunks: res.webChunks };
     } catch (error) {
       lastError = error;
-      if (error instanceof ProviderError && error.status !== 408 && error.status !== 429 && error.status < 500) {
+      if (error instanceof ProviderError && error.status !== 404 && error.status !== 408 && error.status !== 429 && error.status < 500) {
         break;
       }
     }

@@ -7,7 +7,7 @@ import { aiAskRequestSchema, aiResponseSchema, extractJsonObject } from './src/s
 import { generateWithFallback, hasConfiguredProvider, ProviderError } from './server/aiProviders';
 import { consumeDailyQuota, hashRateLimitKey } from './server/aiRateLimit';
 import { detectIntent } from './src/services/aiAgent/intentDetector';
-import { resolveSourcesList, createQuranSource, createTafsirMizanSource } from './src/services/aiAgent/sourceResolver';
+import { createQuranSource, createTafsirMizanSource } from './src/services/aiAgent/sourceResolver';
 import { SourceItem } from './src/services/aiAgent/types';
 
 function getEnvKey(name: string): string {
@@ -166,61 +166,19 @@ export function createApp() {
 
     const userQuestion = parsed.data.question.trim();
     const intent = detectIntent(userQuestion, !!parsed.data.currentVerse);
-    const enableWebSearch = intent === 'current_info' || intent === 'hybrid';
+    const enableWebSearch = false;
 
-    // ساخت کاتالوگ منابع اولیه از روی sourcesCatalog، ragCandidates، candidates یا currentVerse
+    // Sources are related reading links, not claims about what the model used.
     const knownCatalog: SourceItem[] = [];
-    if (parsed.data.sourcesCatalog && Array.isArray(parsed.data.sourcesCatalog)) {
-      for (const s of parsed.data.sourcesCatalog) {
-        if (!knownCatalog.some((k) => k.id === s.id)) {
-          knownCatalog.push(s);
-        }
-      }
-    }
-    if (parsed.data.ragCandidates && Array.isArray(parsed.data.ragCandidates)) {
-      for (const rc of parsed.data.ragCandidates) {
-        if (rc.sourceItem && !knownCatalog.some((k) => k.id === rc.sourceItem?.id)) {
-          knownCatalog.push(rc.sourceItem);
-        }
-      }
-    }
     if (parsed.data.currentVerse) {
       const sId = parsed.data.currentVerse.surahId;
       const vNum = parsed.data.currentVerse.verseNumber;
-      if (!knownCatalog.some((k) => k.id === `quran:${sId}:${vNum}`)) {
-        knownCatalog.push(createQuranSource(sId, vNum));
-      }
-      if (!knownCatalog.some((k) => k.id === `tafsir:mizan:${sId}:${vNum}`)) {
-        knownCatalog.push(createTafsirMizanSource(sId, vNum));
-      }
-    }
-    if (parsed.data.candidates && Array.isArray(parsed.data.candidates)) {
-      for (const c of parsed.data.candidates) {
-        const parts = c.ref.split(':');
-        if (parts.length === 2) {
-          const sId = parseInt(parts[0], 10);
-          const vNum = parseInt(parts[1], 10);
-          if (!knownCatalog.some((k) => k.id === `quran:${sId}:${vNum}`)) {
-            knownCatalog.push(createQuranSource(sId, vNum));
-          }
-          if (!knownCatalog.some((k) => k.id === `tafsir:mizan:${sId}:${vNum}`)) {
-            knownCatalog.push(createTafsirMizanSource(sId, vNum));
-          }
-        }
-      }
+      knownCatalog.push(createQuranSource(sId, vNum), createTafsirMizanSource(sId, vNum));
     }
 
-    let candidateContext = '';
-    if (intent !== 'casual_chat') {
-      if (parsed.data.ragCandidates && parsed.data.ragCandidates.length > 0) {
-        candidateContext = parsed.data.ragCandidates
-          .map((c) => `[شناسه_منبع: ${c.sourceId}] (${c.sourceName} | ${c.reference})\n${c.content}`)
-          .join('\n\n---\n\n');
-      } else if (parsed.data.candidates && parsed.data.candidates.length > 0) {
-        candidateContext = parsed.data.candidates
-          .map((candidate) => `[شناسه_منبع: quran:${candidate.ref}] ${candidate.text_fa}`)
-          .join('\n');
-      }
+    let verseContext = '';
+    if (parsed.data.currentVerse) {
+      verseContext = `آیه‌ای که کاربر برای گفتگو انتخاب کرده است (فقط زمینهٔ گفتگو):\n${parsed.data.currentVerse.textArabic || ''}\nترجمهٔ نمایش‌داده‌شده در برنامه: ${parsed.data.currentVerse.translationMakarem || ''}`;
     }
 
     const historyContext = (parsed.data.history || [])
@@ -245,44 +203,44 @@ ${agentApproachText}
 - اگر Intent برابر «casual_chat» است (سلام، احوال‌پرسی، تشکر، شوخی، سوال درباره هویت دستیار):
   به هیچ وجه پاسخ طولانی، آیات ناگهانی و متن‌های حجیم ارسال نکن! پاسخی کوتاه، بسیار گرم و صمیمانه بده (مثلاً: «سلام و درود پروردگار بر شما دوست گرامی...») و مشتاقانه بپرس مایل است امروز پیرامون کدام مفهوم، سوره، دغدغه زندگی یا موضوع قرآنی با هم گفتگو کنیم. آرایه used_source_ids را خالی [] بگذار.
 - اگر Intent برابر «quran_inquiry» است:
-  از کانتکست ارائه‌شده استفاده کن. مفهوم را ساده و شفاف توضیح بده. در صورت نیاز چند آیه یا مفهوم را با هم تحلیل کن و پاسخ متناسب با گفت‌وگو تولید کن.
+  آزادانه بر پایهٔ دانش خودت پاسخ بده. اگر آیهٔ انتخاب‌شده در زمینه آمده، آن را موضوع گفتگو بدان؛ هیچ متن بازیابی‌شده یا منبعی در اختیار تو نیست. دربارهٔ نقل‌قول دقیق، شماره آیه یا انتساب دیدگاه به مفسر در صورت اطمینان نداشتن ادعای قطعی نکن.
 - اگر Intent برابر «current_info» است:
-  با اتکا به جستجوی وب پاسخی مستند، خلاصه و دقیق بده.
+  اگر اطلاعات از دانش خودت کافی نیست یا ممکن است تغییر کرده باشد، محدودیت دانسته‌هایت را شفاف بگو و ادعای جستجوی وب نکن.
 - اگر Intent برابر «hybrid» است:
-  پیوند آموزه‌های وحیانی را با مفاهیم معاصر به صورت خردورزانه و روشن تبیین کن.
+  پیوند موضوع را با مفاهیم معاصر به صورت خردورزانه و روشن تبیین کن، بدون ادعای دسترسی به منبع بیرونی.
 
-۲. تفکیک دقیق بخش‌های پاسخ (ضروری):
-بین «متن صریح منبع»، «تحلیل مفهومی AI» و «برداشت و پیشنهاد کاربردی AI» تفاوت کامل و شفاف قائل شو. هرگز تحلیل خودت را به عنوان متن وحی یا کلام مفسر جا نزن!
-- direct_answer: پاسخ مستقیم، گفت‌وگومحور، خلاصه و طبیعی به سوال کاربر (۱ الی ۳ پاراگراف کوتاه).
-- source_quote: (در صورت وجود آیه یا روایت) فقط متن صریح و کوتاه آیه شریفه یا روایت بدون تصرف.
-- ai_analysis: شرح و تحلیل مفهومی هوش مصنوعی از پیام آیه و نکته تفسیری معتبر (المیزان، نمونه).
-- practical_takeaway: برداشت و پیشنهاد کاربردی یا سبک زندگی برای امروز.
-- socratic_questions: در انتهای تحلیل، ۱ یا ۲ سوال عمیق و درون‌نگر سقراطی برای تأمل کاربر بیاور.
-- used_source_ids: شناسه‌های منابعی که در پاسخ به کار رفته‌اند (مانند quran:2:255 یا tafsir:mizan:2:255). توجه: تو هرگز نباید URL یا لینک وب بسازی! فقط شناسه بده.
+۲. پاسخ کوتاه و مستند:
+- summary: پاسخ مستقیم و کوتاه به پرسش، حداکثر سه جمله و بر پایهٔ دانش خودت؛ آن را به مفسری نسبت نده مگر کاربر متن مشخصی از او داده باشد.
+- direct_answer: خالی بگذار؛ خلاصه در summary کافی است.
+- source_quote: خالی بگذار مگر کاربر صریحاً متن آیه یا روایت را خواسته باشد. ترجمه‌ای را که رابط قبلاً نمایش داده تکرار نکن.
+- ai_analysis: در صورت نیاز، حداکثر دو جمله تحلیل یا تأمل مستقل ارائه کن؛ روشن باشد برداشت خود هوش مصنوعی است، نه تفسیر رسمی.
+- practical_takeaway: خالی بگذار مگر کاربر صریحاً کاربرد عملی خواسته باشد.
+- socratic_questions: حداکثر یک پرسش کوتاه، فقط وقتی به گفتگو کمک می‌کند.
+- used_source_ids: همیشه آرایهٔ خالی بگذار؛ هیچ منبع بیرونی برای این پاسخ بازیابی نشده است.
 
 ۳. قالب خروجی الزامی:
 فقط یک شیء JSON معتبر مطابق ساختار زیر بدون هیچ متن اضافی:
 {
   "intent": "${intent}",
   "language": "fa",
-  "summary": "پاسخ کلی، روان و گفت‌وگومحور",
-  "direct_answer": "پاسخ مستقیم و صمیمی",
-  "source_quote": "متن صریح آیه در صورت نیاز",
-  "ai_analysis": "تحلیل مفهومی و تفسیری",
-  "practical_takeaway": "برداشت کاربردی برای زندگی",
-  "socratic_questions": ["پرسش سقراطی برای تأمل درونی"],
-  "used_source_ids": ["quran:2:255"],
+  "summary": "پاسخ مستقیم کوتاه بر پایه دانش مدل",
+  "direct_answer": "",
+  "source_quote": "",
+  "ai_analysis": "حداکثر دو جمله تحلیل مستقل AI",
+  "practical_takeaway": "",
+  "socratic_questions": [],
+  "used_source_ids": [],
   "confidence": "high",
   "needs_human_scholar": false,
   "disclaimers": ["تولیدشده با هوش مصنوعی؛ جهت فتاوا و احکام شرعی به مراجع عظام رجوع فرمایید."]
 }`;
-    const user = `${historyContext ? `تاریخچه گفتگو:\n${historyContext}\n\n` : ''}پرسش کاربر:\n${userQuestion}${candidateContext ? `\n\nمنابع و کاندیداها:\n${candidateContext}` : ''}`;
+    const user = `${historyContext ? `تاریخچه گفتگو:\n${historyContext}\n\n` : ''}پرسش کاربر:\n${userQuestion}${verseContext ? `\n\n${verseContext}` : ''}`;
 
     try {
       let generated = await generateWithFallback({
         system,
         user,
-        maxTokens: 1400,
+        maxTokens: 800,
         enableWebSearch,
       });
       let output = aiResponseSchema.safeParse(extractJsonObject(generated.content));
@@ -290,38 +248,39 @@ ${agentApproachText}
       if (!output.success) {
         generated = await generateWithFallback({
           system,
-          user: `پاسخ قبلی ساختار معتبر نداشت. فقط JSON مطابق schema را بازسازی کن و هیچ متن خارج از قالب نیاور.\nپاسخ قبلی:\n${generated.content}`,
-          maxTokens: 1400,
+          user: `پاسخ قبلی با قرارداد خروجی سازگار نبود. این خطاها را اصلاح کن و فقط JSON معتبر برگردان: ${output.error.issues.map((issue) => `${issue.path.join('.') || 'response'} (${issue.code})`).join(', ')}\nپاسخ قبلی:\n${generated.content}`,
+          maxTokens: 800,
           enableWebSearch,
         });
         output = aiResponseSchema.safeParse(extractJsonObject(generated.content));
       }
 
       if (!output.success) {
-        console.warn(JSON.stringify({ event: 'ai_structured_output_invalid', requestId }));
+        console.warn(JSON.stringify({
+          event: 'ai_structured_output_invalid',
+          requestId,
+          issues: output.error.issues.map((issue) => ({ path: issue.path.join('.'), code: issue.code })),
+        }));
         return res.status(502).json({ error: 'پاسخ ساخت‌یافتهٔ دستیار معتبر نبود.', code: 'invalid_model_output', requestId });
       }
-
-      // حل‌وفصل و استخراج منابع ساختاریافته قابل کلیک همراه با Deep Link
-      const resolvedSources = resolveSourcesList(
-        output.data.used_source_ids || [],
-        knownCatalog,
-        generated.webChunks
-      );
 
       console.info(JSON.stringify({ event: 'ai_request', requestId, provider: generated.provider, used: quota.used, intent }));
       return res.json({
         ...output.data,
         intent,
-        sources: resolvedSources,
+        sources: knownCatalog,
         requestId,
       });
     } catch (error) {
       const status = error instanceof ProviderError && error.status === 429 ? 429 : 502;
-      console.warn(JSON.stringify({ event: 'ai_provider_error', requestId, status }));
+      const provider = error instanceof ProviderError ? error.provider : undefined;
+      const providerStatus = error instanceof ProviderError ? error.status : undefined;
+      console.warn(JSON.stringify({ event: 'ai_provider_error', requestId, status, provider, providerStatus }));
       return res.status(status).json({
         error: status === 429 ? 'سرویس هوش مصنوعی موقتاً سهمیه ندارد.' : 'ارتباط با دستیار هوشمند برقرار نشد.',
         code: status === 429 ? 'provider_rate_limited' : 'upstream_error',
+        provider,
+        providerStatus,
         requestId,
       });
     }

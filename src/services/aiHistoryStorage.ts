@@ -7,6 +7,7 @@ export interface AiChatMessage {
   timestamp: number;
   agentName?: string;
   intent?: UserIntent;
+  summary?: string;
   directAnswer?: string;
   sourceQuote?: string;
   aiAnalysis?: string;

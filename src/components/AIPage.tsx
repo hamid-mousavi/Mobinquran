@@ -23,10 +23,10 @@ import {
   MessageSquare,
   Quote,
   Lightbulb,
+  Save,
 } from 'lucide-react';
 import { Verse, Surah } from '../types';
 import { aiResponseSchema } from '../services/aiContract';
-import { retrieveRagKnowledge } from '../services/aiAgent/ragRetriever';
 import { SourceItem, UserIntent } from '../services/aiAgent/types';
 import {
   AiChatSession,
@@ -37,6 +37,7 @@ import {
   clearAllAiHistory,
 } from '../services/aiHistoryStorage';
 import { toPersianDigits } from '../utils/textNormalization';
+import { getVerseReflection, saveVerseReflection } from '../services/aiReflectionStorage';
 
 interface AIPageProps {
   currentVerse?: Verse | null;
@@ -113,6 +114,9 @@ export const AIPage: React.FC<AIPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [reflectionText, setReflectionText] = useState('');
+  const [savedReflection, setSavedReflection] = useState('');
+  const [reflectionStatus, setReflectionStatus] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -124,6 +128,20 @@ export const AIPage: React.FC<AIPageProps> = ({
   useEffect(() => {
     reloadHistory();
   }, []);
+
+  useEffect(() => {
+    if (!currentVerse) {
+      setReflectionText('');
+      setSavedReflection('');
+      setReflectionStatus('');
+      return;
+    }
+
+    const note = getVerseReflection(currentVerse.surahId, currentVerse.verseNumber);
+    setReflectionText(note);
+    setSavedReflection(note);
+    setReflectionStatus('');
+  }, [currentVerse?.surahId, currentVerse?.verseNumber]);
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -144,7 +162,9 @@ export const AIPage: React.FC<AIPageProps> = ({
   }, [currentVerse, currentSurah, selectedAgentId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 1 || isLoading) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, isLoading]);
 
   const handleStartNewChat = () => {
@@ -203,8 +223,6 @@ export const AIPage: React.FC<AIPageProps> = ({
     setIsLoading(true);
 
     try {
-      const { candidates: ragCandidates, sourcesCatalog } = await retrieveRagKnowledge(query, currentVerse);
-
       const deviceStorageKey = 'quran_ai_device_id';
       let deviceId = localStorage.getItem(deviceStorageKey);
       if (!deviceId) {
@@ -234,23 +252,13 @@ export const AIPage: React.FC<AIPageProps> = ({
                 translationMakarem: currentVerse.translationMakarem,
               }
             : null,
-          ragCandidates,
-          sourcesCatalog,
-          candidates: ragCandidates
-            .filter((c) => c.type === 'quran')
-            .map((c) => {
-              const match = c.sourceId.match(/^quran:(\d+:\d+)$/);
-              return {
-                ref: match ? match[1] : '1:1',
-                text_fa: c.content,
-              };
-            }),
           lang: 'fa',
           agent: selectedAgentId,
         }),
       });
 
       let assistantText = '';
+      let summary: string | undefined;
       let directAnswer: string | undefined;
       let sourceQuote: string | undefined;
       let aiAnalysis: string | undefined;
@@ -266,6 +274,7 @@ export const AIPage: React.FC<AIPageProps> = ({
         const data = (parsed.success ? parsed.data : json) as any;
 
         assistantText = data.summary || data.direct_answer || '';
+        summary = data.summary;
         directAnswer = data.direct_answer;
         sourceQuote = data.source_quote;
         aiAnalysis = data.ai_analysis;
@@ -275,14 +284,26 @@ export const AIPage: React.FC<AIPageProps> = ({
         sources = data.sources || [];
         intent = data.intent;
       } else {
-        if (ragCandidates.length > 0) {
-          assistantText = `در پرتو پرسش شما و منابع متناظر قرآنی و روایی، این آموزه‌ها را می‌توان تدبّر کرد:\n\n${ragCandidates
-            .map((c) => `• ${c.sourceName} (${c.reference}):\n${c.content}`)
-            .join('\n\n')}`;
-          sources = sourcesCatalog;
-        } else {
-          assistantText =
-            'پاسخ سرور در دسترس نبود. لطفاً اتصال اینترنت خود را بررسی فرمایید و مجدداً امتحان کنید.';
+        const errorPayload = await response.json().catch(() => null);
+        const errorMessages: Record<string, string> = {
+          ai_unavailable: 'سرویس هوش مصنوعی روی سرور در دسترس یا پیکربندی نشده است.',
+          daily_limit_reached: 'سهمیهٔ روزانهٔ گفتگو تمام شده است.',
+          quota_unavailable: 'سرویس سهمیه‌بندی سرور در دسترس نیست.',
+          provider_rate_limited: 'سرویس هوش مصنوعی موقتاً درخواست‌های زیادی دریافت کرده است.',
+          invalid_model_output: 'پاسخ مدل با قالب مورد انتظار سازگار نبود. لطفاً دوباره تلاش کنید.',
+          upstream_error: 'سرور نتوانست به سرویس هوش مصنوعی وصل شود.',
+          invalid_request: 'درخواست گفتگو معتبر نبود. صفحه را تازه‌سازی و دوباره امتحان کنید.',
+        };
+        const code = typeof errorPayload?.code === 'string' ? errorPayload.code : '';
+        assistantText = errorMessages[code]
+          || (typeof errorPayload?.error === 'string'
+            ? errorPayload.error
+            : 'پاسخ سرور در دسترس نبود. اتصال اینترنت را بررسی و دوباره امتحان کنید.');
+        if (typeof errorPayload?.provider === 'string' && Number.isInteger(errorPayload?.providerStatus)) {
+          assistantText += `\nجزئیات اتصال: ${errorPayload.provider}، کد ${errorPayload.providerStatus}`;
+        }
+        if (typeof errorPayload?.requestId === 'string') {
+          assistantText += `\nشناسهٔ پیگیری: ${errorPayload.requestId}`;
         }
       }
 
@@ -290,6 +311,7 @@ export const AIPage: React.FC<AIPageProps> = ({
         id: `msg_ai_${Date.now()}`,
         role: 'assistant',
         content: assistantText,
+        summary,
         directAnswer,
         sourceQuote,
         aiAnalysis,
@@ -357,6 +379,18 @@ export const AIPage: React.FC<AIPageProps> = ({
 
     if (src.url) {
       window.open(src.url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleSaveReflection = () => {
+    if (!currentVerse) return;
+    const normalizedText = reflectionText.trim();
+    if (saveVerseReflection(currentVerse.surahId, currentVerse.verseNumber, normalizedText)) {
+      setReflectionText(normalizedText);
+      setSavedReflection(normalizedText);
+      setReflectionStatus(normalizedText ? 'یادداشت شخصی به این آیه پیوند خورد.' : 'یادداشت این آیه حذف شد.');
+    } else {
+      setReflectionStatus('ذخیره انجام نشد. فضای ذخیره‌سازی مرورگر را بررسی کنید.');
     }
   };
 
@@ -563,6 +597,75 @@ export const AIPage: React.FC<AIPageProps> = ({
       {/* ناحیه اسکرول پیام‌های گفتگو - فول‌اسکرین در سراسر ارتفاع صفحه */}
       <main className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 space-y-4">
         <div className="max-w-3xl mx-auto space-y-4">
+          {currentVerse && currentSurah && (
+            <section className="rounded-2xl border border-teal-200/80 dark:border-teal-900 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+              <div className="p-4 sm:p-5 border-b border-stone-100 dark:border-slate-800 bg-teal-50/70 dark:bg-teal-950/25">
+                <div className="flex items-center gap-2 text-teal-800 dark:text-teal-300">
+                  <Sparkles className="w-4 h-4" />
+                  <h2 className="font-bold text-sm sm:text-base">با این آیه فکر کن</h2>
+                </div>
+                <p className="mt-3 text-right text-xl sm:text-2xl leading-loose font-['Amiri',serif] text-slate-900 dark:text-slate-100">
+                  {currentVerse.textArabic}
+                </p>
+                <p className="mt-2 text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                  {currentVerse.translationMakarem}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      window.history.pushState(null, '', `/quran/${currentVerse.surahId}/${currentVerse.verseNumber}`);
+                    } catch {}
+                    onNavigateToVerse?.(currentVerse.surahId, currentVerse.verseNumber);
+                  }}
+                  className="mt-3 inline-flex items-center gap-1 text-[11px] text-teal-700 dark:text-teal-300 hover:underline"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>قرآن کریم، {currentSurah.namePersian}، آیه {toPersianDigits(currentVerse.verseNumber)}</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              </div>
+
+              <div className="p-4 sm:p-5 space-y-4">
+                <div>
+                  <label htmlFor="verse-reflection-note" className="block text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">
+                    یک جمله‌ای که از این آیه با خودت می‌بری بنویس.
+                  </label>
+                  <textarea
+                    id="verse-reflection-note"
+                    value={reflectionText}
+                    onChange={(event) => {
+                      setReflectionText(event.target.value);
+                      setReflectionStatus('');
+                    }}
+                    rows={2}
+                    maxLength={500}
+                    placeholder="مثلاً: قبل از واکنش، صبر کنم."
+                    className="mt-2 w-full resize-y rounded-xl border border-stone-300 dark:border-slate-700 bg-stone-50 dark:bg-slate-950 px-3 py-2.5 text-xs sm:text-sm leading-relaxed text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p aria-live="polite" className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {reflectionStatus || `یادداشت خصوصی و پیوندخورده به این آیه · ${toPersianDigits(reflectionText.length)}/۵۰۰`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleSaveReflection}
+                      disabled={reflectionText.trim() === savedReflection}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-40"
+                    >
+                      {reflectionText.trim() === savedReflection && savedReflection ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>ذخیره یادداشت</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
           {messages.map((msg) => {
             const isUser = msg.role === 'user';
             const isCopied = copiedMsgId === msg.id;
@@ -617,9 +720,16 @@ export const AIPage: React.FC<AIPageProps> = ({
                     </div>
                   )}
 
-                  {/* ۱. پاسخ مستقیم، کوتاه و گفت‌وگومحور */}
+                  {/* Keep the model's own response distinct from related sources. */}
                   <div className="whitespace-pre-line leading-relaxed font-normal">
-                    {msg.directAnswer || msg.content}
+                    {(msg.summary || msg.directAnswer || msg.content) && (
+                      <>
+                        {(msg.summary || msg.directAnswer) && (
+                          <div className="mb-1 font-bold text-teal-700 dark:text-teal-300">پاسخ دستیار:</div>
+                        )}
+                        {msg.summary || msg.directAnswer || msg.content}
+                      </>
+                    )}
                   </div>
 
                   {/* ۲. تفکیک صریح: متن منبع وحیانی یا روایی */}
@@ -635,12 +745,12 @@ export const AIPage: React.FC<AIPageProps> = ({
                     </div>
                   )}
 
-                  {/* ۳. تفکیک صریح: تحلیل و جمع‌بندی هوش مصنوعی */}
+                  {/* AI interpretation follows the linked source references. */}
                   {msg.aiAnalysis && msg.aiAnalysis.trim() && (
                     <div className="mt-3 p-3 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-800/70 space-y-1.5">
                       <div className="flex items-center gap-1.5 font-bold text-[11px] text-indigo-800 dark:text-indigo-300">
                         <Lightbulb className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                        <span>تحلیل و جمع‌بندی مفهومی هوش مصنوعی:</span>
+                        <span>تحلیل کوتاه هوش مصنوعی:</span>
                       </div>
                       <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-300 pr-1 whitespace-pre-line">
                         {msg.aiAnalysis}
@@ -697,70 +807,32 @@ export const AIPage: React.FC<AIPageProps> = ({
                     </div>
                   )}
 
-                  {/* ۷. بخش کلیدی «📚 منابع قابل کلیک» با پیوندهای مستقیم و عمیق */}
                   {msg.sources && msg.sources.length > 0 && (
                     <div className="mt-3.5 pt-3 border-t border-stone-200/80 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5 font-bold text-xs text-teal-700 dark:text-teal-400">
                         <BookOpen className="w-3.5 h-3.5 shrink-0" />
-                        <span>📚 منابع:</span>
+                        <span>منابع مرتبط برای مطالعه (نه لزوماً منابع استفاده‌شده در پاسخ):</span>
                       </div>
-                      <div className="grid grid-cols-1 gap-1.5">
-                        {msg.sources.map((source, sIdx) => {
-                          const isQuran = source.type === 'quran' || source.isInternal;
-                          return (
-                            <button
-                              key={source.id || sIdx}
-                              onClick={() => handleSourceClick(source)}
-                              type="button"
-                              className="group flex items-center justify-between gap-2 p-2 sm:p-2.5 rounded-xl text-right transition-all border border-stone-200/90 dark:border-slate-800 hover:border-teal-500/70 dark:hover:border-teal-500/70 bg-stone-50/90 hover:bg-white dark:bg-slate-800/60 dark:hover:bg-slate-800 text-xs shadow-2xs active:scale-[0.99] cursor-pointer"
-                              title={isQuran ? 'باز کردن آیه در قرآن مبین' : 'مشاهده منبع در پنجره جدید'}
-                            >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div
-                                  className={`p-1.5 rounded-lg shrink-0 ${
-                                    source.type === 'quran'
-                                      ? 'bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300'
-                                      : source.type === 'tafsir'
-                                      ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300'
-                                      : source.type === 'hadith'
-                                      ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300'
-                                      : 'bg-sky-100 dark:bg-sky-900/60 text-sky-700 dark:text-sky-300'
-                                  }`}
-                                >
-                                  {source.type === 'quran' ? (
-                                    <BookOpen className="w-3.5 h-3.5" />
-                                  ) : source.type === 'tafsir' ? (
-                                    <Quote className="w-3.5 h-3.5" />
-                                  ) : source.type === 'hadith' ? (
-                                    <ShieldCheck className="w-3.5 h-3.5" />
-                                  ) : (
-                                    <Globe className="w-3.5 h-3.5" />
-                                  )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="font-semibold text-slate-800 dark:text-slate-100 truncate">
-                                    {source.title}
-                                  </div>
-                                  <div className="text-[10px] text-slate-400 dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
-                                    <span>{source.sourceName}</span>
-                                    {source.reference && (
-                                      <>
-                                        <span>•</span>
-                                        <span>{source.reference}</span>
-                                      </>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1 shrink-0 text-[11px] font-medium px-2 sm:px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 border border-stone-200 dark:border-slate-600 text-teal-700 dark:text-teal-300 group-hover:bg-teal-600 group-hover:text-white transition-all">
-                                <span>{isQuran ? 'باز کردن آیه' : 'مشاهده منبع'}</span>
-                                <ExternalLink className="w-3 h-3 shrink-0" />
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {msg.sources.map((source) => {
+                        const isQuran = source.type === 'quran' || source.isInternal;
+                        return (
+                          <button
+                            key={source.id}
+                            onClick={() => handleSourceClick(source)}
+                            type="button"
+                            className="flex w-full items-center justify-between gap-2 rounded-lg border border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800/60 p-2.5 text-right hover:border-teal-500/70 hover:bg-white dark:hover:bg-slate-800"
+                            title={isQuran ? 'باز کردن آیه در قرآن مبین' : 'مشاهده منبع در پنجره جدید'}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{source.title}</span>
+                              <span className="mt-0.5 block truncate text-[10px] text-slate-500 dark:text-slate-400">
+                                {source.sourceName}{source.reference ? ` · ${source.reference}` : ''}
+                              </span>
+                            </span>
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-teal-700 dark:text-teal-300" />
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -868,7 +940,7 @@ export const AIPage: React.FC<AIPageProps> = ({
           </form>
 
           <p className="text-[10px] text-center text-slate-400">
-            پاسخ‌ها جنبهٔ تدبّر و انس با قرآن دارند و جایگزین فتوای فقهی یا نظرات اجتهادی علما نیستند.
+            پاسخ از دانش هوش مصنوعی است؛ منابع پیوندخورده برای مطالعه‌اند و لزوماً مبنای پاسخ نیستند. این گفتگو جایگزین فتوا یا نظر اجتهادی نیست.
           </p>
         </div>
       </footer>

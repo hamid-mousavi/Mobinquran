@@ -155,7 +155,7 @@ export function createTafsirMizanSource(surahId: number, verseNumber: number): S
     type: 'tafsir',
     reference: `المیزان فی تفسیر القرآن (علامه طباطبایی)، ذیل ${surah.arabic}:${toPersianDigits(verseNumber)}`,
     sourceName: 'تفسیر المیزان (علامه سید محمدحسین طباطبایی)',
-    url: `https://quran.inoor.ir/fa/verse/${surahId}/${verseNumber}/tafsir/almizan`,
+    url: `https://quran.inoor.ir/fa/ayah/${surahId}/${verseNumber}/commentary`,
     isInternal: false,
     metadata: {
       surahId,
@@ -176,7 +176,7 @@ export function createTafsirNemonehSource(surahId: number, verseNumber: number):
     type: 'tafsir',
     reference: `تفسیر نمونه، ذیل ${surah.arabic}:${toPersianDigits(verseNumber)}`,
     sourceName: 'تفسیر نمونه (آیت‌الله العظمی مکارم شیرازی و دانشمندان)',
-    url: `https://quran.inoor.ir/fa/verse/${surahId}/${verseNumber}/tafsir/nemoneh`,
+    url: `https://quran.inoor.ir/fa/ayah/${surahId}/${verseNumber}/commentary`,
     isInternal: false,
     metadata: {
       surahId,

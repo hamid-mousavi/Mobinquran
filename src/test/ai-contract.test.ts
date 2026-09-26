@@ -31,6 +31,18 @@ describe('AI RAG contract', () => {
     expect(result.success).toBe(true);
   });
 
+  it('bounds reflection response sections to keep answers concise', () => {
+    const result = aiResponseSchema.safeParse({
+      summary: 'x'.repeat(601),
+      ai_analysis: 'تحلیل کوتاه',
+      socratic_questions: [],
+      confidence: 'medium',
+      disclaimers: ['تولیدشده با هوش مصنوعی.'],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('extracts JSON from a fenced model response', () => {
     expect(extractJsonObject('```json\n{"ok":true}\n```')).toEqual({ ok: true });
   });
