@@ -1,11 +1,19 @@
+import { SourceItem, UserIntent } from './aiAgent/types';
+
 export interface AiChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   agentName?: string;
+  intent?: UserIntent;
+  directAnswer?: string;
+  sourceQuote?: string;
+  aiAnalysis?: string;
+  practicalTakeaway?: string;
   tafsirCitations?: string[];
   socraticQuestions?: string[];
+  sources?: SourceItem[];
 }
 
 export interface AiChatSession {

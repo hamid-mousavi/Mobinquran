@@ -7,12 +7,59 @@ export const aiCandidateSchema = z.object({
   text_fa: z.string().trim().min(1).max(1500),
 });
 
+export const sourceItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  type: z.enum(['quran', 'tafsir', 'hadith', 'web']),
+  reference: z.string(),
+  sourceName: z.string(),
+  url: z.string(),
+  isInternal: z.boolean(),
+  metadata: z
+    .object({
+      surahId: z.number().optional(),
+      verseNumber: z.number().optional(),
+      surahName: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const ragCandidateSchema = z.object({
+  sourceId: z.string(),
+  type: z.enum(['quran', 'tafsir', 'hadith', 'web']),
+  title: z.string(),
+  reference: z.string(),
+  sourceName: z.string(),
+  content: z.string(),
+  sourceItem: sourceItemSchema.optional(),
+});
+
 export const aiAskRequestSchema = z.object({
-  question: z.string().trim().min(1).max(500),
-  candidates: z.array(aiCandidateSchema).max(12).default([]),
+  question: z.string().trim().min(1).max(1000),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string(),
+      })
+    )
+    .optional()
+    .default([]),
+  currentVerse: z
+    .object({
+      surahId: z.number(),
+      verseNumber: z.number(),
+      textArabic: z.string().optional(),
+      translationMakarem: z.string().optional(),
+    })
+    .optional()
+    .nullable(),
+  ragCandidates: z.array(ragCandidateSchema).max(16).optional().default([]),
+  sourcesCatalog: z.array(sourceItemSchema).max(20).optional().default([]),
+  candidates: z.array(aiCandidateSchema).max(12).optional().default([]),
   lang: z.enum(['fa', 'en', 'ur']).default('fa'),
   agent: z.enum(['moral', 'conceptual', 'literary', 'rational']).optional().default('moral'),
-}).strict();
+});
 
 export const aiVerseAnswerSchema = z.object({
   ref: verseRefSchema,
@@ -21,11 +68,18 @@ export const aiVerseAnswerSchema = z.object({
 });
 
 export const aiResponseSchema = z.object({
+  intent: z.enum(['casual_chat', 'quran_inquiry', 'current_info', 'hybrid']).default('quran_inquiry'),
   language: z.enum(['fa', 'en', 'ur']).default('fa'),
-  summary: z.string().trim().min(1).max(3500),
-  verses: z.array(aiVerseAnswerSchema).max(12).default([]),
-  tafsir_citations: z.array(z.string().trim().min(1).max(300)).default([]),
-  socratic_questions: z.array(z.string().trim().min(1).max(500)).optional().default([]),
+  summary: z.string().trim().min(1).max(4000),
+  direct_answer: z.string().trim().optional(),
+  source_quote: z.string().trim().optional(),
+  ai_analysis: z.string().trim().optional(),
+  practical_takeaway: z.string().trim().optional(),
+  socratic_questions: z.array(z.string().trim()).optional().default([]),
+  used_source_ids: z.array(z.string().trim()).optional().default([]),
+  sources: z.array(sourceItemSchema).default([]),
+  tafsir_citations: z.array(z.string().trim()).optional().default([]),
+  verses: z.array(aiVerseAnswerSchema).max(12).optional().default([]),
   confidence: z
     .string()
     .transform((val) => val.toLowerCase())
@@ -39,6 +93,7 @@ export const aiResponseSchema = z.object({
     .default(['تولیدشده با هوش مصنوعی؛ این دستیار مرجع فتوا نیست.']),
 });
 
+export type SourceItemContract = z.infer<typeof sourceItemSchema>;
 export type AiAskRequest = z.infer<typeof aiAskRequestSchema>;
 export type AiResponse = z.infer<typeof aiResponseSchema>;
 export type AiCandidate = z.infer<typeof aiCandidateSchema>;

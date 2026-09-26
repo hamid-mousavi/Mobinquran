@@ -6,6 +6,9 @@ import { randomUUID } from 'node:crypto';
 import { aiAskRequestSchema, aiResponseSchema, extractJsonObject } from './src/services/aiContract';
 import { generateWithFallback, hasConfiguredProvider, ProviderError } from './server/aiProviders';
 import { consumeDailyQuota, hashRateLimitKey } from './server/aiRateLimit';
+import { detectIntent } from './src/services/aiAgent/intentDetector';
+import { resolveSourcesList, createQuranSource, createTafsirMizanSource } from './src/services/aiAgent/sourceResolver';
+import { SourceItem } from './src/services/aiAgent/types';
 
 function getEnvKey(name: string): string {
   return (process.env[name] || '').trim();
@@ -161,13 +164,70 @@ export function createApp() {
       });
     }
 
-    const cleanQuestion = parsed.data.question.trim().toLowerCase();
-    const isGreeting = /^(سلام|درود|سلام علیکم|سلام بر شما|خوبی|چطوری|درود بر شما|وقت بخیر|صبح بخیر|عصر بخیر|شب بخیر|یا علی|یا حق)[\s!.,،]*$/i.test(cleanQuestion);
+    const userQuestion = parsed.data.question.trim();
+    const intent = detectIntent(userQuestion, !!parsed.data.currentVerse);
+    const enableWebSearch = intent === 'current_info' || intent === 'hybrid';
 
-    const candidateRefs = new Set(parsed.data.candidates.map((candidate) => candidate.ref));
-    const candidateContext = parsed.data.candidates
-      .map((candidate) => `[${candidate.ref}] ${candidate.text_fa}`)
+    // ساخت کاتالوگ منابع اولیه از روی sourcesCatalog، ragCandidates، candidates یا currentVerse
+    const knownCatalog: SourceItem[] = [];
+    if (parsed.data.sourcesCatalog && Array.isArray(parsed.data.sourcesCatalog)) {
+      for (const s of parsed.data.sourcesCatalog) {
+        if (!knownCatalog.some((k) => k.id === s.id)) {
+          knownCatalog.push(s);
+        }
+      }
+    }
+    if (parsed.data.ragCandidates && Array.isArray(parsed.data.ragCandidates)) {
+      for (const rc of parsed.data.ragCandidates) {
+        if (rc.sourceItem && !knownCatalog.some((k) => k.id === rc.sourceItem?.id)) {
+          knownCatalog.push(rc.sourceItem);
+        }
+      }
+    }
+    if (parsed.data.currentVerse) {
+      const sId = parsed.data.currentVerse.surahId;
+      const vNum = parsed.data.currentVerse.verseNumber;
+      if (!knownCatalog.some((k) => k.id === `quran:${sId}:${vNum}`)) {
+        knownCatalog.push(createQuranSource(sId, vNum));
+      }
+      if (!knownCatalog.some((k) => k.id === `tafsir:mizan:${sId}:${vNum}`)) {
+        knownCatalog.push(createTafsirMizanSource(sId, vNum));
+      }
+    }
+    if (parsed.data.candidates && Array.isArray(parsed.data.candidates)) {
+      for (const c of parsed.data.candidates) {
+        const parts = c.ref.split(':');
+        if (parts.length === 2) {
+          const sId = parseInt(parts[0], 10);
+          const vNum = parseInt(parts[1], 10);
+          if (!knownCatalog.some((k) => k.id === `quran:${sId}:${vNum}`)) {
+            knownCatalog.push(createQuranSource(sId, vNum));
+          }
+          if (!knownCatalog.some((k) => k.id === `tafsir:mizan:${sId}:${vNum}`)) {
+            knownCatalog.push(createTafsirMizanSource(sId, vNum));
+          }
+        }
+      }
+    }
+
+    let candidateContext = '';
+    if (intent !== 'casual_chat') {
+      if (parsed.data.ragCandidates && parsed.data.ragCandidates.length > 0) {
+        candidateContext = parsed.data.ragCandidates
+          .map((c) => `[شناسه_منبع: ${c.sourceId}] (${c.sourceName} | ${c.reference})\n${c.content}`)
+          .join('\n\n---\n\n');
+      } else if (parsed.data.candidates && parsed.data.candidates.length > 0) {
+        candidateContext = parsed.data.candidates
+          .map((candidate) => `[شناسه_منبع: quran:${candidate.ref}] ${candidate.text_fa}`)
+          .join('\n');
+      }
+    }
+
+    const historyContext = (parsed.data.history || [])
+      .slice(-4)
+      .map((m) => `${m.role === 'user' ? 'کاربر' : 'دستیار'}: ${m.content.slice(0, 250)}`)
       .join('\n');
+
     const agentApproachText = {
       moral: 'رویکرد کاربردی و اخلاقی: در سبک زندگی، آرامش دل، امیدبخشی و اخلاق فردی و اجتماعی متمرکز شو.',
       conceptual: 'رویکرد تدبّر مفهومی: در پیام‌های کلی، پیوند آیه با سایر آموزه‌های قرآن و معارف توحیدی متمرکز شو.',
@@ -175,51 +235,64 @@ export function createApp() {
       rational: 'رویکرد عقلی و اعتقادی: بر پاسخ‌های استدلالی و باورهای فکری در پرتو آیه متمرکز شو.',
     }[parsed.data.agent || 'moral'];
 
-    const system = `تو راهنما، دوست و دستیار حکیم و مهربان تدبّر در قرآن کریم (قرآن مبین) هستی.
-شخصیت تو: صمیمی، دلسوز، فرهیخته، محترم، آرامش‌بخش، دانشمند و ترغیب‌کننده به تفکر و خردورزی در کلام وحی. تو مفتی نیستی و فتوا صادر نمی‌کنی، بلکه دل و اندیشه کاربر را به پیام‌های نورانی الهی پیوند می‌زنی.
+    const system = `تو «دستیار مرکزی و هوشمند تدبّر در قرآن مبین» هستی.
+ویژگی‌های بنیادین: گفت‌وگومحور، صمیمی، دانا، محترم، پاسخ‌های کوتاه و طبیعی، خردورزانه و آرامش‌بخش.
+نوع نیاز تشخیص‌داده‌شده (Intent): ${intent}
 ${agentApproachText}
 
 دستورالعمل‌های بسیار مهم و کلیدی:
-۱. تعامل آغازین و احوال‌پرسی (Greetings):
-اگر پیام کاربر سلام، درود، احوال‌پرسی یا تعارفی کوتاه است (مانند «سلام»، «درود»، «سلام علیکم»، «خوبی؟»)، به هیچ عنوان پاسخ طوماری و تحمیل آیات نده! با لحنی بسیار دلنشین، مؤدبانه و صمیمی پاسخ سلام را بده (مثلاً: «سلام و رحمت و آرامش الهی بر شما دوست گرامی. به فضای تدبّر در قرآن مبین خوش آمدید...»)، و با اشتیاق بپرس مایل است امروز پیرامون کدام دغدغه فکری، آیه، موضوع زندگی یا مفهوم قرآنی با هم گفتگو کنیم. در این حالت آرایه verses را خالی [] قرار بده.
+۱. رفتار متناسب با نوع درخواست:
+- اگر Intent برابر «casual_chat» است (سلام، احوال‌پرسی، تشکر، شوخی، سوال درباره هویت دستیار):
+  به هیچ وجه پاسخ طولانی، آیات ناگهانی و متن‌های حجیم ارسال نکن! پاسخی کوتاه، بسیار گرم و صمیمانه بده (مثلاً: «سلام و درود پروردگار بر شما دوست گرامی...») و مشتاقانه بپرس مایل است امروز پیرامون کدام مفهوم، سوره، دغدغه زندگی یا موضوع قرآنی با هم گفتگو کنیم. آرایه used_source_ids را خالی [] بگذار.
+- اگر Intent برابر «quran_inquiry» است:
+  از کانتکست ارائه‌شده استفاده کن. مفهوم را ساده و شفاف توضیح بده. در صورت نیاز چند آیه یا مفهوم را با هم تحلیل کن و پاسخ متناسب با گفت‌وگو تولید کن.
+- اگر Intent برابر «current_info» است:
+  با اتکا به جستجوی وب پاسخی مستند، خلاصه و دقیق بده.
+- اگر Intent برابر «hybrid» است:
+  پیوند آموزه‌های وحیانی را با مفاهیم معاصر به صورت خردورزانه و روشن تبیین کن.
 
-۲. ذکر منابع معتبر و مستند تفسیری (Tafsir Citations):
-در پاسخ‌های مفهومی و تحلیلی، نام منابع اصیل و معتبر تفسیری را هم در متن summary و هم در آرایه tafsir_citations ذکر کن. منابع مجاز و موثق:
-- «تفسیر المیزان» (علامه طباطبایی)
-- «تفسیر نمونه» (آیت‌الله العظمی مکارم شیرازی و جمعی از دانشمندان)
-- «تفسیر مجمع البیان» (علامه شیخ طبرسی)
-- «مفردات الفاظ القرآن» (راغب اصفهانی)
-- «تفسیر نور» (حجت‌الاسلام قرائتی)
+۲. تفکیک دقیق بخش‌های پاسخ (ضروری):
+بین «متن صریح منبع»، «تحلیل مفهومی AI» و «برداشت و پیشنهاد کاربردی AI» تفاوت کامل و شفاف قائل شو. هرگز تحلیل خودت را به عنوان متن وحی یا کلام مفسر جا نزن!
+- direct_answer: پاسخ مستقیم، گفت‌وگومحور، خلاصه و طبیعی به سوال کاربر (۱ الی ۳ پاراگراف کوتاه).
+- source_quote: (در صورت وجود آیه یا روایت) فقط متن صریح و کوتاه آیه شریفه یا روایت بدون تصرف.
+- ai_analysis: شرح و تحلیل مفهومی هوش مصنوعی از پیام آیه و نکته تفسیری معتبر (المیزان، نمونه).
+- practical_takeaway: برداشت و پیشنهاد کاربردی یا سبک زندگی برای امروز.
+- socratic_questions: در انتهای تحلیل، ۱ یا ۲ سوال عمیق و درون‌نگر سقراطی برای تأمل کاربر بیاور.
+- used_source_ids: شناسه‌های منابعی که در پاسخ به کار رفته‌اند (مانند quran:2:255 یا tafsir:mizan:2:255). توجه: تو هرگز نباید URL یا لینک وب بسازی! فقط شناسه بده.
 
-۳. پرسش‌های سقراطی برای تعمیق مفهوم (Socratic Inquiry):
-در انتهای تحلیل آیات، حتماً ۱ یا ۲ پرسش عمیق، درون‌نگر و اثرگذار سقراطی در آرایه socratic_questions (و نیز در انتهای متن summary با تیتر «💭 پرسش سقراطی برای تأمل درونی:») بیاور تا کاربر را وادار کند آیه را در آینه زندگی، انتخاب‌ها و رفتارهای فردی خود ببیند و درک کند.
-
-۴. لحن و ساختار:
-از لحن خشک اداری یا کلمات سنگین نامأنوس بپرهیز. پاسخ باید جامع، امیدبخش، خردورزانه و دلنشین باشد. از تیترهای کوتاه با ایموجی‌های مناسب استفاده کن.
-
-۵. قالب خروجی الزامی:
+۳. قالب خروجی الزامی:
 فقط یک شیء JSON معتبر مطابق ساختار زیر بدون هیچ متن اضافی:
 {
+  "intent": "${intent}",
   "language": "fa",
-  "summary": "پاسخ غنی و دلنشین شامل شرح معارف، مستندات به تفاسیر و پرسش‌های تأمل‌برانگیز",
-  "verses": [{"ref": "94:5", "why_relevant": "علت پیوند آیه با موضوع", "practical_note": "درس کاربردی برای زندگی امروز"}],
-  "tafsir_citations": ["تفسیر المیزان (علامه طباطبایی)", "تفسیر نمونه"],
-  "socratic_questions": ["وقتی با گره‌های ناگهانی در زندگی روبرو می‌شوید، این آیه چگونه می‌تواند زاویه دید شما را دگرگون کند؟"],
+  "summary": "پاسخ کلی، روان و گفت‌وگومحور",
+  "direct_answer": "پاسخ مستقیم و صمیمی",
+  "source_quote": "متن صریح آیه در صورت نیاز",
+  "ai_analysis": "تحلیل مفهومی و تفسیری",
+  "practical_takeaway": "برداشت کاربردی برای زندگی",
+  "socratic_questions": ["پرسش سقراطی برای تأمل درونی"],
+  "used_source_ids": ["quran:2:255"],
   "confidence": "high",
   "needs_human_scholar": false,
   "disclaimers": ["تولیدشده با هوش مصنوعی؛ جهت فتاوا و احکام شرعی به مراجع عظام رجوع فرمایید."]
 }`;
-    const user = `پرسش کاربر:\n${parsed.data.question}\n\nکاندیداها:\n${candidateContext}`;
+    const user = `${historyContext ? `تاریخچه گفتگو:\n${historyContext}\n\n` : ''}پرسش کاربر:\n${userQuestion}${candidateContext ? `\n\nمنابع و کاندیداها:\n${candidateContext}` : ''}`;
 
     try {
-      let generated = await generateWithFallback({ system, user, maxTokens: 1400 });
+      let generated = await generateWithFallback({
+        system,
+        user,
+        maxTokens: 1400,
+        enableWebSearch,
+      });
       let output = aiResponseSchema.safeParse(extractJsonObject(generated.content));
 
       if (!output.success) {
         generated = await generateWithFallback({
           system,
-          user: `پاسخ قبلی ساختار معتبر نداشت. فقط JSON مطابق schema را بازسازی کن و هیچ متن آیه‌ای اضافه نکن.\nپاسخ قبلی:\n${generated.content}`,
+          user: `پاسخ قبلی ساختار معتبر نداشت. فقط JSON مطابق schema را بازسازی کن و هیچ متن خارج از قالب نیاور.\nپاسخ قبلی:\n${generated.content}`,
           maxTokens: 1400,
+          enableWebSearch,
         });
         output = aiResponseSchema.safeParse(extractJsonObject(generated.content));
       }
@@ -229,14 +302,20 @@ ${agentApproachText}
         return res.status(502).json({ error: 'پاسخ ساخت‌یافتهٔ دستیار معتبر نبود.', code: 'invalid_model_output', requestId });
       }
 
-      const safeVerses = output.data.verses.filter((verse) => candidateRefs.has(verse.ref));
-      if (!isGreeting && candidateRefs.size > 0 && output.data.verses.length > 0 && safeVerses.length === 0) {
-        // اگر آیات ارائه‌شده از کاندیداها نبودند در حالت غیر سلام
-        console.warn('AI returned verses not in candidates, filtering safely');
-      }
+      // حل‌وفصل و استخراج منابع ساختاریافته قابل کلیک همراه با Deep Link
+      const resolvedSources = resolveSourcesList(
+        output.data.used_source_ids || [],
+        knownCatalog,
+        generated.webChunks
+      );
 
-      console.info(JSON.stringify({ event: 'ai_request', requestId, provider: generated.provider, used: quota.used }));
-      return res.json({ ...output.data, verses: safeVerses, requestId });
+      console.info(JSON.stringify({ event: 'ai_request', requestId, provider: generated.provider, used: quota.used, intent }));
+      return res.json({
+        ...output.data,
+        intent,
+        sources: resolvedSources,
+        requestId,
+      });
     } catch (error) {
       const status = error instanceof ProviderError && error.status === 429 ? 429 : 502;
       console.warn(JSON.stringify({ event: 'ai_provider_error', requestId, status }));

@@ -17,10 +17,17 @@ import {
   Check,
   X,
   Share2,
+  ExternalLink,
+  Globe,
+  Compass,
+  MessageSquare,
+  Quote,
+  Lightbulb,
 } from 'lucide-react';
 import { Verse, Surah } from '../types';
 import { aiResponseSchema } from '../services/aiContract';
-import { retrieveAiCandidates } from '../services/aiRetrieval';
+import { retrieveRagKnowledge } from '../services/aiAgent/ragRetriever';
+import { SourceItem, UserIntent } from '../services/aiAgent/types';
 import {
   AiChatSession,
   AiChatMessage,
@@ -196,7 +203,7 @@ export const AIPage: React.FC<AIPageProps> = ({
     setIsLoading(true);
 
     try {
-      const candidates = await retrieveAiCandidates(query, currentVerse);
+      const { candidates: ragCandidates, sourcesCatalog } = await retrieveRagKnowledge(query, currentVerse);
 
       const deviceStorageKey = 'quran_ai_device_id';
       let deviceId = localStorage.getItem(deviceStorageKey);
@@ -215,38 +222,64 @@ export const AIPage: React.FC<AIPageProps> = ({
         },
         body: JSON.stringify({
           question: query,
-          candidates: candidates.map(({ ref, text_fa }) => ({ ref, text_fa })),
+          history: messages.slice(-4).map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          currentVerse: currentVerse
+            ? {
+                surahId: currentVerse.surahId,
+                verseNumber: currentVerse.verseNumber,
+                textArabic: currentVerse.textArabic,
+                translationMakarem: currentVerse.translationMakarem,
+              }
+            : null,
+          ragCandidates,
+          sourcesCatalog,
+          candidates: ragCandidates
+            .filter((c) => c.type === 'quran')
+            .map((c) => {
+              const match = c.sourceId.match(/^quran:(\d+:\d+)$/);
+              return {
+                ref: match ? match[1] : '1:1',
+                text_fa: c.content,
+              };
+            }),
           lang: 'fa',
           agent: selectedAgentId,
         }),
       });
 
       let assistantText = '';
+      let directAnswer: string | undefined;
+      let sourceQuote: string | undefined;
+      let aiAnalysis: string | undefined;
+      let practicalTakeaway: string | undefined;
       let tafsirCitations: string[] = [];
       let socraticQuestions: string[] = [];
+      let sources: SourceItem[] = [];
+      let intent: UserIntent | undefined;
 
       if (response.ok) {
         const json = await response.json();
         const parsed = aiResponseSchema.safeParse(json);
-        if (parsed.success && parsed.data.summary) {
-          assistantText = parsed.data.summary;
-          tafsirCitations = parsed.data.tafsir_citations || [];
-          socraticQuestions = parsed.data.socratic_questions || [];
-        } else if (json.summary) {
-          assistantText = json.summary;
-          tafsirCitations = json.tafsir_citations || [];
-          socraticQuestions = json.socratic_questions || [];
-        } else {
-          assistantText = 'پاسخ دریافت شد اما قالب آن نامعتبر بود.';
-        }
+        const data = (parsed.success ? parsed.data : json) as any;
+
+        assistantText = data.summary || data.direct_answer || '';
+        directAnswer = data.direct_answer;
+        sourceQuote = data.source_quote;
+        aiAnalysis = data.ai_analysis;
+        practicalTakeaway = data.practical_takeaway;
+        tafsirCitations = data.tafsir_citations || [];
+        socraticQuestions = data.socratic_questions || [];
+        sources = data.sources || [];
+        intent = data.intent;
       } else {
-        if (candidates.length > 0) {
-          assistantText = `در پرتو پرسش شما و آیات متناظر، این آموزه‌ها را می‌توان تدبّر کرد:\n\n${candidates
-            .map(
-              (c) =>
-                `• سوره ${toPersianDigits(c.verse.surahId)}، آیه ${toPersianDigits(c.verse.verseNumber)}:\n«${c.verse.textArabic}»\n${c.text_fa}`
-            )
+        if (ragCandidates.length > 0) {
+          assistantText = `در پرتو پرسش شما و منابع متناظر قرآنی و روایی، این آموزه‌ها را می‌توان تدبّر کرد:\n\n${ragCandidates
+            .map((c) => `• ${c.sourceName} (${c.reference}):\n${c.content}`)
             .join('\n\n')}`;
+          sources = sourcesCatalog;
         } else {
           assistantText =
             'پاسخ سرور در دسترس نبود. لطفاً اتصال اینترنت خود را بررسی فرمایید و مجدداً امتحان کنید.';
@@ -257,10 +290,16 @@ export const AIPage: React.FC<AIPageProps> = ({
         id: `msg_ai_${Date.now()}`,
         role: 'assistant',
         content: assistantText,
+        directAnswer,
+        sourceQuote,
+        aiAnalysis,
+        practicalTakeaway,
         timestamp: Date.now(),
         agentName: AI_AGENTS.find((a) => a.id === selectedAgentId)?.name,
         tafsirCitations: tafsirCitations.length > 0 ? tafsirCitations : undefined,
         socraticQuestions: socraticQuestions.length > 0 ? socraticQuestions : undefined,
+        sources: sources.length > 0 ? sources : undefined,
+        intent,
       };
 
       const finalMessages = [...updatedMessages, assistantMsg];
@@ -293,6 +332,31 @@ export const AIPage: React.FC<AIPageProps> = ({
       setMessages([...updatedMessages, errorMsg]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSourceClick = (src: SourceItem) => {
+    if (src.isInternal || src.type === 'quran') {
+      let sId = src.metadata?.surahId;
+      let vNum = src.metadata?.verseNumber;
+      if (!sId || !vNum) {
+        const match = src.url.match(/\/quran\/(\d+)\/(\d+)/i) || src.id.match(/^quran:(\d+):(\d+)$/i);
+        if (match) {
+          sId = parseInt(match[1], 10);
+          vNum = parseInt(match[2], 10);
+        }
+      }
+      if (sId && vNum && onNavigateToVerse) {
+        try {
+          window.history.pushState(null, '', `/quran/${sId}/${vNum}`);
+        } catch {}
+        onNavigateToVerse(sId, vNum);
+        return;
+      }
+    }
+
+    if (src.url) {
+      window.open(src.url, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -523,9 +587,81 @@ export const AIPage: React.FC<AIPageProps> = ({
                       : 'bg-white text-slate-800 border border-stone-200/90 rounded-bl-xs'
                   }`}
                 >
-                  <div className="whitespace-pre-line leading-relaxed font-normal">{msg.content}</div>
+                  {/* نشانگر تشخیص هوشمند نیاز و مسیردهی (Intent) */}
+                  {!isUser && msg.intent && (
+                    <div className="mb-2.5">
+                      {msg.intent === 'casual_chat' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-stone-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 font-medium">
+                          <MessageSquare className="w-3 h-3 text-slate-500" />
+                          <span>گفت‌وگوی صمیمانه</span>
+                        </span>
+                      )}
+                      {msg.intent === 'quran_inquiry' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/60 dark:border-teal-800/60 text-[10px] text-teal-700 dark:text-teal-300 font-medium">
+                          <BookOpen className="w-3 h-3 text-teal-600" />
+                          <span>تدبّر در قرآن، تفسیر و حدیث</span>
+                        </span>
+                      )}
+                      {msg.intent === 'current_info' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-50 dark:bg-sky-950/60 border border-sky-200/60 dark:border-sky-800/60 text-[10px] text-sky-700 dark:text-sky-300 font-medium">
+                          <Globe className="w-3 h-3 text-sky-600" />
+                          <span>جستجوی مستند وب</span>
+                        </span>
+                      )}
+                      {msg.intent === 'hybrid' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/60 border border-purple-200/60 dark:border-purple-800/60 text-[10px] text-purple-700 dark:text-purple-300 font-medium">
+                          <Compass className="w-3 h-3 text-purple-600" />
+                          <span>تحلیل تلفیقی معارف و مسائل روز</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
 
-                  {/* نمایش منابع و مراجع تفسیری معتبر */}
+                  {/* ۱. پاسخ مستقیم، کوتاه و گفت‌وگومحور */}
+                  <div className="whitespace-pre-line leading-relaxed font-normal">
+                    {msg.directAnswer || msg.content}
+                  </div>
+
+                  {/* ۲. تفکیک صریح: متن منبع وحیانی یا روایی */}
+                  {msg.sourceQuote && msg.sourceQuote.trim() && (
+                    <div className="mt-3 p-3 rounded-2xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/80 space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-[11px] text-teal-800 dark:text-teal-300">
+                        <Quote className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                        <span>متن صریح منبع:</span>
+                      </div>
+                      <p className="text-xs sm:text-[13px] leading-relaxed font-['Amiri',serif] text-slate-800 dark:text-slate-200 pr-1">
+                        {msg.sourceQuote}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ۳. تفکیک صریح: تحلیل و جمع‌بندی هوش مصنوعی */}
+                  {msg.aiAnalysis && msg.aiAnalysis.trim() && (
+                    <div className="mt-3 p-3 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-800/70 space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-[11px] text-indigo-800 dark:text-indigo-300">
+                        <Lightbulb className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                        <span>تحلیل و جمع‌بندی مفهومی هوش مصنوعی:</span>
+                      </div>
+                      <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-300 pr-1 whitespace-pre-line">
+                        {msg.aiAnalysis}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ۴. تفکیک صریح: پیشنهاد و برداشت کاربردی برای زندگی */}
+                  {msg.practicalTakeaway && msg.practicalTakeaway.trim() && (
+                    <div className="mt-3 p-3 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/70 space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-[11px] text-emerald-800 dark:text-emerald-300">
+                        <Heart className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>پیشنهاد و برداشت کاربردی برای زندگی:</span>
+                      </div>
+                      <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-300 pr-1 whitespace-pre-line">
+                        {msg.practicalTakeaway}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ۵. منابع و مراجع تفسیری معتبر سنتی */}
                   {msg.tafsirCitations && msg.tafsirCitations.length > 0 && (
                     <div className="mt-3 pt-2.5 border-t border-stone-200/80 dark:border-slate-800 flex flex-wrap items-center gap-1.5 text-[11px]">
                       <span className="font-bold text-teal-600 dark:text-teal-400 flex items-center gap-1 shrink-0">
@@ -543,7 +679,7 @@ export const AIPage: React.FC<AIPageProps> = ({
                     </div>
                   )}
 
-                  {/* بخش برجسته و زیبای پرسش‌های سقراطی برای تعمیق مفهوم */}
+                  {/* ۶. پرسش‌های سقراطی برای تعمیق مفهوم */}
                   {msg.socraticQuestions && msg.socraticQuestions.length > 0 && (
                     <div className="mt-3 p-3 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-amber-950 dark:text-amber-200 space-y-1.5">
                       <div className="flex items-center gap-1.5 font-bold text-xs text-amber-700 dark:text-amber-400">
@@ -557,6 +693,73 @@ export const AIPage: React.FC<AIPageProps> = ({
                             <span>{q}</span>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ۷. بخش کلیدی «📚 منابع قابل کلیک» با پیوندهای مستقیم و عمیق */}
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div className="mt-3.5 pt-3 border-t border-stone-200/80 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-teal-700 dark:text-teal-400">
+                        <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                        <span>📚 منابع:</span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {msg.sources.map((source, sIdx) => {
+                          const isQuran = source.type === 'quran' || source.isInternal;
+                          return (
+                            <button
+                              key={source.id || sIdx}
+                              onClick={() => handleSourceClick(source)}
+                              type="button"
+                              className="group flex items-center justify-between gap-2 p-2 sm:p-2.5 rounded-xl text-right transition-all border border-stone-200/90 dark:border-slate-800 hover:border-teal-500/70 dark:hover:border-teal-500/70 bg-stone-50/90 hover:bg-white dark:bg-slate-800/60 dark:hover:bg-slate-800 text-xs shadow-2xs active:scale-[0.99] cursor-pointer"
+                              title={isQuran ? 'باز کردن آیه در قرآن مبین' : 'مشاهده منبع در پنجره جدید'}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div
+                                  className={`p-1.5 rounded-lg shrink-0 ${
+                                    source.type === 'quran'
+                                      ? 'bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300'
+                                      : source.type === 'tafsir'
+                                      ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300'
+                                      : source.type === 'hadith'
+                                      ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300'
+                                      : 'bg-sky-100 dark:bg-sky-900/60 text-sky-700 dark:text-sky-300'
+                                  }`}
+                                >
+                                  {source.type === 'quran' ? (
+                                    <BookOpen className="w-3.5 h-3.5" />
+                                  ) : source.type === 'tafsir' ? (
+                                    <Quote className="w-3.5 h-3.5" />
+                                  ) : source.type === 'hadith' ? (
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Globe className="w-3.5 h-3.5" />
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-semibold text-slate-800 dark:text-slate-100 truncate">
+                                    {source.title}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
+                                    <span>{source.sourceName}</span>
+                                    {source.reference && (
+                                      <>
+                                        <span>•</span>
+                                        <span>{source.reference}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0 text-[11px] font-medium px-2 sm:px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 border border-stone-200 dark:border-slate-600 text-teal-700 dark:text-teal-300 group-hover:bg-teal-600 group-hover:text-white transition-all">
+                                <span>{isQuran ? 'باز کردن آیه' : 'مشاهده منبع'}</span>
+                                <ExternalLink className="w-3 h-3 shrink-0" />
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

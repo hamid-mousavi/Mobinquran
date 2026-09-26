@@ -14,6 +14,7 @@ export interface ProviderRequest {
   user: string;
   maxTokens: number;
   temperature?: number;
+  enableWebSearch?: boolean;
 }
 
 const providerOrder: ProviderName[] = ['gemini', 'groq', 'deepseek', 'openrouter'];
@@ -45,14 +46,14 @@ function configuredProviders(): ProviderName[] {
 
 function modelFor(provider: ProviderName): string {
   return env(`AI_MODEL_${provider.toUpperCase()}`) || {
-    gemini: 'gemini-2.5-flash',
+    gemini: 'gemini-3.8-flash',
     groq: 'llama-3.3-70b-versatile',
     deepseek: 'deepseek-chat',
     openrouter: 'deepseek/deepseek-chat-v3-0324',
   }[provider];
 }
 
-async function callOpenAiStyle(provider: Exclude<ProviderName, 'gemini'>, key: string, request: ProviderRequest): Promise<string> {
+async function callOpenAiStyle(provider: Exclude<ProviderName, 'gemini'>, key: string, request: ProviderRequest): Promise<{ content: string; webChunks?: Array<{ title: string; uri: string }> }> {
   const response = await fetch(urls[provider], {
     method: 'POST',
     signal: AbortSignal.timeout(Number(env('AI_PROVIDER_TIMEOUT_MS') || 20000)),
@@ -82,25 +83,51 @@ async function callOpenAiStyle(provider: Exclude<ProviderName, 'gemini'>, key: s
   const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const content = body.choices?.[0]?.message?.content?.trim();
   if (!content) throw new ProviderError(provider, 502, `${provider} returned an empty response`);
-  return content;
+  return { content };
 }
 
-async function callGemini(key: string, request: ProviderRequest): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: key });
+async function callGemini(key: string, request: ProviderRequest): Promise<{ content: string; webChunks?: Array<{ title: string; uri: string }> }> {
+  const ai = new GoogleGenAI({
+    apiKey: key,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
   try {
+    const config: any = {
+      systemInstruction: request.system,
+      temperature: request.temperature ?? 0.2,
+      maxOutputTokens: request.maxTokens,
+      responseMimeType: 'application/json',
+    };
+    if (request.enableWebSearch) {
+      config.tools = [{ googleSearch: {} }];
+    }
+
     const response = await ai.models.generateContent({
       model: modelFor('gemini'),
       contents: request.user,
-      config: {
-        systemInstruction: request.system,
-        temperature: request.temperature ?? 0.2,
-        maxOutputTokens: request.maxTokens,
-        responseMimeType: 'application/json',
-      },
+      config,
     });
     const content = response.text?.trim();
     if (!content) throw new ProviderError('gemini', 502, 'gemini returned an empty response');
-    return content;
+
+    const webChunks: Array<{ title: string; uri: string }> = [];
+    const groundingChunks = (response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks;
+    if (Array.isArray(groundingChunks)) {
+      for (const ch of groundingChunks) {
+        if (ch?.web?.uri) {
+          webChunks.push({
+            title: ch.web.title || ch.web.uri,
+            uri: ch.web.uri,
+          });
+        }
+      }
+    }
+
+    return { content, webChunks };
   } catch (error: any) {
     if (error instanceof ProviderError) throw error;
     const status = typeof error?.status === 'number' ? error.status : typeof error?.statusCode === 'number' ? error.statusCode : 502;
@@ -108,20 +135,21 @@ async function callGemini(key: string, request: ProviderRequest): Promise<string
   }
 }
 
-async function callProvider(provider: ProviderName, request: ProviderRequest): Promise<string> {
+async function callProvider(provider: ProviderName, request: ProviderRequest): Promise<{ content: string; webChunks?: Array<{ title: string; uri: string }> }> {
   const key = getProviderKey(provider);
   if (!key) throw new ProviderError(provider, 503, `${provider} is not configured`);
   return provider === 'gemini' ? callGemini(key, request) : callOpenAiStyle(provider, key, request);
 }
 
-export async function generateWithFallback(request: ProviderRequest): Promise<{ content: string; provider: ProviderName }> {
+export async function generateWithFallback(request: ProviderRequest): Promise<{ content: string; provider: ProviderName; webChunks?: Array<{ title: string; uri: string }> }> {
   const providers = configuredProviders();
   if (providers.length === 0) throw new ProviderError('gemini', 503, 'no AI provider is configured');
 
   let lastError: unknown;
   for (const provider of providers) {
     try {
-      return { content: await callProvider(provider, request), provider };
+      const res = await callProvider(provider, request);
+      return { content: res.content, provider, webChunks: res.webChunks };
     } catch (error) {
       lastError = error;
       if (error instanceof ProviderError && error.status !== 408 && error.status !== 429 && error.status < 500) {

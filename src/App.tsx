@@ -273,10 +273,16 @@ export default function App() {
     }
   }, [activePage]);
 
-  // ناوبری مستقیم به آیه از لیست بوکمارک‌ها، نتایج جستجو، یا آیه تصادفی صفحه اصلی
+  // ناوبری مستقیم به آیه از لیست بوکمارک‌ها، نتایج جستجو، منابع هوش مصنوعی، یا آیه تصادفی صفحه اصلی
   const handleNavigateToVerse = async (surahId: number, verseNumber: number) => {
     const targetSurah = surahs.find((s) => s.id === surahId);
     if (targetSurah) {
+      try {
+        const targetPath = `/quran/${surahId}/${verseNumber}`;
+        if (window.location.pathname !== targetPath) {
+          window.history.pushState(null, '', targetPath);
+        }
+      } catch {}
       setResumeScrollVerse(verseNumber);
       setCurrentSurah(targetSurah);
       setViewMode('verse-by-verse');
@@ -291,6 +297,25 @@ export default function App() {
       }, 180);
     }
   };
+
+  // پشتیبانی از Deep Link قرآن در بارگذاری اولیه و دکمه Back مرورگر (مانند /quran/2/255)
+  useEffect(() => {
+    const handleUrlRoute = () => {
+      const path = window.location.pathname;
+      const match = path.match(/\/quran\/(\d+)(?:\/(\d+))?/i);
+      if (match && surahs.length > 0) {
+        const sId = parseInt(match[1], 10);
+        const vNum = match[2] ? parseInt(match[2], 10) : 1;
+        if (sId >= 1 && sId <= 114) {
+          handleNavigateToVerse(sId, vNum);
+        }
+      }
+    };
+
+    handleUrlRoute();
+    window.addEventListener('popstate', handleUrlRoute);
+    return () => window.removeEventListener('popstate', handleUrlRoute);
+  }, [surahs]);
 
   // ذخیرهٔ آیهٔ واقعی در حال مشاهده (P3-T1) و همگام‌سازی صفحهٔ مصحف با موقعیت مطالعه
   const handleReadingPositionChange = useCallback((verse: Verse) => {
