@@ -286,19 +286,24 @@ export const AIPage: React.FC<AIPageProps> = ({
       } else {
         const errorPayload = await response.json().catch(() => null);
         const errorMessages: Record<string, string> = {
-          ai_unavailable: 'سرویس هوش مصنوعی روی سرور در دسترس یا پیکربندی نشده است.',
+          ai_unavailable: 'سرویس هوش مصنوعی روی سرور در دسترس یا پیکربندی نشده است. کلید API سرور را بررسی فرمایید.',
           daily_limit_reached: 'سهمیهٔ روزانهٔ گفتگو تمام شده است.',
-          quota_unavailable: 'سرویس سهمیه‌بندی سرور در دسترس نیست.',
+          quota_unavailable: 'سرویس سهمیه‌بندی سرور در دسترس نیست. متغیرهای سرور (Upstash Redis یا ALLOW_MEMORY_RATE_LIMIT) را بررسی فرمایید.',
           provider_rate_limited: 'سرویس هوش مصنوعی موقتاً درخواست‌های زیادی دریافت کرده است.',
           invalid_model_output: 'پاسخ مدل با قالب مورد انتظار سازگار نبود. لطفاً دوباره تلاش کنید.',
           upstream_error: 'سرور نتوانست به سرویس هوش مصنوعی وصل شود.',
           invalid_request: 'درخواست گفتگو معتبر نبود. صفحه را تازه‌سازی و دوباره امتحان کنید.',
+          not_found: 'مسیر سرویس هوش مصنوعی روی سرور یافت نشد (کد 404).',
         };
         const code = typeof errorPayload?.code === 'string' ? errorPayload.code : '';
         assistantText = errorMessages[code]
           || (typeof errorPayload?.error === 'string'
             ? errorPayload.error
-            : 'پاسخ سرور در دسترس نبود. اتصال اینترنت را بررسی و دوباره امتحان کنید.');
+            : (response.status === 404
+              ? 'مسیر سرور هوش مصنوعی یافت نشد (خطای 404). لطفاً تنظیمات Vercel یا مسیر API را بررسی کنید.'
+              : response.status === 504 || response.status === 502
+              ? `زمان پاسخ سرور هوش مصنوعی به پایان رسید (کد ${response.status}). لطفاً مجدداً امتحان فرمایید.`
+              : `پاسخ سرور در دسترس نبود (کد ${response.status}). لطفاً وضعیت اتصال و لاگ سرور را بررسی فرمایید.`));
         if (typeof errorPayload?.provider === 'string' && Number.isInteger(errorPayload?.providerStatus)) {
           assistantText += `\nجزئیات اتصال: ${errorPayload.provider}، کد ${errorPayload.providerStatus}`;
         }

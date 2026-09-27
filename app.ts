@@ -23,7 +23,55 @@ function isAiEnabled(): boolean {
 export function createApp() {
   const app = express();
 
+  // پذیرش هدرهای پروکسی ورسل برای استخراج آی‌پی و پروتکل واقعی
+  app.set('trust proxy', true);
+
+  // نرمال‌سازی URL برای محیط سرورلس Vercel و پروکسی‌های معکوس
+  // در صورتی که ورسل ریرایت انجام داده باشد یا به صورت catch-all فراخوانی شده باشد،
+  // مسیر واقعی درخواست را به Express برمی‌گرداند تا روت‌ها به درستی تطبیق یابند.
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Device-ID');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+
+    // 1. اگر Vercel از طریق تابع catch-all [...path] مسیر را در query.path قرار داده باشد
+    if (req.query && req.query.path) {
+      const segments = Array.isArray(req.query.path)
+        ? req.query.path.join('/')
+        : String(req.query.path);
+      const reconstructed = `/api/${segments.replace(/^\/+/, '')}`;
+      if (req.url !== reconstructed && !req.url.startsWith(reconstructed)) {
+        req.url = reconstructed;
+      }
+    } else {
+      // 2. اگر Vercel ریرایت انجام داده و هدر x-matched-path موجود باشد
+      const matchedPath = (req.headers['x-matched-path'] as string) || '';
+      if (matchedPath && matchedPath.startsWith('/api/')) {
+        req.url = matchedPath;
+      } else if (req.originalUrl && req.originalUrl.startsWith('/api/') && (req.url === '/api' || req.url === '/api/' || req.url === '/')) {
+        req.url = req.originalUrl;
+      } else if (req.query && (req.query['0'] || req.query['1'])) {
+        const captured = String(req.query['0'] || req.query['1']);
+        req.url = `/api/${captured.replace(/^\/+/, '')}`;
+      }
+    }
+    next();
+  });
+
   app.use(express.json({ limit: '24kb' }));
+
+  // اندپوینت ریشه API
+  app.get(['/api', '/api/'], (_req, res) => {
+    res.json({
+      status: 'ok',
+      service: 'Quran Mobin API',
+      aiAvailable: isAiEnabled() && hasConfiguredProvider(),
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   // اندپوینت سلامتی سرور
   app.get(['/api/health', '/health'], (req, res) => {
@@ -478,6 +526,14 @@ ${agentApproachText}
     return res.status(410).json({
       error: 'این مسیر منسوخ شده است. از مسیر جدید دستیار استفاده کنید.',
       code: 'legacy_endpoint_removed',
+    });
+  });
+
+  // اگر هیچ روت API تطبیق پیدا نکرد، همیشه پاسخ JSON معتبر برگردان تا کلاینت خطای متنی یا HTML دریافت نکند
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({
+      error: `مسیر درخواستی در سرور یافت نشد (${req.method} ${req.url}).`,
+      code: 'not_found',
     });
   });
 

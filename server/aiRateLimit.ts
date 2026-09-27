@@ -54,6 +54,14 @@ async function incrementUpstash(key: string, resetAt: number): Promise<number | 
 export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
   const limit = Math.max(1, Number(env('AI_DAILY_LIMIT') || 20));
   const { resetAt } = dayWindow();
+  const allowMemoryFallback = env('ALLOW_MEMORY_RATE_LIMIT') === 'true';
+
+  if (isProduction() && (!env('UPSTASH_REDIS_REST_URL') || !env('UPSTASH_REDIS_REST_TOKEN'))) {
+    if (!allowMemoryFallback) {
+      return { allowed: false, used: 0, limit, resetAt };
+    }
+  }
+
   const storageKey = `quran-ai:${new Date().toISOString().slice(0, 10)}:${key}`;
 
   let used: number;
@@ -63,6 +71,9 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
     if (persisted !== null) {
       used = persisted;
     } else {
+      if (isProduction() && !allowMemoryFallback) {
+        return { allowed: false, used: 0, limit, resetAt };
+      }
       const existing = memoryCounters.get(storageKey);
       const counter = existing && existing.resetAt > Date.now()
         ? existing
@@ -72,6 +83,9 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
       used = counter.count;
     }
   } catch {
+    if (isProduction() && !allowMemoryFallback) {
+      return { allowed: false, used: 0, limit, resetAt };
+    }
     const existing = memoryCounters.get(storageKey);
     const counter = existing && existing.resetAt > Date.now()
       ? existing
