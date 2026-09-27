@@ -1,11 +1,11 @@
 {
-  "buildCommand": "vite build",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "maxDuration": 60
     },
-    "api/[...path].ts": {
+    "api/[...path].js": {
       "maxDuration": 60
     }
   },
