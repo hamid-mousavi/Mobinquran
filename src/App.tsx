@@ -9,7 +9,6 @@ import { BookmarksModal } from './components/BookmarksModal';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { SearchModal } from './components/SearchModal';
 import { KhatmModal } from './components/KhatmModal';
-import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { PWAUpdateBanner } from './components/PWAUpdateBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { AutoScrollControls } from './components/AutoScrollControls';
@@ -448,9 +447,6 @@ export default function App() {
       }`}
       dir="rtl"
     >
-      {/* بنر نصب اپلیکیشن PWA روی دستگاه */}
-      <PWAInstallBanner darkMode={settings.darkMode} />
-
       {/* هدر بالایی با ابزارهای ناوبری، حالت مصحف، ختم قرآن، جستجو و هوش مصنوعی (تنها در صفحه قرائت) */}
       {activePage === 'reader' && (
         <Header
