@@ -84,6 +84,19 @@ export function createApp() {
     res.sendFile(path.join(process.cwd(), 'public', 'manifest.json'));
   });
 
+  // سرویس استاندارد Digital Asset Links برای خروجی APK (PWABuilder / TWA) جهت حذف قطعی نوار آدرس و اجرای تمام‌صفحه
+  app.get('/.well-known/assetlinks.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    const distPath = path.join(process.cwd(), 'dist', '.well-known', 'assetlinks.json');
+    const publicPath = path.join(process.cwd(), 'public', '.well-known', 'assetlinks.json');
+    if (fs.existsSync(distPath)) {
+      return res.sendFile(distPath);
+    } else if (fs.existsSync(publicPath)) {
+      return res.sendFile(publicPath);
+    }
+    res.json([]);
+  });
+
   // سرویس استاندارد Service Worker PWA با هدر اختصاصی application/javascript جهت پذیرش بدون نقص توسط کروم و رفع مشکل شورت‌کات
   app.get(['/sw.js', '/dev-dist/sw.js'], (req, res) => {
     res.setHeader('Content-Type', 'application/javascript; charset=utf-8');

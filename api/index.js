@@ -620,6 +620,17 @@ function createApp() {
     res.setHeader("Content-Type", "application/manifest+json; charset=utf-8");
     res.sendFile(path.join(process.cwd(), "public", "manifest.json"));
   });
+  app2.get("/.well-known/assetlinks.json", (req, res) => {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    const distPath = path.join(process.cwd(), "dist", ".well-known", "assetlinks.json");
+    const publicPath = path.join(process.cwd(), "public", ".well-known", "assetlinks.json");
+    if (fs.existsSync(distPath)) {
+      return res.sendFile(distPath);
+    } else if (fs.existsSync(publicPath)) {
+      return res.sendFile(publicPath);
+    }
+    res.json([]);
+  });
   app2.get(["/sw.js", "/dev-dist/sw.js"], (req, res) => {
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.setHeader("Service-Worker-Allowed", "/");

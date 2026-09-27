@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.vercel.mobinquran.twa",
+      "sha256_cert_fingerprints": [
+        "13:B9:D8:2D:08:FA:84:B1:B6:DC:92:DC:1E:DF:D6:B3:B1:68:EA:18:02:EC:BD:45:6B:A8:55:7D:2D:28:25:FD"
+      ]
+    }
+  }
+]
