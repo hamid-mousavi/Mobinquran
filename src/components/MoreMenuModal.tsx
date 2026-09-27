@@ -12,6 +12,7 @@ import {
   FileText,
   Sparkles,
   Smartphone,
+  Info,
 } from 'lucide-react';
 import { PWAInstallModal } from './PWAInstallModal';
 
@@ -24,6 +25,7 @@ interface MoreMenuModalProps {
   onOpenSearch: () => void;
   onOpenOffline: () => void;
   onOpenSettings: () => void;
+  onOpenAbout: () => void;
   onToggleDarkMode: () => void;
   onOpenMushafPage: () => void;
   darkMode: boolean;
@@ -38,6 +40,7 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
   onOpenSearch,
   onOpenOffline,
   onOpenSettings,
+  onOpenAbout,
   onToggleDarkMode,
   onOpenMushafPage,
   darkMode,
@@ -124,6 +127,16 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
       action: () => {
         onClose();
         onOpenSettings();
+      },
+    },
+    {
+      label: 'درباره ما و تماس با ما',
+      desc: 'معرفی، پشتیبانی، حریم خصوصی و امتیاز در مایکت',
+      icon: Info,
+      iconColor: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
+      action: () => {
+        onClose();
+        onOpenAbout();
       },
     },
   ];

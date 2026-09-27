@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Clock,
   Layers,
+  Info,
 } from 'lucide-react';
 import { Surah, Verse, KhatmPlan, KhatmType } from '../types';
 import { AyahEndMarker } from './QuranReader';
@@ -46,6 +47,7 @@ interface QuranHomePageProps {
   onOpenMemorization: () => void;
   onOpenOfflineDownloads: () => void;
   onOpenSettings: () => void;
+  onOpenAbout?: () => void;
   onToggleDarkMode: () => void;
   onPlayVerseAudio: (surahId: number, verseNumber: number) => void;
   darkMode: boolean;
@@ -135,6 +137,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
   onOpenMemorization,
   onOpenOfflineDownloads,
   onOpenSettings,
+  onOpenAbout,
   onToggleDarkMode,
   onPlayVerseAudio,
   darkMode,
@@ -733,6 +736,39 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           </button>
         </div>
       </section>
+
+      {/* بخش درباره قرآن مبین، پشتیبانی و ثبت نظر در مایکت */}
+      {onOpenAbout && (
+        <section id="home-about-section" className="pt-2 pb-6">
+          <div className="p-4 rounded-2xl border border-stone-200/90 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 shrink-0">
+                <Info className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-200">
+                    قرآن مبین
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/20">
+                    نسخه ۱.۰.۰
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  رایگان و بدون تبلیغات • پشتیبانی، حریم خصوصی و ثبت نظر در مایکت
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={onOpenAbout}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 text-center shrink-0"
+            >
+              درباره و تماس با ما
+            </button>
+          </div>
+        </section>
+      )}
     </main>
   );
 };

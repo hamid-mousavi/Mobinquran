@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Type, Eye, Palette, Maximize2, Minimize2, AlignJustify, Check, HardDrive, ShieldCheck, ShieldAlert, Smartphone } from 'lucide-react';
+import { X, Type, Eye, Palette, Maximize2, Minimize2, AlignJustify, Check, HardDrive, ShieldCheck, ShieldAlert, Smartphone, Info } from 'lucide-react';
 import { AppSettings, Translator, ArabicFont, LineHeight } from '../types';
 import { getArabicFontFamily, ARABIC_FONT_OPTIONS } from '../utils/fontHelper';
 import { getStorageStatus, requestStoragePersistence, StorageStatus } from '../services/pwaManager';
@@ -11,6 +11,7 @@ interface SettingsModalProps {
   onClose: () => void;
   settings: AppSettings;
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void;
+  onOpenAbout?: () => void;
   darkMode: boolean;
 }
 
@@ -19,6 +20,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   settings,
   onUpdateSettings,
+  onOpenAbout,
   darkMode,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -326,6 +328,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* درباره قرآن مبین، پشتیبانی و ثبت نظر در مایکت */}
+          {onOpenAbout && (
+            <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenAbout();
+                }}
+                className="w-full flex items-center justify-between p-3 rounded-xl border border-stone-200/80 dark:border-slate-800 bg-stone-50/80 dark:bg-slate-800/40 hover:bg-stone-100 dark:hover:bg-slate-800 transition-all text-right active:scale-[0.99]"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    <Info className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-slate-800 dark:text-slate-200">درباره برنامه، پشتیبانی و مایکت</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">ثبت نظر در مایکت، حریم خصوصی و ارتباط با توسعه‌دهنده</div>
+                  </div>
+                </div>
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold">
+                  نسخه ۱.۰
+                </span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 text-center">

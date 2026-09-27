@@ -18,6 +18,7 @@ import { MemorizationPage } from './components/MemorizationPage';
 import { OfflinePage } from './components/OfflinePage';
 import { BottomNavigation } from './components/BottomNavigation';
 import { MoreMenuModal } from './components/MoreMenuModal';
+import { AboutModal } from './components/AboutModal';
 import { SurahSearchModal } from './components/SurahSearchModal';
 import { QuranService } from './services/quranService';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
@@ -97,6 +98,7 @@ export default function App() {
   // مودال نشانه‌گذاری‌ها
   const [isBookmarksModalOpen, setIsBookmarksModalOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
   // ترتیل صوتی و پلیر همگام
   const [isAudioPlayerOpen, setIsAudioPlayerOpen] = useState(false);
@@ -498,6 +500,7 @@ export default function App() {
           onOpenMemorization={handleOpenMemorization}
           onOpenOfflineDownloads={handleOpenOffline}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenAbout={() => setIsAboutModalOpen(true)}
           onToggleDarkMode={handleToggleDarkMode}
           onPlayVerseAudio={(sId, vNum) => {
             const s = surahs.find((x) => x.id === sId);
@@ -732,6 +735,7 @@ export default function App() {
         onClose={() => setIsSettingsModalOpen(false)}
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
+        onOpenAbout={() => setIsAboutModalOpen(true)}
         darkMode={settings.darkMode}
       />
 
@@ -770,11 +774,19 @@ export default function App() {
         onOpenSearch={() => setIsSearchModalOpen(true)}
         onOpenOffline={handleOpenOffline}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenAbout={() => setIsAboutModalOpen(true)}
         onToggleDarkMode={handleToggleDarkMode}
         onOpenMushafPage={() => {
           setViewMode('mushaf-page');
           setActivePage('reader');
         }}
+        darkMode={settings.darkMode}
+      />
+
+      {/* مودال درباره ما، تماس با ما، حریم خصوصی و امتیاز در مایکت */}
+      <AboutModal
+        isOpen={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
         darkMode={settings.darkMode}
       />
     </div>
