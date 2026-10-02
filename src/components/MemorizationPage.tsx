@@ -26,6 +26,8 @@ import { getArabicFontFamily } from '../utils/fontHelper';
 import { toPersianDigits } from '../utils/textNormalization';
 import { QuranicCard } from './QuranicOrnament';
 import { MemorizationQuizStudio } from './MemorizationQuizStudio';
+import { QuranStoriesExplorer } from './QuranStoriesExplorer';
+import { FullscreenShortsPractice } from './FullscreenShortsPractice';
 import {
   getMemorizationProgress,
   getSurahMemorizationStats,
@@ -76,8 +78,9 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   darkMode,
   onBack,
 }) => {
-  // تب‌های صفحه: «خط‌بر و تمرین حفظ»، «آزمون‌ساز حفظ» یا «کارنامه و پایش پیشرفت»
-  const [activeTab, setActiveTab] = useState<'practice' | 'quiz' | 'progress'>('practice');
+  // تب‌های صفحه: «خط‌بر و تمرین حفظ»، «آزمون‌ساز حفظ»، «داستان‌های قرآنی» یا «کارنامه و پایش پیشرفت»
+  const [activeTab, setActiveTab] = useState<'practice' | 'quiz' | 'stories' | 'progress'>('practice');
+  const [isShortsPracticeOpen, setIsShortsPracticeOpen] = useState(false);
 
   // داده‌های پیشرفت حفظ
   const [overallProgress, setOverallProgress] = useState<MemorizationProgress>(getMemorizationProgress());
@@ -196,33 +199,32 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
         preload="auto"
       />
 
-      {/* سربرگ صفحه با دکمه بازگشت */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-slate-800">
-        <div className="flex items-center gap-3">
+      {/* سربرگ ریسپانسیو و مینیمال حفظ قرآن */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-stone-200 dark:border-slate-800">
+        <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all active:scale-95"
-            title="بازگشت به قرائت قرآن"
+            className="p-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all active:scale-95 cursor-pointer shrink-0"
+            title="بازگشت"
             aria-label="بازگشت"
           >
-            <ArrowRight className="w-5 h-5" />
+            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <GraduationCap className="w-6 h-6 text-teal-600 dark:text-teal-400" />
-              <span>مرکز تخصصی حفظ و تثبیت قرآن</span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold shrink-0">
+              <GraduationCap className="w-4.5 h-4.5" />
+            </div>
+            <h1 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+              حفظ قرآن
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              خط‌بر هوشمند صوتی، پنهان‌سازی تدریجی متن و ثبت کارنامه پیشرفت
-            </p>
           </div>
         </div>
 
-        {/* سوییچ تب‌های سه‌گانه با آیکون‌های تمیز */}
-        <div className="flex items-center gap-1 p-1 rounded-2xl bg-stone-100 dark:bg-slate-800 border border-stone-200 dark:border-slate-700">
+        {/* سوییچ تب‌های چهارگانه ریسپانسیو بدون شکستگی ناهمگون در موبایل */}
+        <div className="flex items-center gap-1 p-1 rounded-2xl bg-stone-100 dark:bg-slate-800 border border-stone-200 dark:border-slate-700 max-w-full overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('practice')}
-            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`py-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === 'practice'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -230,27 +232,41 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             title="جلسه تمرین حفظ"
             aria-label="جلسه تمرین"
           >
-            <BookOpen className="w-4 h-4 shrink-0" />
-            <span className="hidden sm:inline">تمرین</span>
+            <BookOpen className="w-3.5 h-3.5 shrink-0" />
+            <span>تمرین</span>
           </button>
 
           <button
             onClick={() => setActiveTab('quiz')}
-            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`py-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === 'quiz'
-                ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
             }`}
             title="آزمون‌ساز حفظ قرآن"
             aria-label="آزمون‌ساز"
           >
-            <Brain className="w-4 h-4 shrink-0" />
-            <span className="hidden sm:inline">آزمون‌ساز</span>
+            <Brain className="w-3.5 h-3.5 shrink-0" />
+            <span>آزمون‌ساز</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('stories')}
+            className={`py-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
+              activeTab === 'stories'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+            title="داستان‌ها و حکمت‌های قرآنی"
+            aria-label="داستان‌های قرآنی"
+          >
+            <Sparkles className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+            <span>داستان‌ها</span>
           </button>
 
           <button
             onClick={() => setActiveTab('progress')}
-            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`py-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === 'progress'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -258,8 +274,8 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             title="پیشرفت و کارنامه حفظ"
             aria-label="کارنامه حفظ"
           >
-            <Award className="w-4 h-4 shrink-0" />
-            <span className="hidden sm:inline">کارنامه</span>
+            <Award className="w-3.5 h-3.5 shrink-0" />
+            <span>کارنامه</span>
           </button>
         </div>
       </div>
@@ -515,14 +531,26 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={startSession}
-                disabled={ayahNumbers.length === 0}
-                className="w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.99] disabled:opacity-50"
-              >
-                <Play className="w-5 h-5 fill-current" />
-                <span>شروع جلسه تمرین با خط‌بر صوتی ({toPersianDigits(ayahNumbers.length)} آیه)</span>
-              </button>
+              <div className="flex items-center gap-2.5 pt-1">
+                <button
+                  onClick={startSession}
+                  disabled={ayahNumbers.length === 0}
+                  className="flex-1 py-3 px-4 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer shadow-sm"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>شروع تمرین ({toPersianDigits(ayahNumbers.length)} آیه)</span>
+                </button>
+
+                <button
+                  onClick={() => setIsShortsPracticeOpen(true)}
+                  disabled={ayahNumbers.length === 0}
+                  className="p-3 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-teal-600 dark:text-teal-300 border border-stone-200 dark:border-slate-700 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                  title="حالت تمام‌صفحه"
+                  aria-label="حالت تمام‌صفحه"
+                >
+                  <Sparkles className="w-5 h-5 text-amber-500" />
+                </button>
+              </div>
             </QuranicCard>
           ) : (
             /* صحنه فعال جلسه تمرین */
@@ -647,7 +675,18 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
         />
       )}
 
-      {/* محتوای تب ۳: کارنامه و پایش پیشرفت حفظ تمام آیات سوره */}
+      {/* محتوای تب ۳: گنجینه داستان‌ها و حکمت‌های قرآنی */}
+      {activeTab === 'stories' && (
+        <QuranStoriesExplorer
+          darkMode={darkMode}
+          onNavigateToSurah={(sId) => {
+            const target = surahs.find((s) => s.id === sId);
+            if (target) onSelectSurah(target);
+          }}
+        />
+      )}
+
+      {/* محتوای تب ۴: کارنامه و پایش پیشرفت حفظ تمام آیات سوره */}
       {activeTab === 'progress' && (
         <div className="space-y-4">
           <div className="p-4 rounded-2xl bg-stone-100/70 dark:bg-slate-900 border border-stone-200 dark:border-slate-800 flex items-center justify-between">
@@ -746,6 +785,18 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
           </div>
         </div>
       )}
+
+      {/* تمرین ویدیویی شورتز تمام‌صفحه با اسلاید عمودی */}
+      <FullscreenShortsPractice
+        isOpen={isShortsPracticeOpen}
+        onClose={() => setIsShortsPracticeOpen(false)}
+        surah={currentSurah}
+        verses={verses}
+        startAyah={range.start}
+        endAyah={range.end}
+        reciterId={reciterId}
+        arabicFont={settings.arabicFont}
+      />
     </div>
   );
 };

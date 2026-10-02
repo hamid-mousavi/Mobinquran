@@ -20,6 +20,9 @@ import {
   Clock,
   Layers,
   Info,
+  Trophy,
+  X,
+  ChevronRight,
 } from 'lucide-react';
 import { Surah, Verse, KhatmPlan, KhatmType } from '../types';
 import { AyahEndMarker } from './QuranReader';
@@ -29,6 +32,8 @@ import { getMemorizationStats, MemorizationStats } from '../services/memorizatio
 import { QuranService } from '../services/quranService';
 import { buildKhatmSegments, KhatmSegment } from '../utils/khatmMath';
 import { currentKhatmDay, localDateKey } from '../utils/date';
+import { QURAN_STORIES, QuranStory } from '../data/quranStories';
+import { FullscreenShortsQuiz, ShortsQuestion } from './FullscreenShortsQuiz';
 
 interface QuranHomePageProps {
   surahs: Surah[];
@@ -146,6 +151,38 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
   const [khatmPlan, setKhatmPlan] = useState<KhatmPlan | null>(null);
   const [khatmSegments, setKhatmSegments] = useState<KhatmSegment[]>([]);
   const [activeFocusTab, setActiveFocusTab] = useState<'verse' | 'khatm' | 'memorization'>('verse');
+  const [storyShuffleOffset, setStoryShuffleOffset] = useState(0);
+  const [isStoryShortsOpen, setIsStoryShortsOpen] = useState(false);
+  const [storyQuizQuestions, setStoryQuizQuestions] = useState<ShortsQuestion[]>([]);
+  const [storyQuizTitle, setStoryQuizTitle] = useState('آزمون داستان روز قرآنی');
+  const [selectedStoryModal, setSelectedStoryModal] = useState<QuranStory | null>(null);
+
+  // داستان منتخب روز بر اساس روز سال
+  const todayStory = useMemo<QuranStory>(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 0);
+    const diff = now.getTime() - start.getTime();
+    const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const idx = Math.abs(dayOfYear + storyShuffleOffset) % QURAN_STORIES.length;
+    return QURAN_STORIES[idx] || QURAN_STORIES[0];
+  }, [storyShuffleOffset]);
+
+  const handleStartTodayStoryQuiz = () => {
+    const formatted: ShortsQuestion[] = todayStory.questions.map((q) => ({
+      id: q.id,
+      prompt: q.prompt,
+      contextText: q.contextAyah,
+      options: q.options,
+      correctIndex: q.correctIndex,
+      explanation: q.explanation,
+      surahName: q.surahName,
+      verseNumber: q.verseNumber,
+      categoryBadge: `داستان ${todayStory.title}`,
+    }));
+    setStoryQuizQuestions(formatted);
+    setStoryQuizTitle(`مسابقه داستان ${todayStory.title}`);
+    setIsStoryShortsOpen(true);
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -422,16 +459,16 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           </div>
         </div>
 
-        {/* بدنه کارت: متن آیه و ترجمه (محدود با line-clamp جهت آیات طولانی) */}
-        <div className="space-y-1.5 text-right">
+        {/* بدنه کارت: متن آیه و ترجمه (محدود با line-clamp جهت آیات طولانی با فونت بزرگ، خوانا و باوقار) */}
+        <div className="space-y-2 text-right">
           <p
-            className="text-sm sm:text-base font-semibold text-slate-800 dark:text-slate-100 leading-loose line-clamp-2"
+            className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-50 leading-loose line-clamp-2"
             style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
             dir="rtl"
           >
             {lastReadVerse ? lastReadVerse.textArabic : 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'}
           </p>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">
+          <p className="text-sm sm:text-base font-medium text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-2">
             {lastReadVerse?.translationMakarem || lastReadVerse?.translationAnsarian || lastReadVerse?.translationFooladvand || 'برای ادامه قرائت از این آیه، روی این کارت کلیک کنید.'}
           </p>
         </div>
@@ -515,18 +552,18 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
 
         {/* محتوای تب ۱: آیه منتخب روز */}
         {activeFocusTab === 'verse' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span className="font-semibold text-teal-700 dark:text-teal-400">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              <span className="font-bold text-teal-700 dark:text-teal-400">
                 {selectedRandomVerse.theme}
               </span>
-              <span>
+              <span className="font-medium">
                 سوره {selectedRandomVerse.surahNameArabic} : آیه {toPersianDigits(selectedRandomVerse.verseNumber)}
               </span>
             </div>
 
             <p
-              className="text-right text-lg sm:text-xl font-normal leading-loose text-slate-900 dark:text-slate-100 my-2"
+              className="text-right text-2xl sm:text-3xl md:text-4xl font-normal leading-loose text-slate-900 dark:text-slate-50 my-3"
               style={{ fontFamily: "'Amiri', 'Amiri Quran', serif" }}
               dir="rtl"
             >
@@ -534,7 +571,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
               <AyahEndMarker verseNumber={selectedRandomVerse.verseNumber} />
             </p>
 
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed text-right" dir="rtl">
+            <p className="text-sm sm:text-base md:text-lg text-slate-700 dark:text-slate-200 leading-relaxed text-right font-medium" dir="rtl">
               «{selectedRandomVerse.translationPersian}»
             </p>
 
@@ -672,9 +709,110 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
         )}
       </div>
 
+      {/* بخش اختصاصی داستان روز قرآنی با دسترسی سریع به آزمون شورتز و مطالعه کامل */}
+      <section id="home-daily-story" className="rounded-3xl border border-amber-500/30 dark:border-amber-500/25 bg-gradient-to-br from-amber-500/5 via-white to-amber-50/50 dark:from-slate-900 dark:via-slate-900 dark:to-amber-950/20 p-5 sm:p-6 shadow-sm space-y-4 relative overflow-hidden">
+        {/* هدر داستان روز */}
+        <div className="flex items-center justify-between border-b border-amber-200/60 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shadow-xs shrink-0">
+              <Sparkles className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-amber-600 dark:text-amber-400 tracking-wider">
+                  داستان روز قرآنی
+                </span>
+                <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold border border-amber-500/20">
+                  سوره {todayStory.surahName}
+                </span>
+              </div>
+              <h2 className="text-base sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
+                {todayStory.title}
+              </h2>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setStoryShuffleOffset((prev) => prev + 1)}
+            className="p-2 sm:px-3 sm:py-1.5 rounded-xl border border-amber-300/60 dark:border-slate-700 bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-slate-700 transition-all active:scale-95 text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0"
+            title="مشاهده داستان قرآنی دیگر"
+            aria-label="داستان دیگر"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">داستان دیگر</span>
+          </button>
+        </div>
+
+        {/* اطلاعات سوره و شخصیت‌ها */}
+        <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+          <span className="font-semibold text-slate-500 dark:text-slate-400">
+            شخصیت‌ها:
+          </span>
+          <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-stone-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-medium">
+            {todayStory.character}
+          </span>
+          <span className="text-slate-400 dark:text-slate-500">•</span>
+          <span className="text-slate-500 dark:text-slate-400 font-medium">
+            {todayStory.versesRange}
+          </span>
+        </div>
+
+        {/* خلاصه داستان با فونت خوانا */}
+        <p className="text-sm sm:text-base text-slate-700 dark:text-slate-200 leading-relaxed text-right font-normal">
+          {todayStory.summary}
+        </p>
+
+        {/* آیه کلیدی داستان با فونت باشکوه و درشت */}
+        {todayStory.narrative[0]?.keyAyahText && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/20 text-right space-y-2">
+            <div className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 justify-end">
+              <span>{todayStory.narrative[0].keyAyahRef}</span>
+              <BookOpen className="w-3.5 h-3.5" />
+            </div>
+            <p
+              className="text-xl sm:text-2xl md:text-3xl font-bold leading-loose text-slate-900 dark:text-amber-100"
+              style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
+              dir="rtl"
+            >
+              «{todayStory.narrative[0].keyAyahText}»
+            </p>
+          </div>
+        )}
+
+        {/* دکمه‌های عملیات */}
+        <div className="pt-2 flex items-center justify-between gap-2.5 border-t border-amber-200/50 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedStoryModal(todayStory)}
+              className="px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-stone-300 dark:border-slate-700 hover:bg-stone-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 shadow-2xs"
+            >
+              <BookOpen className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <span>مطالعه داستان</span>
+            </button>
+
+            <button
+              onClick={handleStartTodayStoryQuiz}
+              className="p-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold transition-all cursor-pointer active:scale-95 shadow-xs shrink-0"
+              title="آزمون تمام‌صفحه"
+              aria-label="آزمون تمام‌صفحه"
+            >
+              <Trophy className="w-4 h-4 fill-current" />
+            </button>
+          </div>
+
+          <button
+            onClick={onOpenMemorization}
+            className="text-xs text-amber-700 dark:text-amber-400 hover:underline font-bold flex items-center gap-1 p-2"
+          >
+            <span>همه داستان‌ها</span>
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </section>
+
       {/* دسترسی سریع به بخش‌های اصلی - با کارت‌های تمیز و بدون بوردر شلوغ */}
       <section id="home-quick-actions" className="space-y-2.5">
-        <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
+        <h3 className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 px-1">
           بخش‌های تخصصی
         </h3>
 
@@ -682,56 +820,56 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           {/* قرائت آیه به آیه */}
           <button
             onClick={onContinueReading}
-            className="p-3 rounded-xl border border-stone-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-right transition-all hover:border-teal-500/50 shadow-xs flex flex-col justify-between active:scale-[0.99]"
+            className="p-3 sm:p-3.5 rounded-xl border border-stone-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-right transition-all hover:border-teal-500/50 shadow-xs flex flex-col justify-between active:scale-[0.99]"
           >
             <div className="p-2 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
-              <BookOpen className="w-4 h-4" />
+              <BookOpen className="w-4.5 h-4.5" />
             </div>
             <div>
-              <div className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">قرائت آیه‌ای</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">۳ ترجمه + تفسیر</div>
+              <div className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100">قرائت آیه‌ای</div>
+              <div className="text-xs text-slate-400 mt-1">۳ ترجمه + تفسیر</div>
             </div>
           </button>
 
           {/* مصحف صفحه‌ای */}
           <button
             onClick={onOpenMushafPage}
-            className="p-3 rounded-xl border border-stone-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-right transition-all hover:border-teal-500/50 shadow-xs flex flex-col justify-between active:scale-[0.99]"
+            className="p-3 sm:p-3.5 rounded-xl border border-stone-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-right transition-all hover:border-teal-500/50 shadow-xs flex flex-col justify-between active:scale-[0.99]"
           >
             <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit mb-2">
-              <FileText className="w-4 h-4" />
+              <FileText className="w-4.5 h-4.5" />
             </div>
             <div>
-              <div className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">مصحف صفحه‌ای</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">۶۰۴ صفحه عثمان طه</div>
+              <div className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100">مصحف صفحه‌ای</div>
+              <div className="text-xs text-slate-400 mt-1">۶۰۴ صفحه عثمان طه</div>
             </div>
           </button>
 
           {/* ترتیل صوتی */}
           <button
             onClick={() => onPlayVerseAudio(lastReadSurah.id, lastRead ? lastRead.verseNumber : 1)}
-            className="p-3 rounded-xl border border-stone-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-right transition-all hover:border-teal-500/50 shadow-xs flex flex-col justify-between active:scale-[0.99]"
+            className="p-3 sm:p-3.5 rounded-xl border border-stone-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-right transition-all hover:border-teal-500/50 shadow-xs flex flex-col justify-between active:scale-[0.99]"
           >
             <div className="p-2 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 w-fit mb-2">
-              <Headphones className="w-4 h-4" />
+              <Headphones className="w-4.5 h-4.5" />
             </div>
             <div>
-              <div className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">ترتیل صوتی</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">پرهیزگار، منشاوی و…</div>
+              <div className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100">ترتیل صوتی</div>
+              <div className="text-xs text-slate-400 mt-1">پرهیزگار، منشاوی و…</div>
             </div>
           </button>
 
           {/* دستیار تدبّر */}
           <button
             onClick={() => onOpenAI()}
-            className="p-3 rounded-xl border border-stone-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-right transition-all hover:border-teal-500/50 shadow-xs flex flex-col justify-between active:scale-[0.99]"
+            className="p-3 sm:p-3.5 rounded-xl border border-stone-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-right transition-all hover:border-teal-500/50 shadow-xs flex flex-col justify-between active:scale-[0.99]"
           >
             <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 w-fit mb-2">
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-4.5 h-4.5" />
             </div>
             <div>
-              <div className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">دستیار تدبّر</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">پاسخ هوشمند قرآنی</div>
+              <div className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100">دستیار تدبّر</div>
+              <div className="text-xs text-slate-400 mt-1">پاسخ هوشمند قرآنی</div>
             </div>
           </button>
         </div>
@@ -768,6 +906,137 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             </button>
           </div>
         </section>
+      )}
+      {/* آزمون شورتز تمام‌صفحه ویدیویی برای داستان روز */}
+      {isStoryShortsOpen && (
+        <FullscreenShortsQuiz
+          isOpen={isStoryShortsOpen}
+          title={storyQuizTitle}
+          questions={storyQuizQuestions}
+          onClose={() => setIsStoryShortsOpen(false)}
+        />
+      )}
+
+      {/* مدال مطالعه تفصیلی داستان و عبرت‌های قرآنی */}
+      {selectedStoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto" dir="rtl">
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white dark:bg-slate-900 border border-amber-500/30 text-slate-800 dark:text-slate-100 shadow-2xl p-5 sm:p-7 space-y-6">
+            {/* سربرگ مدال داستان */}
+            <div className="flex items-center justify-between border-b border-stone-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
+                  <Sparkles className="w-5 h-5 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                    {selectedStoryModal.title}
+                  </h3>
+                  <div className="text-xs text-amber-700 dark:text-amber-400 font-bold mt-0.5">
+                    سوره {selectedStoryModal.surahName} • {selectedStoryModal.versesRange}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedStoryModal(null)}
+                className="p-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
+                aria-label="بستن"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* شخصیت‌ها و زیرعنوان */}
+            <div className="space-y-1.5 p-3.5 rounded-2xl bg-stone-50 dark:bg-slate-800/60 border border-stone-200/80 dark:border-slate-800 text-xs">
+              <div className="font-bold text-slate-800 dark:text-slate-200">
+                {selectedStoryModal.subtitle}
+              </div>
+              <div className="text-slate-500 dark:text-slate-400">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">شخصیت‌های ماجرا: </span>
+                {selectedStoryModal.character}
+              </div>
+            </div>
+
+            {/* فرازهای سرگذشت */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                فرازهای داستان
+              </h4>
+              <div className="space-y-4">
+                {selectedStoryModal.narrative.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-2xl bg-stone-50/80 dark:bg-slate-800/40 border border-stone-200/60 dark:border-slate-800 space-y-2.5"
+                  >
+                    <div className="flex items-center gap-2 text-xs font-bold text-teal-700 dark:text-teal-400">
+                      <div className="w-5 h-5 rounded-full bg-teal-500/15 flex items-center justify-center text-[10px]">
+                        {toPersianDigits(idx + 1)}
+                      </div>
+                      <span>{item.sectionTitle}</span>
+                    </div>
+
+                    <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed text-right">
+                      {item.text}
+                    </p>
+
+                    {item.keyAyahText && (
+                      <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/30 text-right space-y-1 mt-2">
+                        <div className="text-[10px] text-amber-700 dark:text-amber-400 font-bold">
+                          {item.keyAyahRef}
+                        </div>
+                        <p
+                          className="text-base sm:text-lg font-bold leading-loose text-slate-900 dark:text-amber-100"
+                          style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
+                          dir="rtl"
+                        >
+                          «{item.keyAyahText}»
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* حکمت‌ها و عبرت‌ها */}
+            {selectedStoryModal.wisdoms && selectedStoryModal.wisdoms.length > 0 && (
+              <div className="space-y-2.5 p-4 rounded-2xl bg-teal-500/10 dark:bg-teal-500/5 border border-teal-500/20">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-teal-700 dark:text-teal-400">
+                  <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  <span>عبرت‌ها و پیام‌های زندگی‌ساز</span>
+                </div>
+                <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300 list-disc list-inside">
+                  {selectedStoryModal.wisdoms.map((w, i) => (
+                    <li key={i} className="leading-relaxed">
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* دکمه‌های انتهای مدال */}
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 dark:border-slate-800">
+              <button
+                onClick={() => {
+                  setSelectedStoryModal(null);
+                  handleStartTodayStoryQuiz();
+                }}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer active:scale-95"
+              >
+                <Trophy className="w-4 h-4 fill-current" />
+                <span>شروع آزمون</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedStoryModal(null)}
+                className="px-4 py-2 rounded-xl border border-stone-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-stone-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                بستن پنجره
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

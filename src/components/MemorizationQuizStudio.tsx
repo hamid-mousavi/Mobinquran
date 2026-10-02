@@ -19,11 +19,15 @@ import {
   HelpCircle,
   Sliders,
   Filter,
+  Maximize2,
+  Play,
 } from 'lucide-react';
 import { Surah, Verse } from '../types';
 import { toPersianDigits } from '../utils/textNormalization';
 import { QuranService } from '../services/quranService';
 import { getAudioSourceUrl, ReciterId } from '../services/audioSources';
+import { QURAN_STORIES } from '../data/quranStories';
+import { FullscreenShortsQuiz, ShortsQuestion } from './FullscreenShortsQuiz';
 
 interface MemorizationQuizStudioProps {
   currentSurah: Surah;
@@ -33,7 +37,13 @@ interface MemorizationQuizStudioProps {
   onSelectSurah?: (surah: Surah) => void;
 }
 
-export type QuizType = 'next_verse' | 'prev_verse' | 'fill_blank' | 'verse_number' | 'mutashabihat';
+export type QuizType =
+  | 'next_verse'
+  | 'prev_verse'
+  | 'fill_blank'
+  | 'verse_number'
+  | 'mutashabihat'
+  | 'quran_stories';
 
 interface QuizQuestion {
   id: string;
@@ -95,6 +105,7 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [userAnswers, setUserAnswers] = useState<{ isCorrect: boolean; selected: number; question: QuizQuestion }[]>([]);
+  const [isShortsFullscreenOpen, setIsShortsFullscreenOpen] = useState(false);
 
   // تاریخچه نتایج آزمون در حافظه مرورگر
   const [quizHistory, setQuizHistory] = useState<SavedQuizResult[]>(() => {
@@ -171,9 +182,55 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
     setIsAnswerSubmitted(true);
   };
 
-  // تولید هوشمند سوالات آزمون بر اساس آیات سوره
-  const generateQuestions = () => {
+  // تولید هوشمند سوالات آزمون بر اساس آیات سوره یا داستان‌های قرآنی
+  const generateQuestions = (openInShorts: boolean = false) => {
     setErrorMessage(null);
+
+    // حالت آزمون داستان‌ها و قصص قرآنی
+    if (quizType === 'quran_stories') {
+      const storyMatches = QURAN_STORIES.filter((s) => s.surahId === activeSurah.id);
+      const storiesToUse = storyMatches.length > 0 ? storyMatches : QURAN_STORIES;
+      const allQ = storiesToUse.flatMap((s) =>
+        s.questions.map((q) => ({
+          ...q,
+          surahId: s.surahId,
+          storyTitle: s.title,
+        }))
+      );
+      const shuffled = [...allQ].sort(() => Math.random() - 0.5).slice(0, questionCount);
+      const generated: QuizQuestion[] = shuffled.map((sq) => ({
+        id: sq.id,
+        type: 'quran_stories',
+        prompt: sq.prompt,
+        contextText: sq.contextAyah,
+        options: sq.options,
+        correctIndex: sq.correctIndex,
+        explanation: sq.explanation,
+        surahId: sq.surahId,
+        surahName: sq.surahName,
+        verseNumber: sq.verseNumber,
+        verseAudioUrl: getAudioSourceUrl(currentReciterId, sq.surahId, sq.verseNumber, 0),
+      }));
+
+      if (generated.length === 0) {
+        setErrorMessage('سوالات داستانی برای این سوره یافت نشد. می‌توانید سبک دیگری را برگزینید یا سوره یوسف یا کهف را انتخاب نمایید.');
+        return;
+      }
+
+      setQuestions(generated);
+      setCurrentQuestionIndex(0);
+      setSelectedAnswerIndex(null);
+      setIsAnswerSubmitted(false);
+      setScore(0);
+      setUserAnswers([]);
+
+      if (openInShorts) {
+        setIsShortsFullscreenOpen(true);
+      } else {
+        setPhase('playing');
+      }
+      return;
+    }
 
     // فیلتر کردن بر اساس محدوده آیات در صورت فعال بودن
     let pool = [...activeVerses];
@@ -393,7 +450,11 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
     setIsAnswerSubmitted(false);
     setScore(0);
     setUserAnswers([]);
-    setPhase('playing');
+    if (openInShorts) {
+      setIsShortsFullscreenOpen(true);
+    } else {
+      setPhase('playing');
+    }
   };
 
   const handleSelectOption = (idx: number) => {
@@ -439,6 +500,7 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
         fill_blank: 'کلمه مخفی',
         verse_number: 'شماره آیه',
         mutashabihat: 'مشابهات',
+        quran_stories: 'قصص قرآنی',
       };
 
       const resultEntry: SavedQuizResult = {
@@ -483,21 +545,19 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
       {/* مرحله ۱: تنظیمات و استودیوی ساخت آزمون */}
       {phase === 'setup' && (
         <div className="space-y-4">
-          {/* کارت خوش‌آمد و معرفی آزمون‌ساز */}
-          <div className="rounded-2xl p-5 border border-teal-600/30 bg-gradient-to-br from-teal-900/10 via-teal-600/5 to-transparent dark:from-teal-950/40 dark:via-slate-900 border-stone-200 dark:border-slate-800 space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold shadow-sm shrink-0">
-                <Brain className="w-6 h-6" />
+          {/* عنوان استودیوی آزمون با آیکون ساده و شیک */}
+          <div className="flex items-center justify-between gap-3 p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold shadow-xs shrink-0">
+                <Brain className="w-5 h-5" />
               </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
-                  استودیوی حرفه‌ای آزمون و سنجش حفظ قرآن
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  ۵ سبک تخصصی ارزیابی: توالی آیات، اتصال از عقب، متشابهات و تسلط کلمه‌به‌کلمه
-                </p>
-              </div>
+              <h2 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+                آزمون‌ساز حفظ قرآن
+              </h2>
             </div>
+            <span className="text-[11px] text-teal-700 dark:text-teal-300 font-bold px-2 py-0.5 rounded-lg bg-teal-500/10">
+              سوره {activeSurah.nameArabic}
+            </span>
           </div>
 
           {/* پیام خطا در صورت ناکافی بودن آیات */}
@@ -625,6 +685,31 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
                   تسلط بر جایگاه و شمارهٔ دقیق آیه در سوره.
                 </p>
               </button>
+
+              {/* ۶. داستان‌ها و حکمت‌های قرآنی */}
+              <button
+                type="button"
+                onClick={() => setQuizType('quran_stories')}
+                className={`p-3.5 rounded-xl border text-right transition-all flex flex-col gap-1.5 cursor-pointer ${
+                  quizType === 'quran_stories'
+                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 ring-2 ring-amber-500/30 text-amber-950 dark:text-amber-100 shadow-xs'
+                    : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-amber-500" />
+                    <span>داستان‌ها و قصص قرآن</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-400/20 text-amber-700 dark:text-amber-300 font-black">
+                      جدید
+                    </span>
+                  </span>
+                  {quizType === 'quran_stories' && <Check className="w-4 h-4 text-amber-500" />}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  سنجش معرفت و حفظ آیات مرتبط با سرگذشت انبیای الهی.
+                </p>
+              </button>
             </div>
           </div>
 
@@ -730,15 +815,27 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
             </div>
           </div>
 
-          {/* دکمه شروع آزمون */}
-          <button
-            onClick={generateQuestions}
-            disabled={isLoadingVerses}
-            className="w-full py-4 px-4 rounded-2xl bg-teal-600 hover:bg-teal-700 active:scale-98 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-          >
-            <Trophy className="w-5 h-5 text-amber-300" />
-            <span>{isLoadingVerses ? 'در حال آماده‌سازی آیات سوره...' : 'شروع آزمون حرفه‌ای حفظ'}</span>
-          </button>
+          {/* دکمه‌های شروع آزمون (دکمه شروع + آیکون تمام‌صفحه) */}
+          <div className="flex items-center gap-2.5 pt-1">
+            <button
+              onClick={() => generateQuestions(false)}
+              disabled={isLoadingVerses}
+              className="flex-1 py-3 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 active:scale-98 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              <span>{isLoadingVerses ? 'در حال آماده‌سازی...' : 'شروع آزمون'}</span>
+            </button>
+
+            <button
+              onClick={() => generateQuestions(true)}
+              disabled={isLoadingVerses}
+              className="p-3 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold transition-all cursor-pointer shadow-sm disabled:opacity-50 shrink-0"
+              title="تمام‌صفحه"
+              aria-label="تمام‌صفحه"
+            >
+              <Maximize2 className="w-5 h-5" />
+            </button>
+          </div>
 
           {/* تاریخچه آخرین آزمون‌ها */}
           {quizHistory.length > 0 && (
@@ -799,6 +896,14 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
             )}
 
             <div className="flex items-center gap-2 font-bold text-xs">
+              <button
+                onClick={() => setIsShortsFullscreenOpen(true)}
+                className="p-1.5 rounded-lg bg-amber-400/20 text-amber-700 dark:text-amber-300 hover:bg-amber-400/30 transition-all cursor-pointer"
+                title="تمام‌صفحه"
+                aria-label="تمام‌صفحه"
+              >
+                <Maximize2 className="w-4 h-4" />
+              </button>
               <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                 <CheckCircle2 className="w-4 h-4" />
                 {toPersianDigits(score)} درست
@@ -970,7 +1075,7 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
 
             <div className="flex items-center gap-2 pt-2">
               <button
-                onClick={generateQuestions}
+                onClick={() => generateQuestions(false)}
                 className="flex-1 py-3 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -1025,6 +1130,39 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
 
       {/* المان صوتی مخفی */}
       <audio ref={audioPlayerRef} onEnded={() => setPlayingAudioUrl(null)} className="hidden" />
+
+      {/* آزمون ویدیویی شورتز تمام‌صفحه با اسلاید عمودی */}
+      <FullscreenShortsQuiz
+        isOpen={isShortsFullscreenOpen}
+        onClose={() => setIsShortsFullscreenOpen(false)}
+        questions={questions.map((q) => ({
+          id: q.id,
+          prompt: q.prompt,
+          contextText: q.contextText,
+          options: q.options,
+          correctIndex: q.correctIndex,
+          explanation: q.explanation,
+          surahName: q.surahName,
+          verseNumber: q.verseNumber,
+          verseAudioUrl: q.verseAudioUrl,
+          categoryBadge:
+            q.type === 'quran_stories'
+              ? 'قصص قرآنی'
+              : q.type === 'next_verse'
+              ? 'آیه بعدی'
+              : q.type === 'prev_verse'
+              ? 'آیه قبلی'
+              : q.type === 'fill_blank'
+              ? 'کلمه مخفی'
+              : q.type === 'mutashabihat'
+              ? 'مشابهات'
+              : 'شماره آیه',
+        }))}
+        title={`آزمون حفظ سوره ${activeSurah.nameArabic}`}
+        onRestart={() => {
+          generateQuestions(true);
+        }}
+      />
     </div>
   );
 };
