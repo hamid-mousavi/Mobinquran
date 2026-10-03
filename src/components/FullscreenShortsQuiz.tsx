@@ -21,6 +21,7 @@ import {
   Trophy,
   Clock,
   Type,
+  Play,
 } from 'lucide-react';
 import { toPersianDigits } from '../utils/textNormalization';
 
@@ -35,6 +36,8 @@ export interface ShortsQuestion {
   verseNumber: number;
   verseAudioUrl?: string | null;
   categoryBadge?: string;
+  fullVerseText?: string;
+  fullVerseTranslation?: string;
 }
 
 interface FullscreenShortsQuizProps {
@@ -110,6 +113,7 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
   const [isFinished, setIsFinished] = useState(false);
   const [fontScale, setFontScale] = useState<number>(0); // 0 = standard, 1 = large, 2 = extra-large
   const [timeLeft, setTimeLeft] = useState<number>(timePerQuestion);
+  const [isFullVerseModalOpen, setIsFullVerseModalOpen] = useState(false); // باکس پاپ‌آپ مشاهده کل سوال و آیه
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -121,12 +125,24 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
   const currentTheme = BACKGROUND_THEMES[themeIndex % BACKGROUND_THEMES.length];
   const currentQ = questions[currentIndex];
 
-  // اسکرول نرم به بالای صفحه هنگام تغییر سوال
+  // اسکرول نرم به بالای صفحه و بستن پاپ‌آپ هنگام تغییر سوال
   useEffect(() => {
+    setIsFullVerseModalOpen(false);
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [currentIndex]);
+
+  // بستن پاپ‌آپ آیه کامل با کلید Escape
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullVerseModalOpen) {
+        setIsFullVerseModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isFullVerseModalOpen]);
 
   // ورود به حالت فول اسکرین مرورگر در صورت امکان
   const toggleFullscreen = () => {
@@ -488,11 +504,23 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
                 <span className="px-2.5 py-0.5 rounded-full bg-white/15 font-bold">
                   سوال {toPersianDigits(currentIndex + 1)} از {toPersianDigits(questions.length)}
                 </span>
-                {currentQ.categoryBadge && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-medium">
-                    {currentQ.categoryBadge}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {currentQ.categoryBadge && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-medium">
+                      {currentQ.categoryBadge}
+                    </span>
+                  )}
+                  {/* کلید لمسی باز شدن کادر کامل سوال و آیه */}
+                  <button
+                    type="button"
+                    onClick={() => setIsFullVerseModalOpen(true)}
+                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-500/20 hover:bg-teal-500/35 active:scale-95 text-teal-300 hover:text-white border border-teal-400/40 text-[11px] font-bold cursor-pointer transition-all shadow-xs"
+                    title="لمس کنید تا کل آیه و صورت سوال در کادر مجزا باز شود"
+                  >
+                    <Maximize2 className="w-3 h-3 text-amber-300" />
+                    <span>متن کامل</span>
+                  </button>
+                </div>
               </div>
 
               {/* متن صورت سوال با فونت بهینه‌شده، درشت و خوانا */}
@@ -508,11 +536,15 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
                 {currentQ.prompt}
               </div>
 
-              {/* کادر فراز شریفه قرآنی با قلم درشت و فاخر */}
+              {/* کادر فراز شریفه قرآنی با قلم درشت و فاخر - با لمس روی آن باکس نمایش کامل باز می‌شود */}
               {currentQ.contextText && (
-                <div className="p-4 sm:p-6 rounded-2xl bg-black/45 backdrop-blur-xl border border-white/15 text-center shadow-2xl relative">
+                <div
+                  onClick={() => setIsFullVerseModalOpen(true)}
+                  className="p-4 sm:p-6 rounded-2xl bg-black/45 hover:bg-black/60 backdrop-blur-xl border border-white/15 hover:border-teal-400/50 text-center shadow-2xl relative cursor-pointer transition-all duration-200 group active:scale-[0.99]"
+                  title="کلیک یا لمس کنید تا متن کامل آیه و صورت سوال در کادر بزرگ باز شود"
+                >
                   <div
-                    className={`font-bold text-amber-100 py-1 ${
+                    className={`font-bold text-amber-100 py-1 transition-transform group-hover:scale-[1.01] ${
                       fontScale === 0
                         ? 'text-2xl sm:text-4xl md:text-5xl leading-loose'
                         : fontScale === 1
@@ -523,6 +555,13 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
                   >
                     «{currentQ.contextText}»
                   </div>
+
+                  {/* نوار راهنمای لمس برای باز شدن باکس کامل */}
+                  <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-center gap-1.5 text-xs text-teal-300/85 group-hover:text-teal-200 transition-colors">
+                    <Maximize2 className="w-3.5 h-3.5 text-amber-300" />
+                    <span className="font-medium">لمس کنید: باز شدن کادر اختصاصی متن و ترجمه کامل آیه</span>
+                  </div>
+
                   {showHint[currentIndex] && (
                     <div className="mt-2 pt-2 border-t border-white/10 text-xs sm:text-sm text-teal-200 animate-fadeIn">
                       راهنمایی: این فراز در سوره {currentQ.surahName}، آیه {toPersianDigits(currentQ.verseNumber)} قرار دارد.
@@ -770,6 +809,130 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
           </aside>
         )}
       </main>
+
+      {/* باکس پاپ‌آپ تمام‌صفحه / پنجره نمایش کامل آیه و سوال با لمس کاربر */}
+      {isFullVerseModalOpen && currentQ && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn"
+          onClick={() => setIsFullVerseModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl bg-slate-950 border border-white/20 shadow-2xl overflow-hidden text-white"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            {/* سربرگ پنجره پاپ‌آپ */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-white/5 backdrop-blur-md">
+              <div className="flex items-center gap-2.5">
+                <span className="w-9 h-9 rounded-2xl bg-amber-400/20 text-amber-300 flex items-center justify-center shadow-inner">
+                  <BookOpen className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                    <span>سوره {currentQ.surahName}</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-bold border border-teal-400/30">
+                      آیه {toPersianDigits(currentQ.verseNumber)}
+                    </span>
+                  </h3>
+                  <div className="text-[11px] text-white/60">
+                    {currentQ.categoryBadge || 'نمایش متن کامل آیه و صورت سوال'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {currentQ.verseAudioUrl && (
+                  <button
+                    onClick={handleToggleAudio}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                      isPlayingAudio
+                        ? 'bg-teal-500 text-white animate-pulse shadow-md shadow-teal-500/50'
+                        : 'bg-white/10 hover:bg-white/20 text-white/80'
+                    }`}
+                    title="پخش صوت آیه"
+                  >
+                    {isPlayingAudio ? <Volume2 className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setIsFullVerseModalOpen(false)}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer"
+                  title="بستن پنجره"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* بدنه اسکرول‌پذیر کادر با قلم درشت و فاخر */}
+            <div className="flex-1 overflow-y-auto reels-scrollbar p-5 sm:p-7 space-y-5">
+              {/* کادر صورت کامل سوال */}
+              <div className="p-4 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-100 font-bold text-sm sm:text-base leading-relaxed flex items-start gap-3">
+                <HelpCircle className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="text-xs text-teal-300/80 font-normal">صورت کامل سوال:</div>
+                  <div>{currentQ.prompt}</div>
+                </div>
+              </div>
+
+              {/* کادر متن کامل آیه شریفه */}
+              <div className="p-5 sm:p-7 rounded-3xl bg-black/45 border border-white/15 text-center shadow-xl space-y-4">
+                <div className="text-xs text-amber-300 font-bold flex items-center justify-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>متن کامل آیه شریفه:</span>
+                </div>
+
+                <div
+                  className="text-2xl sm:text-4xl text-amber-50 font-bold leading-[2.6] select-text"
+                  style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
+                  dir="rtl"
+                >
+                  «{currentQ.fullVerseText || currentQ.contextText || currentQ.explanation}»
+                </div>
+              </div>
+
+              {/* ترجمه کامل آیه */}
+              {(currentQ.fullVerseTranslation || currentQ.explanation) && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+                  <div className="text-xs text-teal-300 font-bold">ترجمه و تبیین آیه:</div>
+                  <div className="text-sm sm:text-base text-teal-100/90 leading-relaxed font-normal">
+                    {currentQ.fullVerseTranslation || currentQ.explanation}
+                  </div>
+                </div>
+              )}
+
+              {/* گزینه‌های آزمون */}
+              <div className="space-y-2 pt-2 border-t border-white/10">
+                <div className="text-xs text-white/60 font-bold">گزینه‌های موجود برای پاسخ:</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {currentQ.options.map((opt, oIdx) => (
+                    <div
+                      key={oIdx}
+                      className="p-3 rounded-xl bg-white/5 border border-white/10 text-right text-xs sm:text-sm font-medium text-white/90 flex items-center gap-2.5"
+                    >
+                      <span className="w-6 h-6 rounded-lg bg-white/10 text-[11px] font-bold flex items-center justify-center shrink-0">
+                        {toPersianDigits(oIdx + 1)}
+                      </span>
+                      <span className="truncate">{opt}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* پابرگ دکمه بازگشت */}
+            <div className="p-4 border-t border-white/10 bg-white/5 flex items-center justify-end">
+              <button
+                onClick={() => setIsFullVerseModalOpen(false)}
+                className="px-6 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-600 text-white font-bold text-xs sm:text-sm transition-all cursor-pointer active:scale-95 shadow-md"
+              >
+                متوجه شدم (بازگشت به آزمون)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

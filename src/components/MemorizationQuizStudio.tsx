@@ -66,6 +66,9 @@ interface QuizQuestion {
   surahName: string;
   verseNumber: number;
   verseAudioUrl?: string | null;
+  fullVerseText?: string;
+  fullVerseTranslation?: string;
+  blankPosition?: 'start' | 'end' | 'middle';
 }
 
 interface SavedQuizResult {
@@ -100,8 +103,8 @@ const ALL_QUIZ_STYLES: { id: QuizType; title: string; desc: string; icon: React.
   },
   {
     id: 'fill_blank',
-    title: 'تکمیل کلمهٔ مخفی',
-    desc: 'شناسایی واژهٔ پنهان‌شده در جای خالی متن آیه',
+    title: 'تکمیل کلمات مخفی',
+    desc: 'شناسایی واژگان پنهان‌شده در ابتدا، انتها یا میانهٔ آیه',
     icon: FileQuestion,
   },
   {
@@ -316,6 +319,8 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
             surahName: sq.surahName,
             verseNumber: sq.verseNumber,
             verseAudioUrl: audioUrl,
+            fullVerseText: sq.contextAyah || undefined,
+            fullVerseTranslation: sq.explanation,
           });
           continue;
         }
@@ -351,6 +356,8 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
           surahName: activeSurah.nameArabic,
           verseNumber: v.verseNumber,
           verseAudioUrl: audioUrl,
+          fullVerseText: `${v.textArabic}\n\n«آیه بعدی (${toPersianDigits(nextVerse.verseNumber)}): ${nextVerse.textArabic}»`,
+          fullVerseTranslation: `${v.translationMakarem || v.translationFooladvand || ''}\n\nترجمه آیه بعدی: ${nextVerse.translationMakarem || nextVerse.translationFooladvand || ''}`,
         });
       } else if (currentStyle === 'prev_verse') {
         let prevVerse = activeVerses[vIndex - 1];
@@ -382,55 +389,139 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
           surahName: activeSurah.nameArabic,
           verseNumber: v.verseNumber,
           verseAudioUrl: audioUrl,
+          fullVerseText: `«آیه قبلی (${toPersianDigits(prevVerse.verseNumber)}): ${prevVerse.textArabic}»\n\n${v.textArabic}`,
+          fullVerseTranslation: `ترجمه آیه قبلی: ${prevVerse.translationMakarem || prevVerse.translationFooladvand || ''}\n\n${v.translationMakarem || v.translationFooladvand || ''}`,
         });
       } else if (currentStyle === 'fill_blank') {
         const words = v.textArabic.trim().split(/\s+/);
-        if (words.length < 4) continue;
+        if (words.length < 3) continue;
 
-        const candidateIndices = words
-          .map((w, idx) => ({ w, idx }))
-          .filter((item) => item.w.length > 2 && item.idx > 0 && item.idx < words.length - 1);
+        // انتخاب هوشمند موقعیت کلمه مخفی: ابتدای آیه، انتهای آیه یا بخشی از آیه (میانه)
+        const posModes: ('start' | 'end' | 'middle')[] = ['start', 'end', 'middle'];
+        const chosenPosition = posModes[i % posModes.length];
 
-        const targetItem =
-          candidateIndices.length > 0
-            ? candidateIndices[Math.floor(Math.random() * candidateIndices.length)]
-            : { w: words[1], idx: 1 };
+        let targetWord = '';
+        let promptText = '';
+        let blankedText = '';
 
-        const targetWord = targetItem.w;
-        // خلاصه کلمات جهت عدم پر شدن بیش از حد صفحه
-        const displayWords = words.length > 12 ? words.slice(0, 11) : words;
-        const blankedText =
-          displayWords.map((w, idx) => (idx === targetItem.idx ? '【 ... 】' : w)).join(' ') +
-          (words.length > 12 ? ' ...' : '');
+        if (chosenPosition === 'start') {
+          // کلمه مخفی در ابتدای آیه
+          targetWord = words[0];
+          promptText = 'کلمهٔ مخفی‌شده در «ابتدای آیه» کدام است؟';
+          const restWords = words.slice(1);
+          const preview = restWords.length > 14 ? restWords.slice(0, 13).join(' ') + ' ...' : restWords.join(' ');
+          blankedText = `【 ... 】 ${preview}`;
+        } else if (chosenPosition === 'end') {
+          // کلمه مخفی در انتهای آیه
+          targetWord = words[words.length - 1];
+          promptText = 'کلمهٔ مخفی‌شده در «انتهای آیه» کدام است؟';
+          const leadingWords = words.slice(0, words.length - 1);
+          const preview = leadingWords.length > 14 ? '... ' + leadingWords.slice(leadingWords.length - 13).join(' ') : leadingWords.join(' ');
+          blankedText = `${preview} 【 ... 】`;
+        } else {
+          // کلمه مخفی در بخشی از آیه (میانه آیه)
+          const middleCandidates = words
+            .map((w, idx) => ({ w, idx }))
+            .filter((item) => item.idx > 0 && item.idx < words.length - 1 && item.w.length > 2);
 
-        const otherWords: string[] = [];
-        for (const ov of activeVerses) {
-          if (ov.verseNumber !== v.verseNumber) {
-            const ow = ov.textArabic.split(/\s+/).filter((w) => w.length > 2 && w !== targetWord);
-            otherWords.push(...ow);
+          const targetItem =
+            middleCandidates.length > 0
+              ? middleCandidates[Math.floor(Math.random() * middleCandidates.length)]
+              : { w: words[Math.min(1, words.length - 2)], idx: Math.min(1, words.length - 2) };
+
+          targetWord = targetItem.w;
+          promptText = 'کلمهٔ مخفی‌شده در جای خالی 【 ... 】 کدام است؟';
+
+          const startIdx = Math.max(0, targetItem.idx - 5);
+          const endIdx = Math.min(words.length, targetItem.idx + 6);
+          const windowWords = words.slice(startIdx, endIdx);
+
+          const formattedWindow = windowWords
+            .map((w, wIdx) => {
+              const actualIdx = startIdx + wIdx;
+              return actualIdx === targetItem.idx ? '【 ... 】' : w;
+            })
+            .join(' ');
+
+          blankedText = (startIdx > 0 ? '... ' : '') + formattedWindow + (endIdx < words.length ? ' ...' : '');
+        }
+
+        // جمع‌آوری گزینه‌های غلط متناسب با جایگاه کلمه مخفی
+        let wrongWords: string[] = [];
+
+        if (chosenPosition === 'start') {
+          const otherStartWords = activeVerses
+            .filter((ov) => ov.verseNumber !== v.verseNumber)
+            .map((ov) => ov.textArabic.trim().split(/\s+/)[0])
+            .filter((w) => w && w.length > 1 && w !== targetWord);
+
+          wrongWords = Array.from(new Set(otherStartWords))
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 3);
+        } else if (chosenPosition === 'end') {
+          const otherEndWords = activeVerses
+            .filter((ov) => ov.verseNumber !== v.verseNumber)
+            .map((ov) => {
+              const ws = ov.textArabic.trim().split(/\s+/);
+              return ws[ws.length - 1];
+            })
+            .filter((w) => w && w.length > 1 && w !== targetWord);
+
+          wrongWords = Array.from(new Set(otherEndWords))
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 3);
+        }
+
+        // اگر گزینه‌های هم‌موقعیت کافی نبود، از کل واژگان آیات سوره کمک بگیر
+        if (wrongWords.length < 3) {
+          const fallbackWords: string[] = [];
+          for (const ov of activeVerses) {
+            if (ov.verseNumber !== v.verseNumber) {
+              const ow = ov.textArabic
+                .split(/\s+/)
+                .filter((w) => w.length > 2 && w !== targetWord && !wrongWords.includes(w));
+              fallbackWords.push(...ow);
+            }
+          }
+          const uniqueFallback = Array.from(new Set(fallbackWords)).sort(() => Math.random() - 0.5);
+          wrongWords.push(...uniqueFallback.slice(0, 3 - wrongWords.length));
+        }
+
+        // پشتیبان کلمات مصحف
+        const defaultQuranWords =
+          chosenPosition === 'start'
+            ? ['إِنَّ', 'قُلْ', 'يَا أَيُّهَا', 'وَإِذْ', 'ذَٰلِكَ', 'فَلَمَّا']
+            : chosenPosition === 'end'
+            ? ['عَلِيمٌ', 'حَكِيمٌ', 'رَّحِيمٌ', 'قَدِيرٌ', 'تَعْلَمُونَ', 'يَعْمَلُونَ']
+            : ['الَّذِينَ', 'آمَنُوا', 'الصَّالِحَاتِ', 'الْكِتَابَ', 'الصَّلَاةَ'];
+
+        for (const defW of defaultQuranWords) {
+          if (wrongWords.length >= 3) break;
+          if (defW !== targetWord && !wrongWords.includes(defW)) {
+            wrongWords.push(defW);
           }
         }
-        const wrongWords = Array.from(new Set(otherWords))
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 3);
 
         if (wrongWords.length < 3) continue;
 
-        const options = [targetWord, ...wrongWords].sort(() => Math.random() - 0.5);
+        const options = [targetWord, ...wrongWords.slice(0, 3)].sort(() => Math.random() - 0.5);
         const correctIndex = options.indexOf(targetWord);
 
         generated.push({
           id: `q_blank_${i}_${v.verseNumber}`,
           type: 'fill_blank',
-          prompt: 'کلمهٔ مخفی‌شده در جای خالی 【 ... 】 کدام است؟',
+          prompt: promptText,
           contextText: blankedText,
           options,
           correctIndex,
-          explanation: `متن آیه ${toPersianDigits(v.verseNumber)}: «${v.textArabic}»`,
+          explanation: `متن کامل آیه ${toPersianDigits(v.verseNumber)}: «${v.textArabic}»`,
           surahId: activeSurah.id,
           surahName: activeSurah.nameArabic,
           verseNumber: v.verseNumber,
           verseAudioUrl: audioUrl,
+          fullVerseText: v.textArabic,
+          fullVerseTranslation: v.translationMakarem || v.translationFooladvand,
+          blankPosition: chosenPosition,
         });
       } else if (currentStyle === 'mutashabihat') {
         const words = v.textArabic.trim().split(/\s+/);
@@ -467,6 +558,8 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
           surahName: activeSurah.nameArabic,
           verseNumber: v.verseNumber,
           verseAudioUrl: audioUrl,
+          fullVerseText: v.textArabic,
+          fullVerseTranslation: v.translationMakarem || v.translationFooladvand,
         });
       } else if (currentStyle === 'translation_match') {
         const trans = v.translationMakarem || v.translationFooladvand;
@@ -499,6 +592,8 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
           surahName: activeSurah.nameArabic,
           verseNumber: v.verseNumber,
           verseAudioUrl: audioUrl,
+          fullVerseText: v.textArabic,
+          fullVerseTranslation: trans,
         });
       } else if (currentStyle === 'surah_identity') {
         const otherSurahs = ALL_SURAHS.filter((s) => s.id !== activeSurah.id)
@@ -523,6 +618,8 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
           surahName: activeSurah.nameArabic,
           verseNumber: v.verseNumber,
           verseAudioUrl: audioUrl,
+          fullVerseText: v.textArabic,
+          fullVerseTranslation: v.translationMakarem || v.translationFooladvand,
         });
       } else {
         // verse_number
@@ -554,6 +651,8 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
           surahName: activeSurah.nameArabic,
           verseNumber: v.verseNumber,
           verseAudioUrl: audioUrl,
+          fullVerseText: v.textArabic,
+          fullVerseTranslation: v.translationMakarem || v.translationFooladvand,
         });
       }
     }
@@ -999,7 +1098,11 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
               : q.type === 'prev_verse'
               ? 'آیه قبلی'
               : q.type === 'fill_blank'
-              ? 'کلمه مخفی'
+              ? q.blankPosition === 'start'
+                ? 'کلمه مخفی (ابتدای آیه)'
+                : q.blankPosition === 'end'
+                ? 'کلمه مخفی (انتهای آیه)'
+                : 'کلمه مخفی (میانه آیه)'
               : q.type === 'mutashabihat'
               ? 'مشابهات'
               : q.type === 'translation_match'
@@ -1007,6 +1110,8 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
               : q.type === 'surah_identity'
               ? 'تشخیص سوره'
               : 'شماره آیه',
+          fullVerseText: q.fullVerseText,
+          fullVerseTranslation: q.fullVerseTranslation,
         }))}
         title={`آزمون حفظ سوره ${activeSurah.nameArabic}`}
         timePerQuestion={timePerQuestionSeconds}
