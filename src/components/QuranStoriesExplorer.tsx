@@ -20,6 +20,7 @@ import {
 import { QURAN_STORIES, QuranStory } from '../data/quranStories';
 import { toPersianDigits } from '../utils/textNormalization';
 import { FullscreenShortsQuiz, ShortsQuestion } from './FullscreenShortsQuiz';
+import { QuranStoryDetailModal } from './QuranStoryDetailModal';
 import { QuranicCard } from './QuranicOrnament';
 
 interface QuranStoriesExplorerProps {
@@ -223,123 +224,16 @@ export const QuranStoriesExplorer: React.FC<QuranStoriesExplorerProps> = ({
         })}
       </div>
 
-      {/* مودال مطالعه کامل داستان، فرازهای آیات و حکمت‌ها */}
+      {/* مودال مطالعه تفصیلی و با جزئیات داستان */}
       {selectedStory && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fadeIn"
-          dir="rtl"
-        >
-          <div className="bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-            {/* سربرگ مودال */}
-            <div className="p-4 sm:p-6 border-b border-stone-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-stone-50 dark:bg-slate-800/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold">
-                  <Crown className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
-                    {selectedStory.title}
-                  </h3>
-                  <div className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                    سوره {selectedStory.surahName} • {selectedStory.versesRange}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setSelectedStory(null)}
-                className="w-9 h-9 rounded-full bg-stone-200 dark:bg-slate-700 hover:bg-stone-300 dark:hover:bg-slate-600 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all cursor-pointer"
-                title="بستن"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* بدنه محتوای داستان */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
-              {/* خلاصه داستان */}
-              <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-500/20 text-xs sm:text-sm text-teal-950 dark:text-teal-100 leading-relaxed font-medium">
-                {selectedStory.summary}
-              </div>
-
-              {/* بخش‌های روایی به همراه آیات کلیدی */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                  فرازهای بنیادین روایت در قرآن کریم:
-                </h4>
-
-                {selectedStory.narrative.map((sec, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 rounded-2xl bg-stone-50 dark:bg-slate-800/60 border border-stone-200/80 dark:border-slate-700/60 space-y-2.5"
-                  >
-                    <div className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-lg bg-teal-600/15 text-teal-600 dark:text-teal-400 text-xs flex items-center justify-center font-bold">
-                        {toPersianDigits(idx + 1)}
-                      </span>
-                      <span>{sec.sectionTitle}</span>
-                    </div>
-
-                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                      {sec.text}
-                    </p>
-
-                    {sec.keyAyahText && (
-                      <div className="pt-2">
-                        <div
-                          className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 text-center font-bold text-base sm:text-lg text-slate-900 dark:text-amber-100 leading-loose"
-                          style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
-                        >
-                          «{sec.keyAyahText}»
-                        </div>
-                        {sec.keyAyahRef && (
-                          <div className="text-[10px] text-slate-400 text-left mt-1 font-medium">
-                            {sec.keyAyahRef}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* حکمت‌ها و پیام‌های اخلاقی */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300/40 dark:border-amber-700/30 space-y-2.5">
-                <h4 className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-600" />
-                  <span>حکمت‌ها و درس‌های معنوی برای زندگی:</span>
-                </h4>
-                <ul className="space-y-1.5 text-xs text-amber-950 dark:text-amber-100/90 leading-relaxed list-disc list-inside">
-                  {selectedStory.wisdoms.map((w, i) => (
-                    <li key={i}>{w}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* پانوشت دکمه شروع آزمون شورتز */}
-            <div className="p-4 sm:p-6 border-t border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-800/50 flex items-center justify-between gap-3">
-              <button
-                onClick={() => setSelectedStory(null)}
-                className="py-2.5 px-4 rounded-xl border border-stone-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold"
-              >
-                بستن
-              </button>
-
-              <button
-                onClick={() => {
-                  const s = selectedStory;
-                  setSelectedStory(null);
-                  handleStartStoryQuiz(s);
-                }}
-                className="py-2.5 px-5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                <span>شروع آزمون</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <QuranStoryDetailModal
+          story={selectedStory}
+          onClose={() => setSelectedStory(null)}
+          onStartQuiz={(story) => {
+            setSelectedStory(null);
+            handleStartStoryQuiz(story);
+          }}
+        />
       )}
 
       {/* کامپوننت آزمون شورتز تمام‌صفحه */}

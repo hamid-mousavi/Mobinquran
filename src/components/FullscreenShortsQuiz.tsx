@@ -19,6 +19,8 @@ import {
   BookOpen,
   Share2,
   Trophy,
+  Clock,
+  Type,
 } from 'lucide-react';
 import { toPersianDigits } from '../utils/textNormalization';
 
@@ -41,6 +43,8 @@ interface FullscreenShortsQuizProps {
   questions: ShortsQuestion[];
   title?: string;
   onRestart?: () => void;
+  timePerQuestion?: number;
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 // تم‌های رنگی پویا و عرفانی پس‌زمینه
@@ -88,6 +92,8 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
   questions,
   title = 'آزمون تخصصی حفظ قرآن',
   onRestart,
+  timePerQuestion = 0,
+  difficulty = 'medium',
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -102,8 +108,11 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
   const [isSlideAnimating, setIsSlideAnimating] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'up' | 'down'>('up');
   const [isFinished, setIsFinished] = useState(false);
+  const [fontScale, setFontScale] = useState<number>(0); // 0 = standard, 1 = large, 2 = extra-large
+  const [timeLeft, setTimeLeft] = useState<number>(timePerQuestion);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const touchStartY = useRef<number>(0);
   const touchStartTime = useRef<number>(0);
@@ -111,6 +120,13 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
 
   const currentTheme = BACKGROUND_THEMES[themeIndex % BACKGROUND_THEMES.length];
   const currentQ = questions[currentIndex];
+
+  // اسکرول نرم به بالای صفحه هنگام تغییر سوال
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [currentIndex]);
 
   // ورود به حالت فول اسکرین مرورگر در صورت امکان
   const toggleFullscreen = () => {
@@ -144,6 +160,38 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
     setThemeIndex((prev) => (prev + 1) % BACKGROUND_THEMES.length);
   }, [currentIndex]);
 
+  // شمارش معکوس تایمر فوق‌العاده خوانا و پویا برای هر سوال
+  useEffect(() => {
+    if (!isOpen || timePerQuestion <= 0 || isFinished) return;
+    if (selectedAnswers[currentIndex] !== undefined) return;
+
+    setTimeLeft(timePerQuestion);
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // ثبت منفی به دلیل پایان مهلت
+          setSelectedAnswers((currentMap) => {
+            if (currentMap[currentIndex] !== undefined) return currentMap;
+            return { ...currentMap, [currentIndex]: -1 };
+          });
+          setStreak(0);
+          setShowExplanation((prevExp) => ({ ...prevExp, [currentIndex]: true }));
+          if (currentQ?.verseAudioUrl && audioRef.current) {
+            audioRef.current.src = currentQ.verseAudioUrl;
+            audioRef.current.play().catch(() => {});
+            setIsPlayingAudio(true);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [currentIndex, isOpen, timePerQuestion, isFinished, selectedAnswers, currentQ]);
+
   // رفتن به سوال بعدی با انیمیشن اسلاید به بالا (یوتیوب شورتز)
   const goToNextQuestion = useCallback(() => {
     if (isSlideAnimating) return;
@@ -170,7 +218,7 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
     }, 260);
   }, [currentIndex, isSlideAnimating]);
 
-  // رویدادهای لمسی گوشی (Swipe Up / Swipe Down)
+  // رویدادهای لمسی گوشی (Swipe Up / Swipe Down با پشتیبانی کامل از اسکرول متن بلند)
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
     touchStartTime.current = Date.now();
@@ -180,22 +228,59 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
     const deltaY = touchStartY.current - e.changedTouches[0].clientY;
     const deltaTime = Date.now() - touchStartTime.current;
 
-    // اگر حرکت عمودی سریع و بیش از ۴۰ پیکسل بود
+    // بررسی آیا محتوای سوال اسکرول خورده است تا کاربر آزادانه گزینه‌ها را بخواند
+    const scrollEl = scrollRef.current;
+    if (scrollEl) {
+      const isScrollable = scrollEl.scrollHeight > scrollEl.clientHeight + 25;
+      if (isScrollable) {
+        const isAtBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 30;
+        const isAtTop = scrollEl.scrollTop <= 15;
+
+        // فقط در انتهای اسکرول با سوایپ قاطع به سوال بعد می‌رویم
+        if (deltaY > 60 && deltaTime < 400 && isAtBottom) {
+          goToNextQuestion();
+        } else if (deltaY < -60 && deltaTime < 400 && isAtTop) {
+          goToPrevQuestion();
+        }
+        return;
+      }
+    }
+
+    // اگر محتوا کوتاه است و نیاز به اسکرول ندارد
     if (Math.abs(deltaY) > 40 && deltaTime < 450) {
       if (deltaY > 0) {
-        // بالا کشیدن: سوال بعدی
         goToNextQuestion();
       } else {
-        // پایین کشیدن: سوال قبلی
         goToPrevQuestion();
       }
     }
   };
 
-  // اسکرول ماوس / ترک‌پد در دسکتاپ
+  // اسکرول ماوس / ترک‌پد در دسکتاپ با احترام به اسکرول آزاد متن
   const handleWheel = (e: React.WheelEvent) => {
+    const scrollEl = scrollRef.current;
+    if (scrollEl) {
+      const isScrollable = scrollEl.scrollHeight > scrollEl.clientHeight + 20;
+      if (isScrollable) {
+        const isAtBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 25;
+        const isAtTop = scrollEl.scrollTop <= 15;
+
+        const now = Date.now();
+        if (now - lastWheelTime.current < 500) return;
+
+        if (e.deltaY > 50 && isAtBottom) {
+          lastWheelTime.current = now;
+          goToNextQuestion();
+        } else if (e.deltaY < -50 && isAtTop) {
+          lastWheelTime.current = now;
+          goToPrevQuestion();
+        }
+        return;
+      }
+    }
+
     const now = Date.now();
-    if (now - lastWheelTime.current < 450) return; // دبانس
+    if (now - lastWheelTime.current < 450) return;
     lastWheelTime.current = now;
 
     if (e.deltaY > 30) {
@@ -309,8 +394,35 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
           </div>
         </div>
 
-        {/* نشانگرهای امتیاز و زنجیره پیوسته */}
-        <div className="flex items-center gap-2.5">
+        {/* نشانگرهای امتیاز، زنجیره و تایمر فوق‌العاده خوانا */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* تایمر فوق‌العاده خوانا و آشکار */}
+          {timePerQuestion > 0 && !isFinished && (
+            <div
+              className={`flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full border transition-all duration-300 ${
+                selectedAnswers[currentIndex] !== undefined
+                  ? 'bg-white/10 border-white/20 text-white/50'
+                  : timeLeft <= 5
+                  ? 'bg-rose-500/35 border-rose-400 text-rose-200 animate-pulse ring-2 ring-rose-400/70 shadow-lg shadow-rose-950/70 scale-105'
+                  : timeLeft <= 10
+                  ? 'bg-amber-500/25 border-amber-400/70 text-amber-200 ring-1 ring-amber-400/50'
+                  : 'bg-teal-500/20 border-teal-400/40 text-teal-200'
+              }`}
+            >
+              <Clock className={`w-4 h-4 ${timeLeft <= 5 && selectedAnswers[currentIndex] === undefined ? 'animate-spin' : ''}`} />
+              <span className="text-xs sm:text-sm font-black tracking-wider">
+                {toPersianDigits(timeLeft)} ثانیه
+              </span>
+            </div>
+          )}
+
+          {/* برچسب درجه سختی */}
+          <div className="hidden xs:flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border border-white/15 bg-white/10 text-white/80">
+            {difficulty === 'easy' && <span className="text-emerald-300">آسان</span>}
+            {difficulty === 'medium' && <span className="text-amber-300">متوسط</span>}
+            {difficulty === 'hard' && <span className="text-rose-300">سخت</span>}
+          </div>
+
           {streak > 1 && (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-black animate-pulse">
               <Flame className="w-3.5 h-3.5 fill-current" />
@@ -322,10 +434,25 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
             {toPersianDigits(score)} از {toPersianDigits(questions.length)} درست
           </div>
 
+          {/* کلید تغییر اندازه قلم در سربرگ */}
+          <button
+            onClick={() => setFontScale((prev) => (prev + 1) % 3)}
+            className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-amber-300 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            title="اندازه قلم و خوانایی متن"
+          >
+            <Type className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">
+              {fontScale === 0 ? 'فونت بزرگ' : fontScale === 1 ? 'خیلی بزرگ' : 'غول‌پیکر'}
+            </span>
+            <span className="xs:hidden font-black">
+              {fontScale === 0 ? 'A' : fontScale === 1 ? 'A+' : 'A++'}
+            </span>
+          </button>
+
           <button
             onClick={toggleFullscreen}
             className="hidden sm:flex w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 items-center justify-center text-white/80 transition-all cursor-pointer"
-            title={isFullscreen ? 'خروج از تمام‌صفحه' : 'حالت تمام‌صفحه مرورگر'}
+            title="تمام‌صفحه"
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
@@ -340,11 +467,14 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
         />
       </div>
 
-      {/* بخش اصلی کارت شورتز با پشتیبانی از اسلاید */}
-      <main className="relative flex-1 flex items-center justify-center p-3 sm:p-6 overflow-hidden">
+      {/* بخش اصلی کارت شورتز با پشتیبانی کامل از اسکرول آزاد صفحه و اسلاید روان */}
+      <main
+        ref={scrollRef}
+        className="relative flex-1 flex flex-col items-center justify-start sm:justify-center p-3 sm:p-6 overflow-y-auto reels-scrollbar scroll-smooth"
+      >
         {!isFinished && currentQ ? (
           <div
-            className={`w-full max-w-xl mx-auto flex flex-col justify-between h-full max-h-[82vh] transition-all duration-300 ease-out transform ${
+            className={`w-full max-w-2xl mx-auto flex flex-col justify-between my-auto py-2 sm:py-6 space-y-4 transition-all duration-300 ease-out transform ${
               isSlideAnimating
                 ? slideDirection === 'up'
                   ? '-translate-y-8 opacity-0 scale-95'
@@ -365,22 +495,36 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
                 )}
               </div>
 
-              {/* متن صورت سوال */}
-              <div className="text-base sm:text-lg font-bold text-white leading-relaxed">
+              {/* متن صورت سوال با فونت بهینه‌شده، درشت و خوانا */}
+              <div
+                className={`font-bold text-white leading-relaxed ${
+                  fontScale === 0
+                    ? 'text-lg sm:text-2xl'
+                    : fontScale === 1
+                    ? 'text-xl sm:text-3xl'
+                    : 'text-2xl sm:text-4xl'
+                }`}
+              >
                 {currentQ.prompt}
               </div>
 
-              {/* کادر فراز شریفه قرآنی */}
+              {/* کادر فراز شریفه قرآنی با قلم درشت و فاخر */}
               {currentQ.contextText && (
-                <div className="p-4 sm:p-5 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/15 text-center shadow-2xl relative overflow-hidden">
+                <div className="p-4 sm:p-6 rounded-2xl bg-black/45 backdrop-blur-xl border border-white/15 text-center shadow-2xl relative">
                   <div
-                    className="text-xl sm:text-2xl font-bold leading-loose text-amber-100 py-1"
+                    className={`font-bold text-amber-100 py-1 ${
+                      fontScale === 0
+                        ? 'text-2xl sm:text-4xl md:text-5xl leading-loose'
+                        : fontScale === 1
+                        ? 'text-3xl sm:text-5xl md:text-6xl leading-[2.5]'
+                        : 'text-4xl sm:text-6xl md:text-7xl leading-[2.8]'
+                    }`}
                     style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
                   >
                     «{currentQ.contextText}»
                   </div>
                   {showHint[currentIndex] && (
-                    <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/70 animate-fadeIn">
+                    <div className="mt-2 pt-2 border-t border-white/10 text-xs sm:text-sm text-teal-200 animate-fadeIn">
                       راهنمایی: این فراز در سوره {currentQ.surahName}، آیه {toPersianDigits(currentQ.verseNumber)} قرار دارد.
                     </div>
                   )}
@@ -388,7 +532,7 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
               )}
             </div>
 
-            {/* گزینه‌های چهارگانه */}
+            {/* گزینه‌های چهارگانه با قلم بزرگ و اسکرول‌پذیری روان */}
             <div className="space-y-2.5 my-3">
               {currentQ.options.map((option, idx) => {
                 const isSelected = selectedAnswers[currentIndex] === idx;
@@ -419,11 +563,17 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
                     className={`w-full p-3.5 sm:p-4 rounded-2xl border backdrop-blur-md text-right transition-all flex items-center justify-between gap-3 cursor-pointer active:scale-[0.99] ${cardStyle}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-7 h-7 rounded-xl bg-white/15 text-xs font-bold flex items-center justify-center shrink-0">
+                      <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/15 text-xs sm:text-sm font-bold flex items-center justify-center shrink-0">
                         {toPersianDigits(idx + 1)}
                       </span>
                       <span
-                        className="text-sm sm:text-base font-medium leading-relaxed"
+                        className={`leading-relaxed ${
+                          fontScale === 0
+                            ? 'text-base sm:text-xl font-medium'
+                            : fontScale === 1
+                            ? 'text-lg sm:text-2xl font-bold'
+                            : 'text-xl sm:text-3xl font-bold'
+                        }`}
                         style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
                       >
                         {option}
@@ -444,7 +594,15 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
             {/* بخش پیام توضیح و دکمه اسلاید به سوال بعد */}
             <div className="space-y-3 pb-2">
               {showExplanation[currentIndex] && (
-                <div className="p-3 sm:p-3.5 rounded-xl bg-black/40 border border-white/15 text-xs sm:text-sm text-white/90 leading-relaxed backdrop-blur-md animate-fadeIn">
+                <div
+                  className={`p-3 sm:p-4 rounded-xl bg-black/50 border border-white/15 text-white/95 leading-relaxed backdrop-blur-md animate-fadeIn ${
+                    fontScale === 0
+                      ? 'text-xs sm:text-sm'
+                      : fontScale === 1
+                      ? 'text-sm sm:text-base font-medium'
+                      : 'text-base sm:text-lg font-medium'
+                  }`}
+                >
                   <div className="font-bold text-amber-300 mb-0.5">پاسخ و تبیین قرآنی:</div>
                   <div>{currentQ.explanation}</div>
                 </div>
@@ -537,7 +695,7 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
 
         {/* ستون کناری عملیات شناور (شبیه نوار کناری یوتیوب شورتز / ریلز) */}
         {!isFinished && currentQ && (
-          <aside className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-3.5">
+          <aside className="fixed left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-3">
             {/* صوت ترتیل */}
             {currentQ.verseAudioUrl && (
               <button
@@ -568,11 +726,23 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
               <HelpCircle className="w-5 h-5" />
             </button>
 
+            {/* کلید تنظیم اندازه و خوانایی فونت */}
+            <button
+              onClick={() => setFontScale((prev) => (prev + 1) % 3)}
+              className="w-11 h-11 rounded-full bg-black/40 border border-white/20 text-white/90 hover:bg-white/20 backdrop-blur-md flex flex-col items-center justify-center transition-all cursor-pointer active:scale-90"
+              title={`اندازه قلم: ${fontScale === 0 ? 'بزرگ' : fontScale === 1 ? 'خیلی بزرگ' : 'غول‌پیکر'}`}
+            >
+              <Type className="w-4 h-4 text-amber-300" />
+              <span className="text-[9px] font-black text-amber-300 -mt-0.5">
+                {fontScale === 0 ? 'A' : fontScale === 1 ? 'A+' : 'A++'}
+              </span>
+            </button>
+
             {/* تغییر تم پس‌زمینه */}
             <button
               onClick={() => setThemeIndex((prev) => (prev + 1) % BACKGROUND_THEMES.length)}
               className="w-11 h-11 rounded-full bg-black/40 border border-white/20 text-white/80 hover:bg-white/20 backdrop-blur-md flex items-center justify-center transition-all cursor-pointer active:scale-90"
-              title={`تغییر پس‌زمینه (فعلی: ${currentTheme.name})`}
+              title="تغییر پوسته"
             >
               <Palette className="w-5 h-5" />
             </button>

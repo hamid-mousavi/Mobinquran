@@ -15,6 +15,7 @@ import {
   Minimize2,
   Sparkles,
   BookOpen,
+  Type,
 } from 'lucide-react';
 import { Verse, Surah, AppSettings, ArabicFont } from '../types';
 import { toPersianDigits } from '../utils/textNormalization';
@@ -84,6 +85,7 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isMasked, setIsMasked] = useState(false);
   const [showTranslation, setShowTranslation] = useState(true);
+  const [fontScale, setFontScale] = useState<number>(0); // 0: بزرگ، 1: خیلی بزرگ، 2: غول‌پیکر
   const [themeIndex, setThemeIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSlideAnimating, setIsSlideAnimating] = useState(false);
@@ -91,6 +93,7 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
   const [autoAdvance, setAutoAdvance] = useState(true);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const touchStartY = useRef<number>(0);
   const touchStartTime = useRef<number>(0);
   const lastWheelTime = useRef<number>(0);
@@ -103,6 +106,11 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
   useEffect(() => {
     setCurrentAyahNumber(startAyah);
   }, [startAyah, surah.id]);
+
+  // اسکرول نرم به بالای صفحه با تغییر آیه تا متن کامل از ابتدا دیده شود
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentAyahNumber]);
 
   // پخش خودکار صوت آیه جاری هنگام باز شدن یا اسلاید
   useEffect(() => {
@@ -164,6 +172,24 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
     const deltaY = touchStartY.current - e.changedTouches[0].clientY;
     const deltaTime = Date.now() - touchStartTime.current;
 
+    // بررسی آیا صفحه اسکرول خورده است تا کاربر ابتدا متن بلند را بخواند
+    const scrollEl = mainScrollRef.current;
+    if (scrollEl) {
+      const isScrollable = scrollEl.scrollHeight > scrollEl.clientHeight + 25;
+      if (isScrollable) {
+        const isAtBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 30;
+        const isAtTop = scrollEl.scrollTop <= 15;
+
+        // فقط وقتی کاربر به انتهای آیه رسیده باشد و سوایپ سریع بزند، به آیه بعدی برود
+        if (deltaY > 60 && deltaTime < 400 && isAtBottom) {
+          goToNextAyah();
+        } else if (deltaY < -60 && deltaTime < 400 && isAtTop) {
+          goToPrevAyah();
+        }
+        return;
+      }
+    }
+
     if (Math.abs(deltaY) > 40 && deltaTime < 450) {
       if (deltaY > 0) {
         goToNextAyah();
@@ -174,6 +200,28 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+    const scrollEl = mainScrollRef.current;
+    if (scrollEl) {
+      const isScrollable = scrollEl.scrollHeight > scrollEl.clientHeight + 20;
+      if (isScrollable) {
+        const isAtBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 25;
+        const isAtTop = scrollEl.scrollTop <= 15;
+
+        // اجازه اسکرول طبیعی متن آیه با غلتک ماوس داده می‌شود، مگر اینکه در انتها/ابتدا باشیم
+        const now = Date.now();
+        if (now - lastWheelTime.current < 500) return;
+
+        if (e.deltaY > 50 && isAtBottom) {
+          lastWheelTime.current = now;
+          goToNextAyah();
+        } else if (e.deltaY < -50 && isAtTop) {
+          lastWheelTime.current = now;
+          goToPrevAyah();
+        }
+        return;
+      }
+    }
+
     const now = Date.now();
     if (now - lastWheelTime.current < 450) return;
     lastWheelTime.current = now;
@@ -254,6 +302,21 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
         </div>
 
         <div className="flex items-center gap-2">
+          {/* کلید تغییر اندازه فونت در سربرگ */}
+          <button
+            onClick={() => setFontScale((prev) => (prev + 1) % 3)}
+            className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-amber-300 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            title="اندازه قلم و خوانایی متن"
+          >
+            <Type className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">
+              {fontScale === 0 ? 'فونت بزرگ' : fontScale === 1 ? 'خیلی بزرگ' : 'غول‌پیکر'}
+            </span>
+            <span className="xs:hidden font-black">
+              {fontScale === 0 ? 'A' : fontScale === 1 ? 'A+' : 'A++'}
+            </span>
+          </button>
+
           <div className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-bold text-teal-300">
             {toPersianDigits(currentProgress)} از {toPersianDigits(totalAyahs)} آیه
           </div>
@@ -276,11 +339,14 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
         />
       </div>
 
-      {/* بدنه اصلی نمایش آیه با اسلاید */}
-      <main className="relative flex-1 flex items-center justify-center p-4 sm:p-8 overflow-hidden">
+      {/* بدنه اصلی نمایش آیه با اسکرول آزاد و اسلاید روان */}
+      <main
+        ref={mainScrollRef}
+        className="relative flex-1 flex flex-col items-center justify-start sm:justify-center p-3 sm:p-6 overflow-y-auto reels-scrollbar scroll-smooth"
+      >
         {currentVerse ? (
           <div
-            className={`w-full max-w-2xl mx-auto flex flex-col justify-between h-full max-h-[80vh] transition-all duration-300 ease-out transform ${
+            className={`w-full max-w-3xl mx-auto flex flex-col justify-between my-auto py-2 sm:py-6 space-y-6 transition-all duration-300 ease-out transform ${
               isSlideAnimating
                 ? slideDirection === 'up'
                   ? '-translate-y-8 opacity-0 scale-95'
@@ -294,11 +360,17 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
               </span>
             </div>
 
-            {/* کارت فراز آیه */}
-            <div className="my-auto p-6 sm:p-10 rounded-3xl bg-black/45 backdrop-blur-2xl border border-white/15 text-center shadow-2xl relative overflow-hidden space-y-6">
+            {/* کارت فراز آیه با فونت بزرگتر و قابلیت اسکرول کامل */}
+            <div className="p-6 sm:p-10 rounded-3xl bg-black/45 backdrop-blur-2xl border border-white/15 text-center shadow-2xl relative space-y-6">
               <div
-                className={`text-2xl sm:text-4xl font-bold leading-[2.6] transition-all duration-300 ${
+                className={`font-bold transition-all duration-300 ${
                   isMasked ? 'blur-md select-none opacity-20' : 'text-slate-50'
+                } ${
+                  fontScale === 0
+                    ? 'text-3xl sm:text-5xl md:text-6xl leading-[2.6]'
+                    : fontScale === 1
+                    ? 'text-4xl sm:text-6xl md:text-7xl leading-[2.8]'
+                    : 'text-5xl sm:text-7xl md:text-8xl leading-[3.0]'
                 }`}
                 style={{ fontFamily: arabicFontFamily }}
                 dir="rtl"
@@ -307,7 +379,15 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
               </div>
 
               {showTranslation && (
-                <div className="text-sm sm:text-base text-teal-100/80 leading-relaxed font-normal pt-4 border-t border-white/10 max-w-xl mx-auto">
+                <div
+                  className={`leading-relaxed font-normal pt-4 border-t border-white/10 max-w-2xl mx-auto transition-all ${
+                    fontScale === 0
+                      ? 'text-base sm:text-xl text-teal-100/90'
+                      : fontScale === 1
+                      ? 'text-lg sm:text-2xl text-teal-100/95 font-medium'
+                      : 'text-xl sm:text-3xl text-teal-50 font-medium'
+                  }`}
+                >
                   {currentVerse.translationMakarem || currentVerse.translationFooladvand}
                 </div>
               )}
@@ -317,7 +397,7 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
             <div className="flex items-center justify-between text-xs text-white/60 pb-3">
               <div className="flex items-center gap-1.5 font-medium">
                 <ChevronUp className="w-4 h-4 animate-bounce text-amber-300" />
-                <span>برای آیه بعد به بالا بکشید (Swipe Up)</span>
+                <span>برای آیه بعد به بالا بکشید (یا کلیک روی دکمه)</span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -343,7 +423,7 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
             </div>
           </div>
         ) : (
-          <div className="text-center space-y-3">
+          <div className="text-center space-y-3 my-auto">
             <h3 className="text-lg font-bold">پایان بازه تمرین</h3>
             <button
               onClick={() => setCurrentAyahNumber(startAyah)}
@@ -355,7 +435,7 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
         )}
 
         {/* دکمه‌های شناور کناری */}
-        <aside className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-3.5">
+        <aside className="fixed left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-3">
           {/* پخش/توقف صوت */}
           <button
             onClick={togglePlayAudio}
@@ -367,6 +447,18 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
             title={isPlayingAudio ? 'توقف صوت' : 'پخش صوت ترتیل'}
           >
             {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
+          </button>
+
+          {/* تغییر اندازه فونت و بزرگنمایی */}
+          <button
+            onClick={() => setFontScale((prev) => (prev + 1) % 3)}
+            className="w-11 h-11 rounded-full bg-black/40 border border-white/20 text-white hover:bg-white/20 backdrop-blur-md flex flex-col items-center justify-center transition-all cursor-pointer active:scale-90"
+            title={`اندازه قلم: ${fontScale === 0 ? 'بزرگ' : fontScale === 1 ? 'خیلی بزرگ' : 'غول‌پیکر'}`}
+          >
+            <Type className="w-4 h-4 text-amber-300" />
+            <span className="text-[9px] font-black text-amber-300">
+              {fontScale === 0 ? 'A' : fontScale === 1 ? 'A+' : 'A++'}
+            </span>
           </button>
 
           {/* پنهان‌سازی متن برای خودآزمایی */}

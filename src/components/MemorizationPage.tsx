@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   ArrowRight,
   GraduationCap,
@@ -59,12 +59,12 @@ interface MemorizationPageProps {
   onBack: () => void;
 }
 
-const MEMO_RECITERS: { id: ReciterId; name: string }[] = [
-  { id: 'parhizgar', name: RECITER_NAMES.parhizgar.name },
-  { id: 'abdulbasit', name: RECITER_NAMES.abdulbasit.name },
-  { id: 'minshawi', name: RECITER_NAMES.minshawi.name },
-  { id: 'afasy', name: RECITER_NAMES.afasy.name },
-];
+const MEMO_RECITERS: { id: ReciterId; name: string }[] = (
+  Object.keys(RECITER_NAMES) as ReciterId[]
+).map((id) => ({
+  id,
+  name: RECITER_NAMES[id].name,
+}));
 
 const REPEAT_OPTIONS = [1, 2, 3, 5, 10];
 const GAP_OPTIONS = [0, 1, 2, 3, 5];
@@ -95,6 +95,27 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   const [session, setSession] = useState<MemoSession | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [audioError, setAudioError] = useState(false);
+
+  // حالت انتخاب محدوده: بر اساس آیات یا صفحات مصحف
+  const [rangeMode, setRangeMode] = useState<'verses' | 'pages'>('verses');
+
+  const surahPages = useMemo(() => {
+    const pageSet = new Set<number>();
+    verses.forEach((v) => {
+      if (v.pageNumber) pageSet.add(v.pageNumber);
+    });
+    if (pageSet.size === 0 && currentSurah.startPage) {
+      pageSet.add(currentSurah.startPage);
+    }
+    return Array.from(pageSet).sort((a, b) => a - b);
+  }, [verses, currentSurah.startPage]);
+
+  const [selectedStartPage, setSelectedStartPage] = useState<number>(
+    surahPages[0] || currentSurah.startPage || 1
+  );
+  const [selectedEndPage, setSelectedEndPage] = useState<number>(
+    surahPages[surahPages.length - 1] || currentSurah.startPage || 1
+  );
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const gapTimerRef = useRef<number | null>(null);
@@ -341,10 +362,31 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
         </QuranicCard>
       </div>
 
-      {/* انتخاب سوره هدف */}
-      <div className="p-4 rounded-2xl bg-stone-100/70 dark:bg-slate-900 border border-stone-200 dark:border-slate-800 flex items-center justify-between gap-3">
+      {/* انتخاب سوره هدف با طراحی چشم‌نواز، فاخر و بدون تکرار */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-teal-600/10 border border-teal-500/25 text-teal-700 dark:text-teal-300 font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+            {toPersianDigits(currentSurah.id)}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
+                سوره {currentSurah.nameArabic} ({currentSurah.namePersian})
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 font-bold">
+                {currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'}
+              </span>
+            </div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              جزء {toPersianDigits(currentSurah.juzNumber)} • صفحه {toPersianDigits(currentSurah.startPage)} • {toPersianDigits(currentSurah.versesCount)} آیه
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">سوره در حال تمرین:</span>
+          <label className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
+            تغییر سوره:
+          </label>
           <select
             value={currentSurah.id}
             onChange={(e) => {
@@ -354,19 +396,15 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
                 onSelectSurah(target);
               }
             }}
-            className="px-3 py-1.5 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-teal-700 dark:text-teal-400 focus:outline-none"
+            className="w-full md:w-auto px-3.5 py-2 rounded-2xl border border-stone-300 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-xs font-bold text-teal-700 dark:text-teal-300 focus:outline-hidden focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
           >
             {surahs.map((s) => (
               <option key={s.id} value={s.id}>
-                سوره {toPersianDigits(s.id)} - {s.nameArabic} ({s.namePersian}) - {toPersianDigits(s.versesCount)} آیه
+                {toPersianDigits(s.id)}. سوره {s.nameArabic} ({s.namePersian}) - {toPersianDigits(s.versesCount)} آیه
               </option>
             ))}
           </select>
         </div>
-
-        <span className="text-xs text-slate-400 font-medium hidden sm:inline">
-          جزء {toPersianDigits(currentSurah.juzNumber)} • {currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'}
-        </span>
       </div>
 
       {/* محتوای تب ۱: جلسه تمرین با خط‌بر هوشمند */}
@@ -427,60 +465,144 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
               {/* انتخاب قاری ترتیل با اسامی اصیل و فارسی */}
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">
-                  قاری ترتیل برای خط‌بر:
+                  قاری ترتیل برای خط‌بر (۱۲ قاری برجسته جهان اسلام):
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                   {MEMO_RECITERS.map((r) => {
                     const isSelected = reciterId === r.id;
                     return (
                       <button
                         key={r.id}
                         onClick={() => setReciterId(r.id)}
-                        className={`p-3 rounded-2xl border text-right transition-all flex items-center justify-between ${
+                        className={`p-2.5 rounded-2xl border text-right transition-all flex items-center justify-between ${
                           isSelected
                             ? 'border-teal-600 bg-teal-600 text-white font-bold shadow-xs'
                             : 'border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
                         }`}
                       >
                         <span className="text-xs truncate">{r.name}</span>
-                        {isSelected && <Check className="w-4 h-4 shrink-0 mr-1" />}
+                        {isSelected && <Check className="w-3.5 h-3.5 shrink-0 mr-1" />}
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* بازه آیات */}
+              {/* تعیین محدوده بر اساس آیات یا صفحات مصحف */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-slate-800/50 border border-stone-200 dark:border-slate-800">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">
-                    محدوده آیات سوره {currentSurah.nameArabic}:
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <span className="text-[10px] text-slate-400 block mb-0.5">از آیه</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={verses.length || currentSurah.versesCount}
-                        value={range.start}
-                        onChange={(e) => setRange((r) => ({ ...r, start: Math.max(1, Number(e.target.value) || 1) }))}
-                        className="w-full px-3 py-1.5 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <span className="text-[10px] text-slate-400 block mb-0.5">تا آیه</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={verses.length || currentSurah.versesCount}
-                        value={range.end}
-                        onChange={(e) => setRange((r) => ({ ...r, end: Math.max(1, Number(e.target.value) || 1) }))}
-                        className="w-full px-3 py-1.5 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold"
-                      />
+                <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-slate-800/50 border border-stone-200 dark:border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      محدوده سوره {currentSurah.nameArabic}:
+                    </label>
+                    <div className="flex items-center gap-1 p-0.5 rounded-lg bg-stone-200/70 dark:bg-slate-700 text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setRangeMode('verses')}
+                        className={`py-0.5 px-2 rounded-md transition-all ${
+                          rangeMode === 'verses' ? 'bg-teal-600 text-white' : 'text-slate-500'
+                        }`}
+                      >
+                        بر اساس آیه
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRangeMode('pages')}
+                        className={`py-0.5 px-2 rounded-md transition-all ${
+                          rangeMode === 'pages' ? 'bg-teal-600 text-white' : 'text-slate-500'
+                        }`}
+                      >
+                        بر اساس صفحه
+                      </button>
                     </div>
                   </div>
-                  <div className="text-[11px] text-teal-700 dark:text-teal-400 font-bold mt-2">
+
+                  {rangeMode === 'verses' ? (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">از آیه</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={verses.length || currentSurah.versesCount}
+                          value={range.start}
+                          onChange={(e) =>
+                            setRange((r) => ({ ...r, start: Math.max(1, Number(e.target.value) || 1) }))
+                          }
+                          className="w-full px-3 py-1.5 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">تا آیه</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={verses.length || currentSurah.versesCount}
+                          value={range.end}
+                          onChange={(e) =>
+                            setRange((r) => ({ ...r, end: Math.max(1, Number(e.target.value) || 1) }))
+                          }
+                          className="w-full px-3 py-1.5 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs">
+                      <div className="flex-1">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">از صفحه</span>
+                        <select
+                          value={selectedStartPage}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setSelectedStartPage(val);
+                            const minVerses = verses.filter((v) => v.pageNumber >= val && v.pageNumber <= selectedEndPage);
+                            if (minVerses.length > 0) {
+                              setRange({
+                                start: minVerses[0].verseNumber,
+                                end: minVerses[minVerses.length - 1].verseNumber,
+                              });
+                            }
+                          }}
+                          className="w-full px-2 py-1.5 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold"
+                        >
+                          {surahPages.map((p: number) => (
+                            <option key={p} value={p}>
+                              صفحه {toPersianDigits(p)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex-1">
+                        <span className="text-[10px] text-slate-400 block mb-0.5">تا صفحه</span>
+                        <select
+                          value={selectedEndPage}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setSelectedEndPage(val);
+                            const maxVerses = verses.filter((v) => v.pageNumber >= selectedStartPage && v.pageNumber <= val);
+                            if (maxVerses.length > 0) {
+                              setRange({
+                                start: maxVerses[0].verseNumber,
+                                end: maxVerses[maxVerses.length - 1].verseNumber,
+                              });
+                            }
+                          }}
+                          className="w-full px-2 py-1.5 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold"
+                        >
+                          {surahPages
+                            .filter((p: number) => p >= selectedStartPage)
+                            .map((p: number) => (
+                              <option key={p} value={p}>
+                                صفحه {toPersianDigits(p)}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-teal-700 dark:text-teal-400 font-bold mt-1">
                     تعداد آیات منتخب: {toPersianDigits(ayahNumbers.length)} آیه
                   </div>
                 </div>
@@ -531,24 +653,15 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2.5 pt-1">
-                <button
-                  onClick={startSession}
-                  disabled={ayahNumbers.length === 0}
-                  className="flex-1 py-3 px-4 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer shadow-sm"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  <span>شروع تمرین ({toPersianDigits(ayahNumbers.length)} آیه)</span>
-                </button>
-
+              {/* دکمه شروع تمرین (مستقیماً در حالت ریلز تمام‌صفحه باز می‌شود) */}
+              <div className="pt-1">
                 <button
                   onClick={() => setIsShortsPracticeOpen(true)}
                   disabled={ayahNumbers.length === 0}
-                  className="p-3 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-teal-600 dark:text-teal-300 border border-stone-200 dark:border-slate-700 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
-                  title="حالت تمام‌صفحه"
-                  aria-label="حالت تمام‌صفحه"
+                  className="w-full py-3.5 px-4 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer shadow-md"
                 >
-                  <Sparkles className="w-5 h-5 text-amber-500" />
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>شروع تمرین ({toPersianDigits(ayahNumbers.length)} آیه)</span>
                 </button>
               </div>
             </QuranicCard>
