@@ -32,7 +32,7 @@ import { QuranService } from '../services/quranService';
 import { getAudioSourceUrl, ReciterId, RECITER_NAMES } from '../services/audioSources';
 import { QURAN_STORIES } from '../data/quranStories';
 import { ALL_SURAHS } from '../data/surahs';
-import { FullscreenShortsQuiz, ShortsQuestion } from './FullscreenShortsQuiz';
+import { RealisticQuizView } from './RealisticQuizView';
 
 interface MemorizationQuizStudioProps {
   currentSurah: Surah;
@@ -40,6 +40,7 @@ interface MemorizationQuizStudioProps {
   verses: Verse[];
   darkMode: boolean;
   onSelectSurah?: (surah: Surah) => void;
+  onBack?: () => void;
 }
 
 export type QuizType =
@@ -81,11 +82,11 @@ interface SavedQuizResult {
   typeLabel: string;
 }
 
-// کوتاه‌سازی هوشمند فرازهای طولانی جهت حفظ خوانایی فونت و عدم سرریز در گزینه‌ها
-const getVerseSnippet = (text: string, maxWords: number = 7): string => {
+// کوتاه‌سازی هوشمند فرازهای طولانی بدون قطع ناتمام کلمات
+const getVerseSnippet = (text: string, maxWords: number = 24): string => {
   const words = text.trim().split(/\s+/);
   if (words.length <= maxWords) return text;
-  return words.slice(0, maxWords).join(' ') + ' ...';
+  return words.slice(0, maxWords).join(' ');
 };
 
 const ALL_QUIZ_STYLES: { id: QuizType; title: string; desc: string; icon: React.ElementType }[] = [
@@ -145,6 +146,7 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
   verses,
   darkMode,
   onSelectSurah,
+  onBack,
 }) => {
   const [phase, setPhase] = useState<'setup' | 'playing' | 'result'>('setup');
   
@@ -341,7 +343,7 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
         const rawOptions = [nextVerse.textArabic, ...wrongVerses.map((x) => x.textArabic)].sort(
           () => Math.random() - 0.5
         );
-        const options = rawOptions.map((text) => getVerseSnippet(text, 7));
+        const options = rawOptions.map((text) => getVerseSnippet(text, 22));
         const correctIndex = rawOptions.indexOf(nextVerse.textArabic);
 
         generated.push({
@@ -351,13 +353,13 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
           contextText: getVerseSnippet(v.textArabic, 10),
           options,
           correctIndex,
-          explanation: `آیه بعدی (آیه ${toPersianDigits(nextVerse.verseNumber)}): «${nextVerse.textArabic}»`,
+          explanation: `آیه بعدی آیه ${toPersianDigits(nextVerse.verseNumber)}: «${nextVerse.textArabic}»`,
           surahId: activeSurah.id,
           surahName: activeSurah.nameArabic,
           verseNumber: v.verseNumber,
           verseAudioUrl: audioUrl,
-          fullVerseText: `${v.textArabic}\n\n«آیه بعدی (${toPersianDigits(nextVerse.verseNumber)}): ${nextVerse.textArabic}»`,
-          fullVerseTranslation: `${v.translationMakarem || v.translationFooladvand || ''}\n\nترجمه آیه بعدی: ${nextVerse.translationMakarem || nextVerse.translationFooladvand || ''}`,
+          fullVerseText: v.textArabic,
+          fullVerseTranslation: v.translationMakarem || v.translationFooladvand || '',
         });
       } else if (currentStyle === 'prev_verse') {
         let prevVerse = activeVerses[vIndex - 1];
@@ -374,7 +376,7 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
         const rawOptions = [prevVerse.textArabic, ...wrongVerses.map((x) => x.textArabic)].sort(
           () => Math.random() - 0.5
         );
-        const options = rawOptions.map((text) => getVerseSnippet(text, 7));
+        const options = rawOptions.map((text) => getVerseSnippet(text, 22));
         const correctIndex = rawOptions.indexOf(prevVerse.textArabic);
 
         generated.push({
@@ -384,13 +386,13 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
           contextText: getVerseSnippet(v.textArabic, 10),
           options,
           correctIndex,
-          explanation: `آیه قبل (آیه ${toPersianDigits(prevVerse.verseNumber)}): «${prevVerse.textArabic}»`,
+          explanation: `آیه قبل آیه ${toPersianDigits(prevVerse.verseNumber)}: «${prevVerse.textArabic}»`,
           surahId: activeSurah.id,
           surahName: activeSurah.nameArabic,
           verseNumber: v.verseNumber,
           verseAudioUrl: audioUrl,
-          fullVerseText: `«آیه قبلی (${toPersianDigits(prevVerse.verseNumber)}): ${prevVerse.textArabic}»\n\n${v.textArabic}`,
-          fullVerseTranslation: `ترجمه آیه قبلی: ${prevVerse.translationMakarem || prevVerse.translationFooladvand || ''}\n\n${v.translationMakarem || v.translationFooladvand || ''}`,
+          fullVerseText: v.textArabic,
+          fullVerseTranslation: v.translationMakarem || v.translationFooladvand || '',
         });
       } else if (currentStyle === 'fill_blank') {
         const words = v.textArabic.trim().split(/\s+/);
@@ -407,17 +409,17 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
         if (chosenPosition === 'start') {
           // کلمه مخفی در ابتدای آیه
           targetWord = words[0];
-          promptText = 'کلمهٔ مخفی‌شده در «ابتدای آیه» کدام است؟';
+          promptText = 'کلمهٔ مخفی‌شده در [ جای خالی ] کدام است؟';
           const restWords = words.slice(1);
-          const preview = restWords.length > 14 ? restWords.slice(0, 13).join(' ') + ' ...' : restWords.join(' ');
-          blankedText = `【 ... 】 ${preview}`;
+          const preview = restWords.slice(0, 9).join(' ');
+          blankedText = `[ جای خالی ] ${preview}`;
         } else if (chosenPosition === 'end') {
           // کلمه مخفی در انتهای آیه
           targetWord = words[words.length - 1];
-          promptText = 'کلمهٔ مخفی‌شده در «انتهای آیه» کدام است؟';
+          promptText = 'کلمهٔ مخفی‌شده در [ جای خالی ] کدام است؟';
           const leadingWords = words.slice(0, words.length - 1);
-          const preview = leadingWords.length > 14 ? '... ' + leadingWords.slice(leadingWords.length - 13).join(' ') : leadingWords.join(' ');
-          blankedText = `${preview} 【 ... 】`;
+          const preview = leadingWords.slice(Math.max(0, leadingWords.length - 9)).join(' ');
+          blankedText = `${preview} [ جای خالی ]`;
         } else {
           // کلمه مخفی در بخشی از آیه (میانه آیه)
           const middleCandidates = words
@@ -430,20 +432,20 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
               : { w: words[Math.min(1, words.length - 2)], idx: Math.min(1, words.length - 2) };
 
           targetWord = targetItem.w;
-          promptText = 'کلمهٔ مخفی‌شده در جای خالی 【 ... 】 کدام است؟';
+          promptText = 'کلمهٔ مخفی‌شده در [ جای خالی ] کدام است؟';
 
-          const startIdx = Math.max(0, targetItem.idx - 5);
-          const endIdx = Math.min(words.length, targetItem.idx + 6);
+          const startIdx = Math.max(0, targetItem.idx - 4);
+          const endIdx = Math.min(words.length, targetItem.idx + 5);
           const windowWords = words.slice(startIdx, endIdx);
 
           const formattedWindow = windowWords
             .map((w, wIdx) => {
               const actualIdx = startIdx + wIdx;
-              return actualIdx === targetItem.idx ? '【 ... 】' : w;
+              return actualIdx === targetItem.idx ? '[ جای خالی ]' : w;
             })
             .join(' ');
 
-          blankedText = (startIdx > 0 ? '... ' : '') + formattedWindow + (endIdx < words.length ? ' ...' : '');
+          blankedText = formattedWindow;
         }
 
         // جمع‌آوری گزینه‌های غلط متناسب با جایگاه کلمه مخفی
@@ -550,7 +552,7 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
           id: `q_mutashab_${i}_${v.verseNumber}`,
           type: 'mutashabihat',
           prompt: 'پایان‌بندی صحیح این آیه شریفه کدام عبارت است؟',
-          contextText: getVerseSnippet(headWords, 8) + ' ...',
+          contextText: getVerseSnippet(headWords, 10),
           options,
           correctIndex,
           explanation: `پایان‌بندی آیه ${toPersianDigits(v.verseNumber)}: «${v.textArabic}»`,
@@ -677,16 +679,23 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
     <div className="space-y-4 select-none" dir="rtl">
       {/* مرحله ۱: تنظیمات پیشرفته استودیوی آزمون */}
       <div className="space-y-4">
-        {/* کارت سوره فعال هماهنگ با سربرگ (بدون ایجاد لیست کشویی دوم و تکراری) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-teal-600/10 border border-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center font-black text-sm shrink-0">
-              {toPersianDigits(activeSurah.id)}
-            </div>
+        {/* کارت سوره فعال هماهنگ با سربرگ */}
+        <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="p-2 sm:p-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer active:scale-95 shrink-0"
+                title="بازگشت به منوی اصلی حفظ"
+              >
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            )}
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
-                  سوره {activeSurah.nameArabic} ({activeSurah.namePersian})
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+                  آزمون سوره {activeSurah.nameArabic} ({activeSurah.namePersian})
                 </h3>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 font-bold">
                   {activeSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'}
@@ -696,10 +705,6 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
                 جزء {toPersianDigits(activeSurah.juzNumber)} • صفحه {toPersianDigits(activeSurah.startPage)} • {toPersianDigits(activeSurah.versesCount)} آیه
               </div>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span>سوره فعال جهت سنجش و آزمون هوشمند</span>
           </div>
         </div>
 
@@ -1076,50 +1081,71 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
         )}
       </div>
 
-      {/* آزمون شورتز تمام‌صفحه ریلز با اسلاید عمودی */}
-      <FullscreenShortsQuiz
-        isOpen={isShortsFullscreenOpen}
-        onClose={() => setIsShortsFullscreenOpen(false)}
-        questions={questions.map((q) => ({
-          id: q.id,
-          prompt: q.prompt,
-          contextText: q.contextText,
-          options: q.options,
-          correctIndex: q.correctIndex,
-          explanation: q.explanation,
-          surahName: q.surahName,
-          verseNumber: q.verseNumber,
-          verseAudioUrl: q.verseAudioUrl,
-          categoryBadge:
-            q.type === 'quran_stories'
-              ? 'قصص قرآنی'
-              : q.type === 'next_verse'
-              ? 'آیه بعدی'
-              : q.type === 'prev_verse'
-              ? 'آیه قبلی'
-              : q.type === 'fill_blank'
-              ? q.blankPosition === 'start'
-                ? 'کلمه مخفی (ابتدای آیه)'
-                : q.blankPosition === 'end'
-                ? 'کلمه مخفی (انتهای آیه)'
-                : 'کلمه مخفی (میانه آیه)'
-              : q.type === 'mutashabihat'
-              ? 'مشابهات'
-              : q.type === 'translation_match'
-              ? 'ترجمه و مفاهیم'
-              : q.type === 'surah_identity'
-              ? 'تشخیص سوره'
-              : 'شماره آیه',
-          fullVerseText: q.fullVerseText,
-          fullVerseTranslation: q.fullVerseTranslation,
-        }))}
-        title={`آزمون حفظ سوره ${activeSurah.nameArabic}`}
-        timePerQuestion={timePerQuestionSeconds}
-        difficulty={difficulty}
-        onRestart={() => {
-          generateQuestions(true);
-        }}
-      />
+      {/* صفحه آزمون واقعی و استاندارد حفظ قرآن با بازخورد صوتی و گذار خودکار */}
+      {isShortsFullscreenOpen && (
+        <RealisticQuizView
+          questions={questions.map((q) => ({
+            id: q.id,
+            prompt: q.prompt,
+            contextText: q.contextText,
+            options: q.options,
+            correctIndex: q.correctIndex,
+            explanation: q.explanation,
+            surahName: q.surahName,
+            verseNumber: q.verseNumber,
+            verseAudioUrl: q.verseAudioUrl,
+            categoryBadge:
+              q.type === 'quran_stories'
+                ? 'قصص قرآنی'
+                : q.type === 'next_verse'
+                ? 'اکمال آیه'
+                : q.type === 'prev_verse'
+                ? 'آیه قبلی'
+                : q.type === 'fill_blank'
+                ? q.blankPosition === 'start'
+                  ? 'کلمه مخفی (ابتدای آیه)'
+                  : q.blankPosition === 'end'
+                  ? 'کلمه مخفی (انتهای آیه)'
+                  : 'کلمه مخفی (میانه آیه)'
+                : q.type === 'mutashabihat'
+                ? 'مشابهات'
+                : q.type === 'translation_match'
+                ? 'ترجمه و مفاهیم'
+                : q.type === 'surah_identity'
+                ? 'تشخیص سوره'
+                : 'شماره آیه',
+            fullVerseText: q.fullVerseText,
+            fullVerseTranslation: q.fullVerseTranslation,
+            isBlankFill: q.type === 'fill_blank',
+          }))}
+          title={`آزمون حفظ سوره ${activeSurah.nameArabic}`}
+          timePerQuestion={timePerQuestionSeconds}
+          difficulty={difficulty}
+          onClose={() => setIsShortsFullscreenOpen(false)}
+          onRestart={() => {
+            generateQuestions(true);
+          }}
+          onFinish={(finalScore, totalQ) => {
+            const percent = Math.round((finalScore / Math.max(1, totalQ)) * 100);
+            const newRecord: SavedQuizResult = {
+              id: Date.now().toString(),
+              date: new Date().toLocaleDateString('fa-IR'),
+              surahName: activeSurah.nameArabic,
+              score: finalScore,
+              total: totalQ,
+              percent,
+              typeLabel: isCombinedMode ? 'جامع ترکیبی' : 'تخصصی',
+            };
+            setQuizHistory((prev) => {
+              const updated = [newRecord, ...prev].slice(0, 10);
+              try {
+                localStorage.setItem('mobin_memorization_quiz_history', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
+          }}
+        />
+      )}
     </div>
   );
 };
