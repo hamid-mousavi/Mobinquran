@@ -555,6 +555,67 @@ ${agentApproachText}
     });
   });
 
+  // اندپوینت تخصصی ارزیابی دقیق تلاوت و حفظ قرآن با هوش مصنوعی قرآنی Gemini
+  app.post('/api/ai/verify-recitation', async (req, res) => {
+    try {
+      const { targetText, spokenText, surahName, verseNumber } = req.body || {};
+      if (!targetText || !spokenText) {
+        return res.status(400).json({ error: 'targetText and spokenText are required' });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({ error: 'کلید سرویس هوش مصنوعی تنظیم نشده است.' });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `شما یک استاد داور متخصص حفظ و ترتیل قرآن کریم هستید.
+کاربر آیه زیر از سوره «${surahName || ''}» آیه ${verseNumber || ''} را تلاوت کرده است و سیستم تبدیل صوت به متن مرورگر، متن زیر را از صدای وی ضبط کرده است:
+
+متن اصلی آیه قرآن:
+«${targetText}»
+
+متن شنیده شده از تلاوت کاربر:
+«${spokenText}»
+
+لطفاً به عنوان استاد داور حفظ و ترتیل:
+۱. توجه داشته باشید که موتور تبدیل گفتار مرورگر ممکن است به خاطر کشش مد، غنه، تجوید یا لهجه عربی، برخی حروف را با املای اندکی متفاوت بنویسد (مثلاً حذف پیشوند «و»، تبدیل ص به س، یا پیوستن کلمات). با در نظر گرفتن ماهیت تلاوت قرآن، بررسی کنید که آیا کاربر کلمات آیه را صحیح و به ترتیب تلاوت کرده است یا خیر.
+۲. درصد تطابق دقیق (accuracy بین ۰ تا ۱۰۰) را محاسبه کنید.
+۳. وضعیت قبولی (isPass: آیا تطابق بالای ۷۰٪ است و کلمات اصلی ادا شده‌اند؟) را تعیین نمایید.
+۴. یک پیام تشویقی و بازخورد آموزنده کوتاه به زبان فارسی (verdictMessage) ارائه دهید.
+۵. مشخص کنید کدام کلمات اصلی ادا شده (matchedWords) و کدام کلمات جا افتاده‌اند (missedWords).
+
+پاسخ را دقیقاً در قالب این JSON معتبر و بدون هیچ متن اضافه دیگری برگردانید:
+{
+  "isPass": true,
+  "accuracy": 95,
+  "verdictMessage": "احسنت! تلاوت شما با تسلط کامل و رعایت کلمات انجام شد.",
+  "matchedWords": ["کلمه۱", "کلمه۲"],
+  "missedWords": [],
+  "tajweedNote": "وقف و لحن تلاوت مناسب است."
+}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-flash-latest',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        },
+      });
+
+      const rawJson = response.text || '{}';
+      const parsed = JSON.parse(rawJson);
+      return res.json(parsed);
+    } catch (err: any) {
+      console.error('Verify recitation AI error:', err);
+      return res.status(500).json({
+        error: 'خطا در ارزیابی هوش مصنوعی.',
+        details: err?.message || String(err),
+      });
+    }
+  });
+
   // اگر هیچ روت API تطبیق پیدا نکرد، همیشه پاسخ JSON معتبر برگردان تا کلاینت خطای متنی یا HTML دریافت نکند
   app.all('/api/*', (req, res) => {
     res.status(404).json({
