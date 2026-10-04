@@ -35,6 +35,12 @@ import {
 } from '../services/audioSources';
 import { toPersianDigits } from '../utils/textNormalization';
 import { SurahSelectorModal } from './SurahSelectorModal';
+import {
+  evaluateRecitation,
+  StrictnessLevel,
+  RecitationEvaluation,
+} from '../utils/quranRecitationEvaluator';
+import { quizAudio } from '../utils/quizAudio';
 
 export type DiscussionMode =
   | 'verse_by_verse' // ۱. آیه به آیه
@@ -51,6 +57,270 @@ interface VoiceDiscussionStudioProps {
   onSelectSurah?: (surah: Surah) => void;
   onBack: () => void;
 }
+
+interface SmartRecitationFeedbackPanelProps {
+  evaluation: RecitationEvaluation;
+  transcribedText: string;
+  isRecording: boolean;
+  onToggleRecording: () => void;
+  onRetry: () => void;
+  onAccept: () => void;
+  onReject?: () => void;
+  acceptLabel?: string;
+  rejectLabel?: string;
+  isCompetitive?: boolean;
+}
+
+const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanelProps> = ({
+  evaluation,
+  transcribedText,
+  isRecording,
+  onToggleRecording,
+  onRetry,
+  onAccept,
+  onReject,
+  acceptLabel = 'تلاوت مسلط (مرحله بعد)',
+  rejectLabel = 'نیاز به تمرین',
+  isCompetitive = false,
+}) => {
+  const hasTranscribed = Boolean(transcribedText && transcribedText.trim());
+
+  return (
+    <div
+      className={`p-4 sm:p-5 rounded-3xl border transition-all space-y-3.5 ${
+        hasTranscribed
+          ? evaluation.isPass
+            ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+            : 'border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 ring-2 ring-amber-500/20'
+          : isRecording
+          ? 'border-rose-500 bg-rose-50/30 dark:bg-rose-950/20 ring-2 ring-rose-500/20 animate-pulse'
+          : 'border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs'
+      }`}
+      dir="rtl"
+    >
+      {/* سربرگ کنترل ضبط و وضعیت ارزیابی */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleRecording}
+            className={`px-3.5 py-2 rounded-2xl flex items-center gap-2 text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95 ${
+              isRecording
+                ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse shadow-rose-600/30'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+            }`}
+          >
+            {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            <span>{isRecording ? 'در حال شنیدن… (پایان ضبط)' : 'شروع تلاوت با میکروفون'}</span>
+          </button>
+
+          {isRecording && (
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="w-1 rounded-full bg-rose-500 animate-pulse"
+                  style={{
+                    height: `${10 + (i % 3) * 6}px`,
+                    animationDelay: `${i * 100}ms`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* نشانگر دقت و وضعیت درستی */}
+        {hasTranscribed && (
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 border shadow-2xs ${
+                evaluation.isPass
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+                  : 'bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-200'
+              }`}
+            >
+              {evaluation.isPass ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>تطابق: {toPersianDigits(evaluation.accuracy)}٪ • تایید شد</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>تطابق: {toPersianDigits(evaluation.accuracy)}٪ • نیاز به دقت</span>
+                </>
+              )}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* نوار خطی دقت درصد */}
+      {hasTranscribed && (
+        <div className="w-full h-1.5 rounded-full bg-stone-200 dark:bg-slate-800 overflow-hidden">
+          <div
+            className={`h-full transition-all duration-500 ${
+              evaluation.isPass ? 'bg-emerald-500' : 'bg-amber-500'
+            }`}
+            style={{ width: `${Math.min(100, Math.max(5, evaluation.accuracy))}%` }}
+          />
+        </div>
+      )}
+
+      {/* تفکیک کلمه به کلمه آیه هدف با رنگ‌بندی صحت */}
+      {hasTranscribed && evaluation.wordResults.length > 0 && (
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-stone-200/80 dark:border-slate-800 space-y-2 text-right">
+          <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 border-b border-stone-100 dark:border-slate-800 pb-2">
+            <span>تحلیل هوشمند کلمات تلاوت‌شده:</span>
+            <div className="flex items-center gap-2.5">
+              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span>صحیح</span>
+              </span>
+              <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                <span className="w-2 h-2 rounded-full bg-rose-500" />
+                <span>جاافتاده / اشتباه</span>
+              </span>
+            </div>
+          </div>
+
+          <div
+            className="flex flex-wrap items-center gap-1.5 leading-[2.6] py-1 text-base sm:text-lg"
+            style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', 'Scheherazade New', serif" }}
+            dir="rtl"
+          >
+            {evaluation.wordResults.map((wr, idx) => (
+              <span
+                key={idx}
+                className={`px-2 py-0.5 rounded-lg border text-sm sm:text-base transition-all select-none ${
+                  wr.status === 'matched'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-950 dark:text-emerald-100 font-bold'
+                    : wr.status === 'fuzzy'
+                    ? 'bg-teal-500/15 border-teal-500/30 text-teal-950 dark:text-teal-100 font-medium'
+                    : 'bg-rose-500/15 border-rose-500/40 text-rose-800 dark:text-rose-300 font-bold line-through decoration-rose-500/80'
+                }`}
+                title={
+                  wr.status === 'matched'
+                    ? 'صحیح'
+                    : wr.status === 'fuzzy'
+                    ? `تلفظ نزدیک: «${wr.spokenWord}»`
+                    : 'جا افتاده یا ناخوانا'
+                }
+              >
+                {wr.originalWord}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* متن شنیده‌شده و پیام سیستم */}
+      {hasTranscribed ? (
+        <div className="space-y-1.5 text-right">
+          <div className="p-3 rounded-xl bg-stone-50 dark:bg-slate-800/80 border border-stone-200 dark:border-slate-700 text-xs">
+            <span className="text-[10px] text-slate-400 block mb-0.5">صدای شنیده شده از شما:</span>
+            <span className="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200">
+              «{transcribedText}»
+            </span>
+          </div>
+          <div
+            className={`text-xs font-bold px-1 flex items-center gap-1.5 ${
+              evaluation.isPass
+                ? 'text-emerald-700 dark:text-emerald-400'
+                : 'text-amber-700 dark:text-amber-400'
+            }`}
+          >
+            {evaluation.isPass ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+            )}
+            <span>{evaluation.message}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-2 text-xs text-slate-400">
+          {isRecording
+            ? 'میکروفون فعال است؛ آیه را با ترتیل واضح بخوانید…'
+            : 'برای ارزیابی صحت تلاوت، دکمه میکروفون را لمس کرده و آیه را بخوانید.'}
+        </div>
+      )}
+
+      {/* دکمه‌های اقدام و تایید */}
+      {!isCompetitive && (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {hasTranscribed ? (
+            <>
+              {evaluation.isPass ? (
+                <button
+                  type="button"
+                  onClick={onAccept}
+                  className="flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 cursor-pointer active:scale-95"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{acceptLabel}</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>تلاش دوباره (پاک کردن)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onAccept}
+                    className="py-2.5 px-3 rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-stone-50 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer active:scale-95"
+                    title="تایید دستی در صورت عدم تشخیص مناسب لهجه توسط مرورگر"
+                  >
+                    <span>تایید دستی</span>
+                  </button>
+
+                  {onReject && (
+                    <button
+                      type="button"
+                      onClick={onReject}
+                      className="py-2.5 px-3 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 text-xs font-bold transition-all cursor-pointer active:scale-95"
+                    >
+                      <span>{rejectLabel}</span>
+                    </button>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onAccept}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{acceptLabel}</span>
+              </button>
+
+              {onReject && (
+                <button
+                  type="button"
+                  onClick={onReject}
+                  className="py-2.5 px-3 rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                >
+                  <AlertCircle className="w-4 h-4 text-amber-500" />
+                  <span>{rejectLabel}</span>
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
   currentSurah,
@@ -128,11 +398,40 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
   const [revealedCompletionWordCount, setRevealedCompletionWordCount] = useState<number>(0);
   const [isCompletionFullRevealed, setIsCompletionFullRevealed] = useState<boolean>(false);
 
-  // ضبط صدای کاربر
+  // -------------------------------------------------------------
+  // وضعیت‌های اختصاصی جلسه زنده روش ۴: روش مسابقه‌ای (سرعتی و امتیازی)
+  // -------------------------------------------------------------
+  const [competitiveTimeLimit, setCompetitiveTimeLimit] = useState<number>(20);
+  const [competitiveChallengeType, setCompetitiveChallengeType] = useState<'next_verse' | 'speed_completion'>('next_verse');
+  const [competitiveScore, setCompetitiveScore] = useState<number>(0);
+  const [competitiveStreak, setCompetitiveStreak] = useState<number>(0);
+  const [maxCompetitiveStreak, setMaxCompetitiveStreak] = useState<number>(0);
+  const [timeLeft, setTimeLeft] = useState<number>(20);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+  const [isTimeUp, setIsTimeUp] = useState<boolean>(false);
+  const [competitiveRevealed, setCompetitiveRevealed] = useState<boolean>(false);
+
+  // -------------------------------------------------------------
+  // وضعیت‌های اختصاصی جلسه زنده روش ۵: مقطع به مقطع (محتوامحور)
+  // -------------------------------------------------------------
+  const [sectionPassageSize, setSectionPassageSize] = useState<number>(5);
+  const [thematicTurnMode, setThematicTurnMode] = useState<'alternating' | 'user_recall'>('alternating');
+  const [currentSectionIndex, setCurrentSectionIndex] = useState<number>(0);
+  const [thematicRevealedVerseNumbers, setThematicRevealedVerseNumbers] = useState<number[]>([]);
+  const [showFullSectionText, setShowFullSectionText] = useState<boolean>(false);
+  const [systemSectionVerseIndex, setSystemSectionVerseIndex] = useState<number>(0);
+
+  // ضبط صدای کاربر و ارزیابی هوشمند صحت تلاوت
   const [isRecording, setIsRecording] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
   const [showHintWord, setShowHintWord] = useState(false);
   const [showFullVersePrompt, setShowFullVersePrompt] = useState(false);
+
+  // تنظیمات ارزیابی هوشمند صوت
+  const [strictnessLevel, setStrictnessLevel] = useState<StrictnessLevel>('normal');
+  const [autoAdvanceOnPass, setAutoAdvanceOnPass] = useState<boolean>(true);
+  const [soundFeedbackEnabled, setSoundFeedbackEnabled] = useState<boolean>(true);
+  const hasTriggeredPassAudioRef = useRef<boolean>(false);
 
   // آمار تسلط این دور
   const [masteredCount, setMasteredCount] = useState(0);
@@ -198,6 +497,12 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     };
   }, [activeVerse, completionSplit]);
 
+  // آیه قبلی برای چالش تلاوت آیه بعد در روش مسابقه‌ای
+  const previousVerse = useMemo(() => {
+    if (!activeVerse) return null;
+    return verses.find((v) => v.verseNumber === activeVerse.verseNumber - 1) || null;
+  }, [verses, activeVerse]);
+
   // آیات صفحه فعلی در روش صفحه به صفحه
   const currentPageNumber = sessionPages[currentPageIndex] || surahPages[0] || 1;
   const currentPageVerses = useMemo(() => {
@@ -220,6 +525,92 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     return currentPageIndex % 2 === 1;
   }, [currentPageIndex, starterTurn]);
 
+  // مقاطع مفهومی و محتوامحور برای روش ۵
+  const thematicSections = useMemo(() => {
+    if (sessionVerses.length === 0) return [];
+    const size = sectionPassageSize;
+    const sections: Array<{
+      id: number;
+      startVerse: number;
+      endVerse: number;
+      title: string;
+      verses: Verse[];
+    }> = [];
+
+    for (let i = 0; i < sessionVerses.length; i += size) {
+      const chunk = sessionVerses.slice(i, i + size);
+      const startV = chunk[0].verseNumber;
+      const endV = chunk[chunk.length - 1].verseNumber;
+      let title = `مقطع ${sections.length + 1}: آیات ${toPersianDigits(startV)} تا ${toPersianDigits(endV)}`;
+      if (startV === 1) {
+        title = `فراز افتتاحیه: آیات ${toPersianDigits(startV)} تا ${toPersianDigits(endV)}`;
+      } else if (endV === currentSurah.versesCount) {
+        title = `فراز پایانی و ختام سوره: آیات ${toPersianDigits(startV)} تا ${toPersianDigits(endV)}`;
+      }
+      sections.push({
+        id: sections.length,
+        startVerse: startV,
+        endVerse: endV,
+        title,
+        verses: chunk,
+      });
+    }
+    return sections;
+  }, [sessionVerses, sectionPassageSize, currentSurah.versesCount]);
+
+  const activeSection = thematicSections[currentSectionIndex] || thematicSections[0];
+
+  // محاسبه نوبت در روش مقطع به مقطع
+  const isSystemSectionTurn = useMemo(() => {
+    if (thematicTurnMode === 'user_recall') return false;
+    if (starterTurn === 'system') return currentSectionIndex % 2 === 0;
+    return currentSectionIndex % 2 === 1;
+  }, [thematicTurnMode, starterTurn, currentSectionIndex]);
+
+  // متن هدف آیه برای سنجش صحت تلاوت کاربر بر اساس متد جاری
+  const currentTargetRecitationText = useMemo(() => {
+    if (discussionMode === 'completion') {
+      return activeVerseSplit?.completionText || '';
+    }
+    if (discussionMode === 'competitive') {
+      if (competitiveChallengeType === 'speed_completion') {
+        return activeVerseSplit?.completionText || '';
+      }
+      return activeVerse?.textArabic || '';
+    }
+    if (discussionMode === 'thematic') {
+      return activeSection?.verses.map((v) => v.textArabic).join(' ') || '';
+    }
+    if (discussionMode === 'page_by_page') {
+      return currentPageVerses.map((v) => v.textArabic).join(' ') || '';
+    }
+    return activeVerse?.textArabic || '';
+  }, [
+    discussionMode,
+    activeVerse,
+    activeVerseSplit,
+    competitiveChallengeType,
+    activeSection,
+    currentPageVerses,
+  ]);
+
+  // نتیجه ارزیابی هوشمند صوت نسبت به متن هدف
+  const recitationEvaluation = useMemo<RecitationEvaluation>(() => {
+    if (!currentTargetRecitationText || !transcribedText) {
+      return {
+        accuracy: 0,
+        isPass: false,
+        totalTargetWords: 0,
+        matchedWordsCount: 0,
+        missedWordsCount: 0,
+        wordResults: [],
+        message: '',
+        verdictType: 'empty',
+      };
+    }
+    return evaluateRecitation(currentTargetRecitationText, transcribedText, strictnessLevel);
+  }, [currentTargetRecitationText, transcribedText, strictnessLevel]);
+
   // کنترل Web Speech API برای تشخیص صدای کاربر در مرورگر
   useEffect(() => {
     const SpeechRecognition =
@@ -233,10 +624,10 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
 
       recognition.onresult = (event: any) => {
         let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript + ' ';
         }
-        setTranscribedText(transcript);
+        setTranscribedText(transcript.trim());
       };
 
       recognition.onerror = () => {
@@ -258,6 +649,18 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
       }
     };
   }, []);
+
+  // تلاش مجدد و پاک کردن متن ضبط شده
+  const handleRetryRecording = () => {
+    setTranscribedText('');
+    hasTriggeredPassAudioRef.current = false;
+    if (isRecording && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      setIsRecording(false);
+    }
+  };
 
   // شروع یا توقف ضبط صوت
   const toggleRecording = () => {
@@ -390,6 +793,61 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     }
   };
 
+  // پخش ترتیل پیوسته آیات مقطع در روش ۵: مقطع به مقطع
+  const playSectionVerseAudio = useCallback(
+    (verseIdx: number) => {
+      if (!activeSection || !activeSection.verses || verseIdx >= activeSection.verses.length) {
+        setIsPlayingAudio(false);
+        return;
+      }
+      const v = activeSection.verses[verseIdx];
+      if (!v) return;
+
+      setSystemSectionVerseIndex(verseIdx);
+      const resolved = resolveAudioSource(selectedReciterId, currentSurah.id, v.verseNumber);
+      if (!resolved || !resolved.url) {
+        setAudioError('فایل صوتی این آیه برای این قاری یافت نشد.');
+        setIsPlayingAudio(false);
+        return;
+      }
+
+      setAudioError(null);
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+      }
+
+      const proxied = getProxiedAudioUrl(resolved.url);
+      audioRef.current.src = proxied;
+      setIsPlayingAudio(true);
+
+      audioRef.current
+        .play()
+        .then(() => {
+          setIsPlayingAudio(true);
+        })
+        .catch(() => {
+          setIsPlayingAudio(false);
+        });
+
+      audioRef.current.onended = () => {
+        if (verseIdx + 1 < activeSection.verses.length) {
+          playSectionVerseAudio(verseIdx + 1);
+        } else {
+          setIsPlayingAudio(false);
+        }
+      };
+    },
+    [activeSection, selectedReciterId, currentSurah.id]
+  );
+
+  const handleToggleSectionAudio = () => {
+    if (isPlayingAudio) {
+      stopAudio();
+    } else {
+      playSectionVerseAudio(systemSectionVerseIndex);
+    }
+  };
+
   // مدیریت نوبت‌ها در روش آیه به آیه
   useEffect(() => {
     if (!isSessionActive || discussionMode !== 'verse_by_verse' || !activeVerse) return;
@@ -397,6 +855,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     setShowHintWord(false);
     setShowFullVersePrompt(false);
     setTranscribedText('');
+    hasTriggeredPassAudioRef.current = false;
 
     if (isSystemTurn) {
       setCurrentTurn('system');
@@ -417,6 +876,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     setShowFullPagePrompt(false);
     setShowPageHeaderHint(false);
     setTranscribedText('');
+    hasTriggeredPassAudioRef.current = false;
 
     if (isSystemPageTurn) {
       setCurrentTurn('system');
@@ -433,8 +893,90 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     setRevealedCompletionWordCount(0);
     setIsCompletionFullRevealed(false);
     setTranscribedText('');
+    hasTriggeredPassAudioRef.current = false;
     stopAudio();
   }, [isSessionActive, discussionMode, currentVerseIndex]);
+
+  // مدیریت زمان‌سنج در روش ۴: مسابقه‌ای (سرعتی و امتیازی)
+  useEffect(() => {
+    if (!isSessionActive || discussionMode !== 'competitive' || !isTimerRunning || isTimeUp) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setIsTimeUp(true);
+          setIsTimerRunning(false);
+          setCompetitiveStreak(0);
+          setReviewedCount((c) => c + 1);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isSessionActive, discussionMode, isTimerRunning, isTimeUp, currentVerseIndex]);
+
+  // ریست هر سوال جدید در روش مسابقه‌ای
+  useEffect(() => {
+    if (!isSessionActive || discussionMode !== 'competitive') return;
+    setTimeLeft(competitiveTimeLimit);
+    setIsTimeUp(false);
+    setCompetitiveRevealed(false);
+    setIsTimerRunning(true);
+    setTranscribedText('');
+    hasTriggeredPassAudioRef.current = false;
+    stopAudio();
+  }, [isSessionActive, discussionMode, currentVerseIndex, competitiveTimeLimit]);
+
+  // مدیریت نوبت‌ها در روش ۵: مقطع به مقطع (محتوامحور)
+  useEffect(() => {
+    if (!isSessionActive || discussionMode !== 'thematic' || !activeSection) return;
+    setSystemSectionVerseIndex(0);
+    setThematicRevealedVerseNumbers([]);
+    setShowFullSectionText(false);
+    setTranscribedText('');
+    hasTriggeredPassAudioRef.current = false;
+
+    if (isSystemSectionTurn) {
+      setCurrentTurn('system');
+      playSectionVerseAudio(0);
+    } else {
+      setCurrentTurn('user');
+      stopAudio();
+    }
+  }, [isSessionActive, discussionMode, currentSectionIndex, isSystemSectionTurn, playSectionVerseAudio]);
+
+  // ارزیابی هوشمند و اعمال خودکار تایید تلاوت
+  useEffect(() => {
+    if (!isSessionActive || !transcribedText) {
+      hasTriggeredPassAudioRef.current = false;
+      return;
+    }
+
+    if (recitationEvaluation.isPass && !hasTriggeredPassAudioRef.current) {
+      hasTriggeredPassAudioRef.current = true;
+      if (soundFeedbackEnabled) {
+        quizAudio.playCorrect();
+      }
+
+      // در روش مسابقه‌ای: ثبت خودکار امتیاز و رفتن به سوال بعد
+      if (discussionMode === 'competitive' && isTimerRunning && !isTimeUp) {
+        handleCompetitiveSuccess();
+      }
+    }
+  }, [
+    isSessionActive,
+    recitationEvaluation.isPass,
+    transcribedText,
+    soundFeedbackEnabled,
+    discussionMode,
+    isTimerRunning,
+    isTimeUp,
+  ]);
 
   // شروع جلسه
   const handleStartSession = () => {
@@ -450,6 +992,36 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
       return;
     }
 
+    if (discussionMode === 'thematic') {
+      if (thematicSections.length === 0) return;
+      setIsSessionActive(true);
+      setIsSessionFinished(false);
+      setCurrentSectionIndex(0);
+      setSystemSectionVerseIndex(0);
+      setMasteredCount(0);
+      setReviewedCount(0);
+      setSessionStartTime(Date.now());
+      return;
+    }
+
+    if (discussionMode === 'competitive') {
+      if (sessionVerses.length === 0) return;
+      setIsSessionActive(true);
+      setIsSessionFinished(false);
+      setCurrentVerseIndex(0);
+      setCompetitiveScore(0);
+      setCompetitiveStreak(0);
+      setMaxCompetitiveStreak(0);
+      setMasteredCount(0);
+      setReviewedCount(0);
+      setTimeLeft(competitiveTimeLimit);
+      setIsTimeUp(false);
+      setCompetitiveRevealed(false);
+      setIsTimerRunning(true);
+      setSessionStartTime(Date.now());
+      return;
+    }
+
     if (sessionVerses.length === 0) return;
     setIsSessionActive(true);
     setIsSessionFinished(false);
@@ -457,6 +1029,38 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     setMasteredCount(0);
     setReviewedCount(0);
     setSessionStartTime(Date.now());
+  };
+
+  // تایید مقطع کاربر و رفتن به مقطع بعد در روش ۵: مقطع به مقطع
+  const advanceToNextSection = (wasMastered = true) => {
+    stopAudio();
+    if (isRecording && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      setIsRecording(false);
+    }
+
+    if (wasMastered) {
+      setMasteredCount((prev) => prev + 1);
+    } else {
+      setReviewedCount((prev) => prev + 1);
+    }
+
+    if (currentSectionIndex + 1 < thematicSections.length) {
+      setCurrentSectionIndex((prev) => prev + 1);
+    } else {
+      setIsSessionFinished(true);
+      setSessionDurationSec(Math.round((Date.now() - sessionStartTime) / 1000));
+    }
+  };
+
+  // بازگشت به مقطع قبل در روش ۵
+  const handlePreviousSection = () => {
+    if (currentSectionIndex > 0) {
+      stopAudio();
+      setCurrentSectionIndex((prev) => prev - 1);
+    }
   };
 
   // تایید صفحه کاربر و رفتن به صفحه بعد در روش صفحه به صفحه
@@ -509,6 +1113,39 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     advanceToNextVerse();
   };
 
+  // ثبت پاسخ موفق سرعتی در روش مسابقه‌ای
+  const handleCompetitiveSuccess = () => {
+    stopAudio();
+    setIsTimerRunning(false);
+    if (isRecording && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      setIsRecording(false);
+    }
+
+    const speedBonus = timeLeft * 5;
+    const streakBonus = Math.min(competitiveStreak, 5) * 20;
+    const pointsEarned = 100 + speedBonus + streakBonus;
+    const newStreak = competitiveStreak + 1;
+
+    setCompetitiveScore((prev) => prev + pointsEarned);
+    setCompetitiveStreak(newStreak);
+    setMaxCompetitiveStreak((prev) => Math.max(prev, newStreak));
+    setMasteredCount((prev) => prev + 1);
+
+    advanceToNextVerse();
+  };
+
+  // ثبت انصراف یا تسلیم در سوال مسابقه‌ای
+  const handleCompetitiveStuck = () => {
+    stopAudio();
+    setIsTimerRunning(false);
+    setCompetitiveStreak(0);
+    setCompetitiveRevealed(true);
+    setReviewedCount((prev) => prev + 1);
+  };
+
   // رفتن به آیه بعد
   const advanceToNextVerse = () => {
     stopAudio();
@@ -555,6 +1192,14 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     const words = pageFirstVerse.textArabic.trim().split(/\s+/);
     return words.slice(0, 3).join(' ') + ' …';
   }, [pageFirstVerse]);
+
+  // سرنخ آیه اول مقطع برای روش ۵: مقطع به مقطع
+  const sectionFirstVerse = activeSection?.verses?.[0];
+  const sectionFirstWordHint = useMemo(() => {
+    if (!sectionFirstVerse) return '';
+    const words = sectionFirstVerse.textArabic.trim().split(/\s+/);
+    return words.slice(0, 3).join(' ') + ' …';
+  }, [sectionFirstVerse]);
 
   return (
     <div className="space-y-4 select-none max-w-2xl mx-auto w-full" dir="rtl">
@@ -723,7 +1368,12 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   <Zap className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs sm:text-sm font-bold">۴. روش مسابقه‌ای (چالشی)</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs sm:text-sm font-bold">۴. روش مسابقه‌ای (چالشی)</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold">
+                      فعال
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
                     شمارش معکوس زمان، ثبت زنجیره تسلط و سنجش سرعت پاسخگویی.
                   </p>
@@ -749,7 +1399,12 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   <Award className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs sm:text-sm font-bold">۵. مقطع به مقطع (محتوامحور)</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs sm:text-sm font-bold">۵. مقطع به مقطع (محتوامحور)</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-500/15 text-teal-700 dark:text-teal-300 font-bold">
+                      فعال
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
                     مباحثه دسته‌های آیات بر مبنای سیر مفهومی، سیاق آیات یا رکوعات قرآنی.
                   </p>
@@ -912,6 +1567,135 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   </button>
                 </div>
               </div>
+            ) : discussionMode === 'competitive' ? (
+              <div className="space-y-3">
+                {/* انتخاب زمان هر سوال */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1 font-bold">
+                    زمان پاسخگویی به هر سوال (ثانیه):
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[15, 20, 30].map((sec) => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => setCompetitiveTimeLimit(sec)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                          competitiveTimeLimit === sec
+                            ? 'border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500'
+                            : 'border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <span className="block font-black">{toPersianDigits(sec)} ثانیه</span>
+                        <span className="text-[10px] opacity-75 font-normal block mt-0.5">
+                          {sec === 15 ? 'سرعتی و هیجانی' : sec === 20 ? 'استاندارد مسابقات' : 'فرصت بیشتر'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* انتخاب نوع چالش مسابقه */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1 font-bold">
+                    نوع چالش مسابقه‌ای:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCompetitiveChallengeType('next_verse')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                        competitiveChallengeType === 'next_verse'
+                          ? 'border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500'
+                          : 'border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <span className="block font-black">تلاوت آیه بعد</span>
+                      <span className="text-[10px] opacity-75 font-normal block mt-0.5">زنجیره آیات</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCompetitiveChallengeType('speed_completion')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                        competitiveChallengeType === 'speed_completion'
+                          ? 'border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500'
+                          : 'border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <span className="block font-black">اکمال سرعتی</span>
+                      <span className="text-[10px] opacity-75 font-normal block mt-0.5">فراز ناقص</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : discussionMode === 'thematic' ? (
+              <div className="space-y-3">
+                {/* اندازه هر مقطع */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1 font-bold">
+                    حجم هر مقطع محتوایی (تعداد آیات در هر فراز):
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[3, 5, 7].map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setSectionPassageSize(size)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                          sectionPassageSize === size
+                            ? 'border-teal-500 bg-teal-500/10 text-teal-700 dark:text-teal-300 ring-1 ring-teal-500'
+                            : 'border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <span className="block font-black">{toPersianDigits(size)} آیه</span>
+                        <span className="text-[10px] opacity-75 font-normal block mt-0.5">
+                          {size === 3 ? 'فرازهای کوتاه' : size === 5 ? 'سیاق استاندارد' : 'مقطع طولانی'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* شیوه اجرای مقطع */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1 font-bold">
+                    نحوه مباحثه مقاطع:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setThematicTurnMode('alternating')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                        thematicTurnMode === 'alternating'
+                          ? 'border-teal-500 bg-teal-500/10 text-teal-700 dark:text-teal-300 ring-1 ring-teal-500'
+                          : 'border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <span className="block font-black">نوبتی (سیستم / شما)</span>
+                      <span className="text-[10px] opacity-75 font-normal block mt-0.5">یک مقطع سیستم، یک مقطع شما</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setThematicTurnMode('user_recall')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                        thematicTurnMode === 'user_recall'
+                          ? 'border-teal-500 bg-teal-500/10 text-teal-700 dark:text-teal-300 ring-1 ring-teal-500'
+                          : 'border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <span className="block font-black">تمام مقاطع با شما</span>
+                      <span className="text-[10px] opacity-75 font-normal block mt-0.5">تلاوت کامل با راهنما</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-xs font-bold text-teal-800 dark:text-teal-300 flex items-center justify-between">
+                  <span>تعداد مقاطع استخراج‌شده:</span>
+                  <span>{toPersianDigits(thematicSections.length)} مقطع مفهومی</span>
+                </div>
+              </div>
             ) : (
               /* شروع با چه کسی باشد؟ */
               <div>
@@ -980,6 +1764,86 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                 <span>مخفی‌سازی متن سیستم (تقویت تمرکز شنیداری)</span>
               </label>
             </div>
+
+            {/* تنظیم هوشمند ارزیابی صوت و صحت‌سنجی */}
+            <div className="pt-3 border-t border-stone-100 dark:border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>دقت ارزیابی و تصحیح هوشمند صدای شما:</span>
+                </span>
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                  {strictnessLevel === 'easy'
+                    ? 'آسان (قبولی بالای ۷۰٪)'
+                    : strictnessLevel === 'normal'
+                    ? 'استاندارد (قبولی بالای ۸۲٪)'
+                    : 'سخت‌گیرانه (قبولی بالای ۹۲٪)'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStrictnessLevel('easy')}
+                  className={`p-2 rounded-xl text-xs font-bold text-center transition-all cursor-pointer ${
+                    strictnessLevel === 'easy'
+                      ? 'border border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-500'
+                      : 'border border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:border-emerald-300'
+                  }`}
+                >
+                  <span className="block font-black">آسان</span>
+                  <span className="text-[10px] opacity-75 font-normal block mt-0.5">اغماض در لهجه و تجوید</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStrictnessLevel('normal')}
+                  className={`p-2 rounded-xl text-xs font-bold text-center transition-all cursor-pointer ${
+                    strictnessLevel === 'normal'
+                      ? 'border border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-500'
+                      : 'border border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:border-emerald-300'
+                  }`}
+                >
+                  <span className="block font-black">استاندارد</span>
+                  <span className="text-[10px] opacity-75 font-normal block mt-0.5">تطابق دقیق کلمات</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStrictnessLevel('strict')}
+                  className={`p-2 rounded-xl text-xs font-bold text-center transition-all cursor-pointer ${
+                    strictnessLevel === 'strict'
+                      ? 'border border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-500'
+                      : 'border border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:border-emerald-300'
+                  }`}
+                >
+                  <span className="block font-black">مسابقه‌ای</span>
+                  <span className="text-[10px] opacity-75 font-normal block mt-0.5">بدون کمترین کلمه جاافتاده</span>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={soundFeedbackEnabled}
+                    onChange={(e) => setSoundFeedbackEnabled(e.target.checked)}
+                    className="rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>پخش نوای صوتی تایید درستی تلاوت (افکت صوتی)</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={autoAdvanceOnPass}
+                    onChange={(e) => setAutoAdvanceOnPass(e.target.checked)}
+                    className="rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>برجسته‌سازی خودکار دکمه تایید پس از تلاوت صحیح</span>
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* دکمه شروع مباحثه */}
@@ -994,6 +1858,10 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                 ? `شروع مباحثه صفحه به صفحه (${toPersianDigits(sessionPages.length)} صفحه مصحف)`
                 : discussionMode === 'completion'
                 ? `شروع مباحثه تکمیلی (${toPersianDigits(sessionVerses.length)} آیه)`
+                : discussionMode === 'competitive'
+                ? `شروع مسابقه سرعتی (${toPersianDigits(sessionVerses.length)} سوال با زمان‌سنج ${toPersianDigits(competitiveTimeLimit)}ث)`
+                : discussionMode === 'thematic'
+                ? `شروع مباحثه مقطع‌به‌مقطع (${toPersianDigits(thematicSections.length)} مقطع مفهومی)`
                 : `شروع جلسه مباحثه (${toPersianDigits(sessionVerses.length)} آیه)`}
             </span>
           </button>
@@ -1246,44 +2114,19 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   </div>
                 </div>
 
-                {/* کنترل میکروفون و تایید تلاوت صفحه */}
-                <div className="pt-2 flex flex-col items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={toggleRecording}
-                    className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all cursor-pointer active:scale-95 ${
-                      isRecording
-                        ? 'bg-rose-600 text-white animate-pulse shadow-rose-600/30'
-                        : 'bg-emerald-600 text-white shadow-emerald-600/30 hover:scale-105'
-                    }`}
-                    title={isRecording ? 'توقف ضبط' : 'روشن کردن میکروفون'}
-                  >
-                    {isRecording ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
-                  </button>
-                  <span className="text-[11px] text-slate-400">
-                    {isRecording ? 'در حال شنیدن تلاوت صفحه…' : 'میکروفون را روشن کرده و صفحه را با صوت تلاوت کنید'}
-                  </span>
-
-                  <div className="flex items-center gap-2 pt-2 w-full max-w-sm">
-                    <button
-                      type="button"
-                      onClick={() => advanceToNextPage(true)}
-                      className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>صفحه را مسلط خواندم (تکمیل)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => advanceToNextPage(false)}
-                      className="py-3 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
-                      title="نیاز به تمرین و مرور مجدد"
-                    >
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                      <span>نیاز به تمرین</span>
-                    </button>
-                  </div>
+                {/* کنترل میکروفون و ارزیابی هوشمند صحت تلاوت صفحه */}
+                <div className="pt-2">
+                  <SmartRecitationFeedbackPanel
+                    evaluation={recitationEvaluation}
+                    transcribedText={transcribedText}
+                    isRecording={isRecording}
+                    onToggleRecording={toggleRecording}
+                    onRetry={handleRetryRecording}
+                    onAccept={() => advanceToNextPage(true)}
+                    onReject={() => advanceToNextPage(false)}
+                    acceptLabel="صفحه را مسلط خواندم (صفحه بعد)"
+                    rejectLabel="نیاز به تمرین این صفحه"
+                  />
                 </div>
               </div>
             )}
@@ -1467,45 +2310,19 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   </div>
                 </div>
 
-                {/* ۳. میکروفون و ثبت تسلط */}
-                <div className="pt-2 flex flex-col items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={toggleRecording}
-                    className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all cursor-pointer active:scale-95 ${
-                      isRecording
-                        ? 'bg-rose-600 text-white animate-pulse shadow-rose-600/30'
-                        : 'bg-emerald-600 text-white shadow-emerald-600/30 hover:scale-105'
-                    }`}
-                    title={isRecording ? 'توقف ضبط' : 'روشن کردن میکروفون'}
-                  >
-                    {isRecording ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
-                  </button>
-                  <span className="text-[11px] text-slate-400">
-                    {isRecording ? 'در حال شنیدن اکمال آیه…' : 'میکروفون را روشن کرده و ادامه آیه را با صوت تلاوت کنید'}
-                  </span>
-
-                  {/* دکمه‌های تایید نتیجه */}
-                  <div className="flex items-center gap-2 pt-2 w-full max-w-sm">
-                    <button
-                      type="button"
-                      onClick={() => handleCompleteUserTurn(true)}
-                      className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>صحیح و کامل خواندم (بعدی)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleCompleteUserTurn(false)}
-                      className="py-3 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
-                      title="نیاز به تمرین و مرور مجدد"
-                    >
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                      <span>نیاز به تمرین</span>
-                    </button>
-                  </div>
+                {/* ۳. میکروفون و ارزیابی هوشمند صحت اکمال فراز */}
+                <div className="pt-2">
+                  <SmartRecitationFeedbackPanel
+                    evaluation={recitationEvaluation}
+                    transcribedText={transcribedText}
+                    isRecording={isRecording}
+                    onToggleRecording={toggleRecording}
+                    onRetry={handleRetryRecording}
+                    onAccept={() => handleCompleteUserTurn(true)}
+                    onReject={() => handleCompleteUserTurn(false)}
+                    acceptLabel="صحیح و کامل خواندم (آیه بعد)"
+                    rejectLabel="نیاز به تمرین"
+                  />
                 </div>
               </div>
             )}
@@ -1528,6 +2345,597 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                 className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1 cursor-pointer"
               >
                 <span>رد شدن به آیه بعد</span>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : discussionMode === 'competitive' ? (
+          /* ============================================================ */
+          /* روش ۴: محیط اختصاصی روش مسابقه‌ای (سرعتی و امتیازی) */
+          /* ============================================================ */
+          <div className="space-y-4 animate-fadeIn">
+            {/* نوار وضعیت بالای جلسه مسابقه‌ای */}
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
+              <span className="text-slate-600 dark:text-slate-400">
+                سوال {toPersianDigits(currentVerseIndex + 1)} از {toPersianDigits(sessionVerses.length)}
+              </span>
+
+              {/* نشانگر تایمر معکوس */}
+              <div
+                className={`px-3 py-1 rounded-full flex items-center gap-1.5 transition-all ${
+                  timeLeft <= 5
+                    ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40 animate-pulse'
+                    : timeLeft <= 10
+                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40'
+                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>زمان: {toPersianDigits(timeLeft)} ثانیه</span>
+              </div>
+
+              {/* امتیاز و زنجیره */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 flex items-center gap-1">
+                  <Award className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{toPersianDigits(competitiveScore)} امتیاز</span>
+                </span>
+                {competitiveStreak > 0 && (
+                  <span className="px-2 py-1 rounded-xl bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30 flex items-center gap-1 animate-pulse">
+                    <Zap className="w-3.5 h-3.5 text-orange-500" />
+                    <span>🔥 {toPersianDigits(competitiveStreak)}</span>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleExitSession}
+                  className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer mr-1"
+                  title="پایان مسابقه"
+                >
+                  خروج
+                </button>
+              </div>
+            </div>
+
+            {/* نوار پویای پیشرفت زمان */}
+            <div className="w-full h-1.5 rounded-full bg-stone-200 dark:bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full transition-all duration-1000 ${
+                  timeLeft <= 5 ? 'bg-rose-500' : timeLeft <= 10 ? 'bg-amber-500' : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.max(0, Math.min(100, (timeLeft / competitiveTimeLimit) * 100))}%` }}
+              />
+            </div>
+
+            {/* کارت اصلی چالش مسابقه‌ای */}
+            {activeVerse && (
+              <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs space-y-4">
+                {/* بخش سربرگ سوال */}
+                <div className="flex items-center justify-between border-b border-stone-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 font-black text-xs flex items-center justify-center">
+                      {toPersianDigits(activeVerse.verseNumber)}
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      سوره {currentSurah.nameArabic} • آیه {toPersianDigits(activeVerse.verseNumber)}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isPlayingAudio) {
+                        stopAudio();
+                      } else {
+                        playVerseAudio(activeVerse.verseNumber);
+                      }
+                    }}
+                    className="p-1.5 px-2.5 rounded-xl bg-stone-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 hover:bg-stone-200 transition-all cursor-pointer"
+                    title={isPlayingAudio ? 'توقف صوت' : 'شنیدن ترتیل این آیه'}
+                  >
+                    {isPlayingAudio ? (
+                      <>
+                        <Pause className="w-3.5 h-3.5 fill-current text-rose-500" />
+                        <span className="text-rose-500">توقف ترتیل</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>شنیدن ترتیل آیه</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* صورت چالش مسابقه بر اساس نوع چالش */}
+                {competitiveChallengeType === 'next_verse' ? (
+                  /* چالش ۱: تلاوت آیه بعد بر مبنای آیه قبل */
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-2xl bg-teal-50/40 dark:bg-slate-800/60 border border-teal-500/25 space-y-1 text-center">
+                      <span className="text-xs font-bold text-teal-800 dark:text-teal-300 block">
+                        {previousVerse
+                          ? `آیه مبنا (آیه ${toPersianDigits(previousVerse.verseNumber)}):`
+                          : `آغاز سوره مبارکه ${currentSurah.nameArabic}:`}
+                      </span>
+                      {previousVerse ? (
+                        <div
+                          className="text-base sm:text-lg font-normal leading-[2.2] text-teal-950 dark:text-teal-100 py-1"
+                          style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', 'Scheherazade New', serif" }}
+                          dir="rtl"
+                        >
+                          «{previousVerse.textArabic}»
+                        </div>
+                      ) : (
+                        <div className="text-sm font-bold text-slate-500 py-2">
+                          بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-amber-50/30 dark:bg-slate-800/40 border border-amber-500/30 text-center space-y-2">
+                      <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center justify-center gap-1.5">
+                        <Zap className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                        <span>بلافاصله آیه بعد (آیه {toPersianDigits(activeVerse.verseNumber)}) را از حفظ بخوانید:</span>
+                      </span>
+
+                      {!isTimeUp && !competitiveRevealed ? (
+                        <div className="py-4 px-3 rounded-xl border border-dashed border-amber-500/40 bg-white/70 dark:bg-slate-900/60 text-xs sm:text-sm text-slate-500 animate-pulse">
+                          آیه را با صوت بخوانید و پیش از اتمام {toPersianDigits(timeLeft)} ثانیه دکمه تایید را لمس کنید!
+                        </div>
+                      ) : (
+                        <div className="space-y-2 animate-fadeIn">
+                          <div className="text-xs font-bold text-rose-600 dark:text-rose-400">
+                            {isTimeUp ? 'زمان این سوال به پایان رسید!' : 'پاسخ برای مرور شما آشکار شد:'}
+                          </div>
+                          <div
+                            className="text-lg sm:text-xl font-normal leading-[2.4] text-slate-900 dark:text-slate-100 py-2"
+                            style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', 'Scheherazade New', serif" }}
+                            dir="rtl"
+                          >
+                            «{activeVerse.textArabic}»
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* چالش ۲: اکمال سرعتی فراز ناقص */
+                  activeVerseSplit && (
+                    <div className="space-y-3">
+                      <div className="p-4 rounded-2xl bg-teal-50/40 dark:bg-slate-800/60 border border-teal-500/25 space-y-1 text-center">
+                        <span className="text-xs font-bold text-teal-800 dark:text-teal-300 block">
+                          ابتدای آیه (سیستم خواند):
+                        </span>
+                        <div
+                          className="text-lg sm:text-xl font-normal leading-[2.2] text-teal-950 dark:text-teal-100 py-1"
+                          style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', 'Scheherazade New', serif" }}
+                          dir="rtl"
+                        >
+                          «{activeVerseSplit.promptText} …»
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-amber-50/30 dark:bg-slate-800/40 border border-amber-500/30 text-center space-y-2">
+                        <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center justify-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                          <span>ادامه آیه را سریعاً از حفظ کامل کنید:</span>
+                        </span>
+
+                        {!isTimeUp && !competitiveRevealed ? (
+                          <div className="py-4 px-3 rounded-xl border border-dashed border-amber-500/40 bg-white/70 dark:bg-slate-900/60 text-xs sm:text-sm text-slate-500 animate-pulse">
+                            «… [ادامه آیه شامل {toPersianDigits(activeVerseSplit.completionWords.length)} کلمه تا پایان]»
+                          </div>
+                        ) : (
+                          <div className="space-y-2 animate-fadeIn">
+                            <div className="text-xs font-bold text-rose-600 dark:text-rose-400">
+                              {isTimeUp ? 'زمان این سوال به پایان رسید!' : 'پاسخ برای مرور شما آشکار شد:'}
+                            </div>
+                            <div
+                              className="text-lg sm:text-xl font-normal leading-[2.4] text-slate-900 dark:text-slate-100 py-2"
+                              style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', 'Scheherazade New', serif" }}
+                              dir="rtl"
+                            >
+                              «… {activeVerseSplit.completionText}»
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* ارزیابی هوشمند صوت در مسابقه */}
+                <div className="pt-2 space-y-3">
+                  <SmartRecitationFeedbackPanel
+                    evaluation={recitationEvaluation}
+                    transcribedText={transcribedText}
+                    isRecording={isRecording}
+                    onToggleRecording={toggleRecording}
+                    onRetry={handleRetryRecording}
+                    onAccept={handleCompetitiveSuccess}
+                    isCompetitive={true}
+                  />
+
+                  {/* دکمه‌های تایید نتیجه مسابقه */}
+                  {!isTimeUp && !competitiveRevealed ? (
+                    <div className="flex items-center gap-2 pt-1 w-full max-w-sm mx-auto">
+                      <button
+                        type="button"
+                        onClick={handleCompetitiveSuccess}
+                        className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-95"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>
+                          تایید دستی (+{toPersianDigits(100 + timeLeft * 5 + Math.min(competitiveStreak, 5) * 20)} امتیاز)
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCompetitiveStuck}
+                        className="py-3.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                        title="گیر کردم / مشاهده پاسخ"
+                      >
+                        <HelpCircle className="w-4 h-4 text-amber-500" />
+                        <span>تسلیم / پاسخ</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="pt-1 w-full max-w-sm mx-auto">
+                      <button
+                        type="button"
+                        onClick={() => advanceToNextVerse()}
+                        className="w-full py-3.5 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer active:scale-95"
+                      >
+                        <span>رفتن به سوال بعد</span>
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* نوار جابجایی پایین صفحه */}
+            <div className="flex items-center justify-between text-xs pt-1">
+              <button
+                type="button"
+                onClick={handlePreviousVerse}
+                disabled={currentVerseIndex === 0}
+                className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800 disabled:opacity-30 text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+                <span>سوال قبل</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => advanceToNextVerse()}
+                className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <span>رد شدن به سوال بعد</span>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : discussionMode === 'thematic' ? (
+          /* ============================================================ */
+          /* روش ۵: محیط اختصاصی مباحثه مقطع به مقطع (محتوامحور) */
+          /* ============================================================ */
+          <div className="space-y-4 animate-fadeIn">
+            {/* نوار وضعیت بالای جلسه مقطع به مقطع */}
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
+              <span className="text-slate-600 dark:text-slate-400">
+                مقطع {toPersianDigits(currentSectionIndex + 1)} از {toPersianDigits(thematicSections.length)}
+              </span>
+
+              {/* نشانگر نوبت جاری */}
+              <div
+                className={`px-3 py-1 rounded-full flex items-center gap-1.5 transition-all ${
+                  isSystemSectionTurn
+                    ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30'
+                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 animate-pulse'
+                }`}
+              >
+                {isSystemSectionTurn ? <Bot className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+                <span>
+                  {isSystemSectionTurn
+                    ? 'نوبت تلاوت سیستم (ترتیل پیوسته مقطع)'
+                    : 'نوبت شما (تلاوت پیوسته مقطع از حفظ)'}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleExitSession}
+                className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer"
+                title="پایان مباحثه"
+              >
+                خروج
+              </button>
+            </div>
+
+            {/* کارت اصلی مقطع جاری */}
+            {activeSection && (
+              <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs space-y-4">
+                {/* سربرگ مقطع */}
+                <div className="flex items-center justify-between border-b border-stone-100 dark:border-slate-800 pb-3 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-700 dark:text-teal-300 font-black text-xs flex items-center justify-center">
+                      {toPersianDigits(currentSectionIndex + 1)}
+                    </span>
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">
+                        {activeSection.title}
+                      </h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        سوره {currentSurah.nameArabic} • {toPersianDigits(activeSection.verses.length)} آیه در این مقطع
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* دکمه‌های صوتی مقطع */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleToggleSectionAudio}
+                      className="p-1.5 px-3 rounded-xl bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center gap-1.5 hover:bg-teal-100 transition-all cursor-pointer"
+                      title={isPlayingAudio ? 'توقف صوت' : 'پخش ترتیل پیوسته آیات مقطع'}
+                    >
+                      {isPlayingAudio ? (
+                        <>
+                          <Pause className="w-3.5 h-3.5 fill-current text-rose-500" />
+                          <span className="text-rose-500">توقف ترتیل</span>
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="w-3.5 h-3.5" />
+                          <span>پخش ترتیل مقطع</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => playSectionVerseAudio(0)}
+                      className="p-1.5 rounded-xl bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 transition-all cursor-pointer"
+                      title="پخش مجدد از آغاز مقطع"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* نمایش مقطع بر اساس نوبت سیستم یا کاربر */}
+                {isSystemSectionTurn ? (
+                  /* الف) نوبت سیستم در این مقطع */
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between text-xs text-teal-700 dark:text-teal-400 font-bold px-1">
+                      <div className="flex items-center gap-1.5">
+                        <Volume2 className={`w-4 h-4 ${isPlayingAudio ? 'animate-bounce' : ''}`} />
+                        <span>
+                          {isPlayingAudio
+                            ? `سیستم در حال ترتیل آیه ${toPersianDigits(
+                                activeSection.verses[systemSectionVerseIndex]?.verseNumber || ''
+                              )} است…`
+                            : 'تلاوت پیوسته آیات مقطع توسط هم‌مباحثه:'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-normal">
+                        (برای شنیدن هر آیه روی آن کلیک کنید)
+                      </span>
+                    </div>
+
+                    {/* لیست آیات مقطع */}
+                    {!hideSystemText ? (
+                      <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                        {activeSection.verses.map((verse, vIdx) => {
+                          const isRecitingThis =
+                            isPlayingAudio && systemSectionVerseIndex === vIdx;
+                          return (
+                            <div
+                              key={verse.verseNumber}
+                              onClick={() => playSectionVerseAudio(vIdx)}
+                              className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
+                                isRecitingThis
+                                  ? 'border-teal-500 bg-teal-500/10 ring-2 ring-teal-500/30 shadow-xs'
+                                  : 'border-stone-100 dark:border-slate-800 bg-stone-50/50 dark:bg-slate-800/40 hover:border-teal-300'
+                              }`}
+                            >
+                              <span
+                                className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${
+                                  isRecitingThis
+                                    ? 'bg-teal-600 text-white animate-pulse'
+                                    : 'bg-stone-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                }`}
+                              >
+                                {toPersianDigits(verse.verseNumber)}
+                              </span>
+
+                              <div className="flex-1 min-w-0">
+                                <div
+                                  className="text-base sm:text-lg leading-[2.3] text-slate-900 dark:text-slate-100"
+                                  style={{
+                                    fontFamily: "'Uthman Taha', 'Amiri Quran', 'Scheherazade New', serif",
+                                  }}
+                                  dir="rtl"
+                                >
+                                  {verse.textArabic}
+                                </div>
+                              </div>
+
+                              {isRecitingThis && (
+                                <div className="flex items-center gap-0.5 shrink-0 self-center">
+                                  <div className="w-1 h-3 rounded-full bg-teal-500 animate-pulse" />
+                                  <div className="w-1 h-5 rounded-full bg-teal-600 animate-pulse delay-75" />
+                                  <div className="w-1 h-2 rounded-full bg-teal-400 animate-pulse delay-150" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-6 rounded-2xl bg-teal-50/30 dark:bg-slate-800/40 text-xs text-slate-400 text-center space-y-2">
+                        <p>متن مقطع جهت تقویت حافظه شنیداری و دقت گوش دادن پنهان شده است.</p>
+                        <p className="text-[11px] text-teal-600 dark:text-teal-400">
+                          (به لحن، وقف و اتصال آیات مقطع توسط سیستم دقت فرمایید)
+                        </p>
+                      </div>
+                    )}
+
+                    {/* دکمه تحویل نوبت به کاربر برای مقطع بعد */}
+                    <div className="pt-2 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => advanceToNextSection(true)}
+                        className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-xs cursor-pointer active:scale-95"
+                      >
+                        <span>مقطع بعدی با من است (رفتن به مقطع بعد)</span>
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* ب) نوبت کاربر در این مقطع */
+                  <div className="space-y-4">
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-500/30 text-center space-y-1">
+                      <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center justify-center gap-1.5">
+                        <Mic className="w-4 h-4 animate-pulse text-emerald-600" />
+                        <span>
+                          این مقطع ({toPersianDigits(activeSection.verses.length)} آیه پیوسته) را از حفظ تلاوت کنید:
+                        </span>
+                      </span>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        آیات {toPersianDigits(activeSection.startVerse)} تا {toPersianDigits(activeSection.endVerse)} را بدون وقفه بخوانید.
+                      </p>
+                    </div>
+
+                    {/* نمایش محتوای مقطع یا پنل راهنمایی */}
+                    {!hideUserText || showFullSectionText ? (
+                      /* متن آشکار مقطع */
+                      <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1 animate-fadeIn">
+                        {activeSection.verses.map((verse) => (
+                          <div
+                            key={verse.verseNumber}
+                            className="p-3 rounded-2xl border border-stone-100 dark:border-slate-800 bg-stone-50/40 dark:bg-slate-800/30 flex items-start gap-2.5"
+                          >
+                            <span className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[11px] font-black flex items-center justify-center shrink-0">
+                              {toPersianDigits(verse.verseNumber)}
+                            </span>
+                            <div
+                              className="text-base sm:text-lg leading-[2.3] text-slate-900 dark:text-slate-100 flex-1"
+                              style={{
+                                fontFamily: "'Uthman Taha', 'Amiri Quran', 'Scheherazade New', serif",
+                              }}
+                              dir="rtl"
+                            >
+                              {verse.textArabic}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      /* حالت مخفی‌سازی با راهنمای هوشمند */
+                      <div className="p-4 sm:p-5 rounded-2xl border border-dashed border-emerald-500/30 bg-white/50 dark:bg-slate-900/40 space-y-3 text-center">
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          متن آیات برای آزمون حفظ پنهان است. در صورت نیاز از سرنخ‌ها استفاده کنید:
+                        </div>
+
+                        {/* سرنخ آغاز مقطع */}
+                        <div className="py-2.5 px-4 rounded-xl bg-emerald-500/10 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                          سرآغاز مقطع: «{sectionFirstWordHint}»
+                        </div>
+
+                        {/* آیات آشکارشده به صورت تکی */}
+                        {thematicRevealedVerseNumbers.length > 0 && (
+                          <div className="space-y-2 text-right pt-2">
+                            {activeSection.verses
+                              .filter((v) => thematicRevealedVerseNumbers.includes(v.verseNumber))
+                              .map((v) => (
+                                <div
+                                  key={v.verseNumber}
+                                  className="p-2.5 rounded-xl bg-amber-50/50 dark:bg-slate-800 border border-amber-500/20 text-xs text-slate-800 dark:text-slate-200"
+                                >
+                                  <span className="font-bold text-amber-700 dark:text-amber-400 ml-1">
+                                    آیه {toPersianDigits(v.verseNumber)}:
+                                  </span>
+                                  <span>{v.textArabic}</span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+
+                        {/* دکمه‌های کمکی */}
+                        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextUnrevealed = activeSection.verses.find(
+                                (v) => !thematicRevealedVerseNumbers.includes(v.verseNumber)
+                              );
+                              if (nextUnrevealed) {
+                                setThematicRevealedVerseNumbers((prev) => [
+                                  ...prev,
+                                  nextUnrevealed.verseNumber,
+                                ]);
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800 flex items-center gap-1 cursor-pointer"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
+                            <span>آشکارسازی آیه به آیه</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowFullSectionText(true)}
+                            className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>نمایش کامل متن مقطع</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* کنترل میکروفون و ارزیابی هوشمند مقطع */}
+                    <div className="pt-2">
+                      <SmartRecitationFeedbackPanel
+                        evaluation={recitationEvaluation}
+                        transcribedText={transcribedText}
+                        isRecording={isRecording}
+                        onToggleRecording={toggleRecording}
+                        onRetry={handleRetryRecording}
+                        onAccept={() => advanceToNextSection(true)}
+                        onReject={() => advanceToNextSection(false)}
+                        acceptLabel="تلاوت مسلط (مقطع بعد)"
+                        rejectLabel="نیاز به تمرین این مقطع"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* نوار جابجایی پایین صفحه در روش مقطع به مقطع */}
+            <div className="flex items-center justify-between text-xs pt-1">
+              <button
+                type="button"
+                onClick={handlePreviousSection}
+                disabled={currentSectionIndex === 0}
+                className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800 disabled:opacity-30 text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+                <span>مقطع قبل</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => advanceToNextSection(true)}
+                className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <span>رد شدن به مقطع بعد</span>
                 <ChevronLeft className="w-4 h-4" />
               </button>
             </div>
@@ -1702,45 +3110,19 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                       </button>
                     </div>
 
-                    {/* کنترل میکروفون و تایید تلاوت */}
-                    <div className="pt-2 flex flex-col items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={toggleRecording}
-                        className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all cursor-pointer active:scale-95 ${
-                          isRecording
-                            ? 'bg-rose-600 text-white animate-pulse shadow-rose-600/30'
-                            : 'bg-emerald-600 text-white shadow-emerald-600/30 hover:scale-105'
-                        }`}
-                        title={isRecording ? 'توقف ضبط' : 'روشن کردن میکروفون'}
-                      >
-                        {isRecording ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
-                      </button>
-                      <span className="text-[11px] text-slate-400">
-                        {isRecording ? 'در حال شنیدن صدای شما…' : 'لمس کنید تا میکروفون فعال شود (یا پس از تلاوت تایید کنید)'}
-                      </span>
-
-                      {/* دکمه‌های تایید نتیجه برای ثبت پیشرفت */}
-                      <div className="flex items-center gap-2 pt-2 w-full max-w-sm">
-                        <button
-                          type="button"
-                          onClick={() => handleCompleteUserTurn(true)}
-                          className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>مسلط خواندم (بعدی)</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleCompleteUserTurn(false)}
-                          className="py-2.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
-                          title="نیاز به تمرین بیشتر"
-                        >
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                          <span>نیاز به تمرین</span>
-                        </button>
-                      </div>
+                    {/* کنترل میکروفون و ارزیابی هوشمند تلاوت آیه */}
+                    <div className="pt-2">
+                      <SmartRecitationFeedbackPanel
+                        evaluation={recitationEvaluation}
+                        transcribedText={transcribedText}
+                        isRecording={isRecording}
+                        onToggleRecording={toggleRecording}
+                        onRetry={handleRetryRecording}
+                        onAccept={() => handleCompleteUserTurn(true)}
+                        onReject={() => handleCompleteUserTurn(false)}
+                        acceptLabel="مسلط خواندم (آیه بعد)"
+                        rejectLabel="نیاز به تمرین"
+                      />
                     </div>
                   </div>
                 )}
@@ -1776,40 +3158,102 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
       {isSessionFinished && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" dir="rtl">
           <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 max-w-sm w-full text-center space-y-4 shadow-xl animate-fadeIn">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
+            <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center ${
+              discussionMode === 'competitive'
+                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+            }`}>
               <Award className="w-8 h-8" />
             </div>
 
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                {discussionMode === 'completion'
+                {discussionMode === 'competitive'
+                  ? 'مسابقه حفظ با موفقیت به پایان رسید!'
+                  : discussionMode === 'completion'
                   ? 'مباحثه تکمیلی (اکمال فراز) به پایان رسید!'
                   : discussionMode === 'page_by_page'
                   ? 'مباحثه صفحه به صفحه به پایان رسید!'
+                  : discussionMode === 'thematic'
+                  ? 'مباحثه مقطع به مقطع به پایان رسید!'
                   : 'جلسه مباحثه با موفقیت به پایان رسید!'}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 سوره مبارکه {currentSurah.nameArabic} •{' '}
                 {discussionMode === 'page_by_page'
                   ? `${toPersianDigits(sessionPages.length)} صفحه مصحف شریف`
+                  : discussionMode === 'thematic'
+                  ? `${toPersianDigits(thematicSections.length)} مقطع محتوایی`
                   : `${toPersianDigits(sessionVerses.length)} آیه`}
               </p>
             </div>
 
-            <div className="p-3 rounded-2xl bg-stone-50 dark:bg-slate-800 grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-slate-400 block">تلاوت مسلط:</span>
-                <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
-                  {toPersianDigits(masteredCount)} {discussionMode === 'page_by_page' ? 'صفحه' : 'آیه'}
-                </span>
+            {discussionMode === 'competitive' ? (
+              <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-center space-y-1">
+                  <span className="text-xs text-amber-800 dark:text-amber-300 font-bold block">
+                    امتیاز کل کسب‌شده:
+                  </span>
+                  <span className="text-3xl font-black text-amber-600 dark:text-amber-400 block py-1">
+                    {toPersianDigits(competitiveScore)}
+                  </span>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 pt-1 flex items-center justify-center gap-1 font-bold">
+                    <span>بزرگ‌ترین زنجیره تسلط:</span>
+                    <span className="text-orange-500 font-black">🔥 {toPersianDigits(maxCompetitiveStreak)}</span>
+                  </div>
+                  {/* رتبه مسابقه بر اساس درصد کسب امتیاز */}
+                  <div className="pt-2">
+                    <span className="text-[11px] px-3 py-1 rounded-full font-bold bg-amber-500/20 text-amber-800 dark:text-amber-200 inline-block">
+                      {competitiveScore >= sessionVerses.length * 120
+                        ? '🌟 مدال طلای حافظان مسابقه‌ای'
+                        : competitiveScore >= sessionVerses.length * 70
+                        ? '🥈 مدال نقره (سرعت و دقت خوب)'
+                        : '🥉 مدال برنز (نیاز به تمرین سرعت)'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-stone-50 dark:bg-slate-800 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-slate-400 block">پاسخ‌های به موقع:</span>
+                    <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                      {toPersianDigits(masteredCount)} سوال
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">اتمام زمان / راهنما:</span>
+                    <span className="text-base font-black text-rose-600 dark:text-rose-400">
+                      {toPersianDigits(reviewedCount)} سوال
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-400 block">نیاز به تمرین:</span>
-                <span className="text-base font-black text-amber-600 dark:text-amber-400">
-                  {toPersianDigits(reviewedCount)} {discussionMode === 'page_by_page' ? 'صفحه' : 'آیه'}
-                </span>
+            ) : (
+              <div className="p-3 rounded-2xl bg-stone-50 dark:bg-slate-800 grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-slate-400 block">تلاوت مسلط:</span>
+                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                    {toPersianDigits(masteredCount)}{' '}
+                    {discussionMode === 'page_by_page'
+                      ? 'صفحه'
+                      : discussionMode === 'thematic'
+                      ? 'مقطع'
+                      : 'آیه'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">نیاز به تمرین:</span>
+                  <span className="text-base font-black text-amber-600 dark:text-amber-400">
+                    {toPersianDigits(reviewedCount)}{' '}
+                    {discussionMode === 'page_by_page'
+                      ? 'صفحه'
+                      : discussionMode === 'thematic'
+                      ? 'مقطع'
+                      : 'آیه'}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex items-center gap-2 pt-1">
               <button
