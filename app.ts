@@ -5,7 +5,7 @@ import { GoogleGenAI } from '@google/genai';
 import { randomUUID } from 'node:crypto';
 import { aiAskRequestSchema, aiResponseSchema, extractJsonObject } from './src/services/aiContract';
 import { generateWithFallback, hasConfiguredProvider, ProviderError } from './server/aiProviders';
-import { consumeDailyQuota, hashRateLimitKey } from './server/aiRateLimit';
+import { consumeDailyQuota, hashRateLimitKey, getDailyQuotaUsage } from './server/aiRateLimit';
 import { detectIntent } from './src/services/aiAgent/intentDetector';
 import { createQuranSource, createTafsirMizanSource } from './src/services/aiAgent/sourceResolver';
 import { SourceItem } from './src/services/aiAgent/types';
@@ -185,10 +185,23 @@ export function createApp() {
     }
   });
 
-  // وضعیت سرویس‌های هوش مصنوعی (بر اساس P0-T5 فقط اعلام فعال بودن کلی)
-  app.get(['/api/ai/status', '/ai/status'], (req, res) => {
+  // وضعیت سرویس‌های هوش مصنوعی و سهمیه روزانه
+  app.get(['/api/ai/status', '/ai/status'], async (req, res) => {
+    const forwardedIp = req.header('x-forwarded-for')?.split(',')[0]?.trim();
+    const ip = forwardedIp || req.ip || 'unknown';
+    const deviceId = (req.header('x-device-id') || req.query.deviceId || '').toString().trim();
+    const dailyLimit = Math.max(1, Number(getEnvKey('AI_DAILY_LIMIT') || 20));
+    let used = 0;
+    if (deviceId && deviceId.length >= 8) {
+      used = await getDailyQuotaUsage(hashRateLimitKey(ip, deviceId));
+    }
+    const remaining = Math.max(0, dailyLimit - used);
+
     res.json({
       enabled: isAiEnabled() && !['1', 'true'].includes(getEnvKey('AI_KILL_SWITCH').toLowerCase()) && hasConfiguredProvider(),
+      dailyLimit,
+      used,
+      remaining,
     });
   });
 

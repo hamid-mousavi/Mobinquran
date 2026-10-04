@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Trophy,
   CheckCircle2,
@@ -17,22 +17,26 @@ import {
   ArrowRight,
   Layers,
   HelpCircle,
-  Maximize2,
   Play,
   Languages,
   Compass,
-  CheckSquare,
-  Square,
-  Flame,
-  ShieldAlert,
+  History,
+  Trash2,
+  Settings2,
+  Sliders,
+  Shuffle,
+  AlignJustify,
+  Link2,
+  Keyboard,
 } from 'lucide-react';
 import { Surah, Verse } from '../types';
 import { toPersianDigits } from '../utils/textNormalization';
-import { QuranService } from '../services/quranService';
-import { getAudioSourceUrl, ReciterId, RECITER_NAMES } from '../services/audioSources';
+import { getAudioSourceUrl, ReciterId } from '../services/audioSources';
 import { QURAN_STORIES } from '../data/quranStories';
-import { ALL_SURAHS } from '../data/surahs';
-import { RealisticQuizView } from './RealisticQuizView';
+import { RealisticQuizView, QuizQuestionItem } from './RealisticQuizView';
+import { ReciterSelectorDropdown } from './ReciterSelectorDropdown';
+import { SurahSelectorModal } from './SurahSelectorModal';
+import { QuranService } from '../services/quranService';
 
 interface MemorizationQuizStudioProps {
   currentSurah: Surah;
@@ -51,26 +55,12 @@ export type QuizType =
   | 'translation_match'
   | 'verse_number'
   | 'surah_identity'
-  | 'quran_stories';
+  | 'quran_stories'
+  | 'ordering'
+  | 'matching'
+  | 'typing';
 
-export type QuizDifficulty = 'easy' | 'medium' | 'hard';
-
-interface QuizQuestion {
-  id: string;
-  type: QuizType;
-  prompt: string;
-  contextText?: string;
-  options: string[];
-  correctIndex: number;
-  explanation: string;
-  surahId: number;
-  surahName: string;
-  verseNumber: number;
-  verseAudioUrl?: string | null;
-  fullVerseText?: string;
-  fullVerseTranslation?: string;
-  blankPosition?: 'start' | 'end' | 'middle';
-}
+export type BlankPosition = 'start' | 'middle' | 'end';
 
 interface SavedQuizResult {
   id: string;
@@ -80,65 +70,15 @@ interface SavedQuizResult {
   total: number;
   percent: number;
   typeLabel: string;
+  durationSeconds?: number;
 }
 
-// کوتاه‌سازی هوشمند فرازهای طولانی بدون قطع ناتمام کلمات
+// کوتاه‌سازی هوشمند فرازهای طولانی
 const getVerseSnippet = (text: string, maxWords: number = 24): string => {
   const words = text.trim().split(/\s+/);
   if (words.length <= maxWords) return text;
   return words.slice(0, maxWords).join(' ');
 };
-
-const ALL_QUIZ_STYLES: { id: QuizType; title: string; desc: string; icon: React.ElementType }[] = [
-  {
-    id: 'next_verse',
-    title: 'اکمال آیه (آیهٔ بعدی)',
-    desc: 'تشخیص فراز بعدی جهت سنجش توالی و زنجیره پیوسته آیات',
-    icon: ChevronRight,
-  },
-  {
-    id: 'prev_verse',
-    title: 'السابق (آیهٔ ماقبل)',
-    desc: 'تشخیص آیه قبل از فراز فعلی برای تسلط بر پیوند معکوس',
-    icon: ArrowRight,
-  },
-  {
-    id: 'fill_blank',
-    title: 'تکمیل کلمات مخفی',
-    desc: 'شناسایی واژگان پنهان‌شده در ابتدا، انتها یا میانهٔ آیه',
-    icon: FileQuestion,
-  },
-  {
-    id: 'mutashabihat',
-    title: 'مشابهات و پایان‌بندی‌ها',
-    desc: 'تمایز فواصل و پایان‌بندی‌های مشتبه در مسابقات حفظ',
-    icon: Layers,
-  },
-  {
-    id: 'translation_match',
-    title: 'تطبیق ترجمه و مفاهیم',
-    desc: 'ارتباط آیه با ترجمه روان و پیام مفهومی فارسی',
-    icon: Languages,
-  },
-  {
-    id: 'verse_number',
-    title: 'تشخیص شماره آیه',
-    desc: 'تسلط بر جایگاه عددی و موقعیت آیه در مصحف',
-    icon: ListOrdered,
-  },
-  {
-    id: 'surah_identity',
-    title: 'تشخیص نام سوره',
-    desc: 'شناخت سوره مربوط به فراز قرآنی از بین سوره‌ها',
-    icon: Compass,
-  },
-  {
-    id: 'quran_stories',
-    title: 'داستان‌ها و حکمت‌ها',
-    desc: 'سنجش معرفت و حفظ آیات سرگذشت پیامبران الهی',
-    icon: BookOpen,
-  },
-];
 
 export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
   currentSurah,
@@ -148,24 +88,24 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
   onSelectSurah,
   onBack,
 }) => {
-  const [phase, setPhase] = useState<'setup' | 'playing' | 'result'>('setup');
-  
-  // سطح دشواری آزمون (آسان، متوسط، سخت)
-  const [difficulty, setDifficulty] = useState<QuizDifficulty>('medium');
-  
-  // انتخاب سبک‌ها به حالت چک‌باکس چندگانه و سبک ترکیبی
-  const [isCombinedMode, setIsCombinedMode] = useState<boolean>(true);
+  // تب‌های استودیو: آزمون‌ساز / تاریخچه آزمون‌ها
+  const [activeTab, setActiveTab] = useState<'creator' | 'history'>('creator');
+
+  // دسته‌بندی سبک‌های انتخاب شده
   const [selectedStyles, setSelectedStyles] = useState<QuizType[]>([
     'next_verse',
-    'prev_verse',
     'fill_blank',
     'mutashabihat',
-    'translation_match',
   ]);
 
-  const [questionCount, setQuestionCount] = useState<number>(5);
+  // محدوده آزمون: سوره انتخابی / کل قرآن کریم
+  const [quizScope, setQuizScope] = useState<'surah' | 'all_quran'>('surah');
+
+  // موقعیت‌های کلمه مخفی در ۴ گزینه‌ای (چک‌باکس‌های چندگانه)
+  const [blankPositions, setBlankPositions] = useState<BlankPosition[]>(['start', 'middle', 'end']);
+
+  const [questionCount, setQuestionCount] = useState<number>(10);
   const [activeVerses, setActiveVerses] = useState<Verse[]>(verses);
-  const [isLoadingVerses, setIsLoadingVerses] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // محدوده آزمون: بر اساس آیات یا صفحات مصحف
@@ -174,17 +114,26 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
   const [rangeStart, setRangeStart] = useState<number>(1);
   const [rangeEnd, setRangeEnd] = useState<number>(currentSurah.versesCount || 10);
 
+  // تایمر کل آزمون (برای ۲۰ سوال ۱۵ دقیقه = ۴۵ ثانیه به ازای هر سوال)
+  const [isTimerEnabled, setIsTimerEnabled] = useState<boolean>(true);
+  const totalQuizDurationSeconds = useMemo(() => {
+    return Math.round(questionCount * 45); // 20 سوال = 900 ثانیه (15 دقیقه)
+  }, [questionCount]);
+
+  // قاری ترتیل
+  const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>('parhizgar');
+
+  // مودال انتخاب سوره
+  const [isSurahPickerOpen, setIsSurahPickerOpen] = useState(false);
+
   // صفحات سوره
   const surahPages = useMemo(() => {
     const pageSet = new Set<number>();
     verses.forEach((v) => {
       if (v.pageNumber) pageSet.add(v.pageNumber);
     });
-    if (pageSet.size === 0 && currentSurah.startPage) {
-      pageSet.add(currentSurah.startPage);
-    }
     return Array.from(pageSet).sort((a, b) => a - b);
-  }, [verses, currentSurah.startPage]);
+  }, [verses]);
 
   const [selectedStartPage, setSelectedStartPage] = useState<number>(
     surahPages[0] || currentSurah.startPage || 1
@@ -193,20 +142,11 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
     surahPages[surahPages.length - 1] || currentSurah.startPage || 1
   );
 
-  // تایمر سرعت پاسخگویی
-  const [isTimerEnabled, setIsTimerEnabled] = useState(true);
-  const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>('parhizgar');
-
   // وضعیت جلسه آزمون
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswerIndex, setSelectedAnswerIndex] = useState<number | null>(null);
-  const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
-  const [score, setScore] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<{ isCorrect: boolean; selected: number; question: QuizQuestion }[]>([]);
-  const [isShortsFullscreenOpen, setIsShortsFullscreenOpen] = useState(false);
+  const [generatedQuestions, setGeneratedQuestions] = useState<QuizQuestionItem[]>([]);
+  const [isQuizActive, setIsQuizActive] = useState(false);
 
-  // تاریخچه نتایج آزمون
+  // تاریخچه نتایج آزمون از حافظه محلی
   const [quizHistory, setQuizHistory] = useState<SavedQuizResult[]>(() => {
     try {
       const saved = localStorage.getItem('mobin_memorization_quiz_history');
@@ -218,7 +158,6 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
 
   const activeSurah = currentSurah;
 
-  // همگام‌سازی آیات و محدوده هنگام تغییر سوره فعال
   useEffect(() => {
     setActiveVerses(verses);
     setRangeStart(1);
@@ -229,921 +168,956 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
     }
   }, [currentSurah, verses, surahPages]);
 
-  // زمان هر سوال متناسب با درجه سختی
-  const timePerQuestionSeconds = useMemo(() => {
-    if (!isTimerEnabled) return 0;
-    if (difficulty === 'easy') return 25;
-    if (difficulty === 'medium') return 15;
-    return 10; // سخت
-  }, [isTimerEnabled, difficulty]);
+  // محاسبه سطح دشواری به صورت خودکار بر اساس سبک‌های انتخابی
+  const calculatedDifficultyLevel = useMemo(() => {
+    if (
+      selectedStyles.includes('mutashabihat') ||
+      selectedStyles.includes('ordering') ||
+      selectedStyles.includes('typing')
+    ) {
+      return { label: 'پیشرفته و چالشی', color: 'text-amber-600 bg-amber-500/10 border-amber-500/20' };
+    }
+    if (selectedStyles.includes('fill_blank') || selectedStyles.includes('prev_verse')) {
+      return { label: 'متوسط و استاندارد', color: 'text-teal-700 bg-teal-500/10 border-teal-500/20' };
+    }
+    return { label: 'مقدماتی و روان', color: 'text-emerald-700 bg-emerald-500/10 border-emerald-500/20' };
+  }, [selectedStyles]);
 
   // تاگل چک‌باکس سبک‌ها
   const toggleStyle = (styleId: QuizType) => {
-    if (isCombinedMode) {
-      setIsCombinedMode(false);
-    }
     setSelectedStyles((prev) => {
       if (prev.includes(styleId)) {
-        if (prev.length === 1) return prev; // حداقل یک سبک باید انتخاب باشد
+        if (prev.length === 1) return prev; // حداقل یک سبک
         return prev.filter((s) => s !== styleId);
       }
       return [...prev, styleId];
     });
   };
 
-  // فعال‌سازی سبک ترکیبی (شامل تمام سبک‌ها)
-  const toggleCombinedMode = () => {
-    if (!isCombinedMode) {
-      setIsCombinedMode(true);
-      setSelectedStyles(ALL_QUIZ_STYLES.map((s) => s.id));
-    } else {
-      setIsCombinedMode(false);
-      setSelectedStyles(['next_verse', 'fill_blank']);
-    }
-  };
-
-  // تولید هوشمند سوالات آزمون بر اساس آیات سوره
-  const generateQuestions = (openInShorts: boolean = true) => {
+  // تولید هوشمند سوالات آزمون
+  const generateQuestions = async () => {
     setErrorMessage(null);
 
-    // فیلتر کردن آیات بر اساس بازه انتخابی
-    let pool = [...activeVerses];
-    if (isRangeCustom) {
-      if (rangeMode === 'verses') {
-        pool = pool.filter((v) => v.verseNumber >= rangeStart && v.verseNumber <= rangeEnd);
-      } else {
-        pool = pool.filter(
-          (v) => v.pageNumber >= selectedStartPage && v.pageNumber <= selectedEndPage
-        );
+    // آماده‌سازی مخزن آیات بر اساس محدوده (تک‌سوره یا کل قرآن)
+    type PoolItem = { verse: Verse; surah: Surah };
+    let pool: PoolItem[] = [];
+
+    if (quizScope === 'all_quran') {
+      // آزمون کل قرآن: انتخاب تصادفی سوره‌ها از ۱۱۴ سوره
+      const candidateSurahs = [...surahs].sort(() => Math.random() - 0.5).slice(0, 10);
+      for (const s of candidateSurahs) {
+        try {
+          const sVerses = await QuranService.getVersesBySurah(s.id);
+          if (sVerses && sVerses.length > 0) {
+            const sampled = [...sVerses].sort(() => Math.random() - 0.5).slice(0, 4);
+            sampled.forEach((v) => pool.push({ verse: v, surah: s }));
+          }
+        } catch {}
       }
+      if (pool.length === 0) {
+        activeVerses.forEach((v) => pool.push({ verse: v, surah: activeSurah }));
+      }
+    } else {
+      let filteredVerses = [...activeVerses];
+      if (isRangeCustom) {
+        if (rangeMode === 'verses') {
+          filteredVerses = filteredVerses.filter((v) => v.verseNumber >= rangeStart && v.verseNumber <= rangeEnd);
+        } else {
+          filteredVerses = filteredVerses.filter(
+            (v) => v.pageNumber >= selectedStartPage && v.pageNumber <= selectedEndPage
+          );
+        }
+      }
+      filteredVerses.forEach((v) => pool.push({ verse: v, surah: activeSurah }));
     }
 
-    if (pool.length < 3) {
-      setErrorMessage(
-        'تعداد آیات در این محدوده برای آزمون کافی نیست. لطفاً بازه را گسترش دهید یا محدوده صفحات بیشتری را برگزینید.'
-      );
+    if (pool.length < 2) {
+      setErrorMessage('تعداد آیات در این محدوده برای آزمون کافی نیست. لطفاً بازه را گسترش دهید.');
       return;
     }
 
-    const availableStyles = isCombinedMode ? ALL_QUIZ_STYLES.map((s) => s.id) : selectedStyles;
-    if (availableStyles.length === 0) {
-      setErrorMessage('لطفاً حداقل یک سبک آزمون را انتخاب فرمایید.');
+    // فیلتر سبک‌ها: در آزمون تک‌سوره تشخیص سوره بی‌معنی است
+    const effectiveStyles = selectedStyles.filter((s) => {
+      if (quizScope === 'surah' && s === 'surah_identity') return false;
+      return true;
+    });
+
+    if (effectiveStyles.length === 0) {
+      setErrorMessage('لطفاً حداقل یک سبک آزمون متناسب با این محدوده را انتخاب فرمایید.');
       return;
     }
 
-    const generated: QuizQuestion[] = [];
-    const totalToGenerate = Math.min(questionCount, pool.length);
+    const generated: QuizQuestionItem[] = [];
+    const totalToGenerate = Math.min(questionCount, Math.max(pool.length, 30));
     const shuffledPool = [...pool].sort(() => Math.random() - 0.5);
 
     for (let i = 0; i < totalToGenerate; i++) {
-      const v = shuffledPool[i];
+      const item = shuffledPool[i % shuffledPool.length];
+      const v = item.verse;
+      const itemSurah = item.surah;
       const vIndex = activeVerses.findIndex((x) => x.verseNumber === v.verseNumber);
-      const audioUrl = getAudioSourceUrl(selectedReciterId, activeSurah.id, v.verseNumber, 0);
+      const audioUrl = getAudioSourceUrl(selectedReciterId, itemSurah.id, v.verseNumber, 0);
+      const currentStyle = effectiveStyles[i % effectiveStyles.length];
 
-      // در حالت ترکیبی یا چندچک‌باکس، سبک به صورت تصادفی از بین سبک‌های انتخابی تخصیص می‌یابد
-      const currentStyle = availableStyles[i % availableStyles.length];
-
-      if (currentStyle === 'quran_stories') {
-        const storyMatches = QURAN_STORIES.filter((s) => s.surahId === activeSurah.id);
-        const storiesToUse = storyMatches.length > 0 ? storyMatches : QURAN_STORIES;
-        const allStoryQuestions = storiesToUse.flatMap((s) => s.questions);
-        if (allStoryQuestions.length > 0) {
-          const sq = allStoryQuestions[Math.floor(Math.random() * allStoryQuestions.length)];
+      // ۱. سبک چینشی (Ordering)
+      if (currentStyle === 'ordering') {
+        const words = v.textArabic.trim().split(/\s+/);
+        if (words.length >= 3) {
+          const sliceWords = words.length > 9 ? words.slice(0, 7) : words;
+          const shuffledTokens = [...sliceWords].sort(() => Math.random() - 0.5);
           generated.push({
-            id: `q_story_${i}_${sq.id}`,
-            type: 'quran_stories',
-            prompt: sq.prompt,
-            contextText: sq.contextAyah ? getVerseSnippet(sq.contextAyah, 9) : undefined,
-            options: sq.options.map((opt) => getVerseSnippet(opt, 7)),
-            correctIndex: sq.correctIndex,
-            explanation: sq.explanation,
-            surahId: activeSurah.id,
-            surahName: sq.surahName,
-            verseNumber: sq.verseNumber,
+            id: `q_order_${i}_${v.verseNumber}`,
+            prompt: `کلمات این فراز از سوره مبارکه ${itemSurah.nameArabic} را به ترتیب صحیح مرتب کنید:`,
+            contextText: `فراز ${toPersianDigits(sliceWords.length)} کلمه‌ای از آیه شریفه`,
+            options: [sliceWords.join(' ')],
+            correctIndex: 0,
+            explanation: `ترتیب کامل آیه ${toPersianDigits(v.verseNumber)}: «${v.textArabic}»`,
+            surahName: itemSurah.nameArabic,
+            verseNumber: v.verseNumber,
             verseAudioUrl: audioUrl,
-            fullVerseText: sq.contextAyah || undefined,
-            fullVerseTranslation: sq.explanation,
+            categoryBadge: 'چینشی و مرتب‌سازی',
+            questionMode: 'ordering',
+            orderingTokens: shuffledTokens,
           });
           continue;
         }
       }
 
-      if (currentStyle === 'next_verse') {
-        let nextVerse = activeVerses[vIndex + 1];
-        if (!nextVerse) nextVerse = activeVerses[vIndex - 1];
-        if (!nextVerse) continue;
-
-        const wrongVerses = activeVerses
-          .filter((x) => x.verseNumber !== nextVerse.verseNumber && x.verseNumber !== v.verseNumber)
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 3);
-
-        if (wrongVerses.length < 3) continue;
-
-        const rawOptions = [nextVerse.textArabic, ...wrongVerses.map((x) => x.textArabic)].sort(
-          () => Math.random() - 0.5
-        );
-        const options = rawOptions.map((text) => getVerseSnippet(text, 22));
-        const correctIndex = rawOptions.indexOf(nextVerse.textArabic);
-
-        generated.push({
-          id: `q_next_${i}_${v.verseNumber}`,
-          type: 'next_verse',
-          prompt: 'آیهٔ بعدی این فراز شریف را از میان گزینه‌ها برگزینید:',
-          contextText: getVerseSnippet(v.textArabic, 10),
-          options,
-          correctIndex,
-          explanation: `آیه بعدی آیه ${toPersianDigits(nextVerse.verseNumber)}: «${nextVerse.textArabic}»`,
-          surahId: activeSurah.id,
-          surahName: activeSurah.nameArabic,
-          verseNumber: v.verseNumber,
-          verseAudioUrl: audioUrl,
-          fullVerseText: v.textArabic,
-          fullVerseTranslation: v.translationMakarem || v.translationFooladvand || '',
-        });
-      } else if (currentStyle === 'prev_verse') {
-        let prevVerse = activeVerses[vIndex - 1];
-        if (!prevVerse) prevVerse = activeVerses[vIndex + 1];
-        if (!prevVerse) continue;
-
-        const wrongVerses = activeVerses
-          .filter((x) => x.verseNumber !== prevVerse.verseNumber && x.verseNumber !== v.verseNumber)
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 3);
-
-        if (wrongVerses.length < 3) continue;
-
-        const rawOptions = [prevVerse.textArabic, ...wrongVerses.map((x) => x.textArabic)].sort(
-          () => Math.random() - 0.5
-        );
-        const options = rawOptions.map((text) => getVerseSnippet(text, 22));
-        const correctIndex = rawOptions.indexOf(prevVerse.textArabic);
-
-        generated.push({
-          id: `q_prev_${i}_${v.verseNumber}`,
-          type: 'prev_verse',
-          prompt: 'آیهٔ ماقبل (السابق) این فراز شریف کدام است؟',
-          contextText: getVerseSnippet(v.textArabic, 10),
-          options,
-          correctIndex,
-          explanation: `آیه قبل آیه ${toPersianDigits(prevVerse.verseNumber)}: «${prevVerse.textArabic}»`,
-          surahId: activeSurah.id,
-          surahName: activeSurah.nameArabic,
-          verseNumber: v.verseNumber,
-          verseAudioUrl: audioUrl,
-          fullVerseText: v.textArabic,
-          fullVerseTranslation: v.translationMakarem || v.translationFooladvand || '',
-        });
-      } else if (currentStyle === 'fill_blank') {
+      // ۲. سبک تایپی (Typing)
+      if (currentStyle === 'typing') {
         const words = v.textArabic.trim().split(/\s+/);
-        if (words.length < 3) continue;
-
-        // انتخاب هوشمند موقعیت کلمه مخفی: ابتدای آیه، انتهای آیه یا بخشی از آیه (میانه)
-        const posModes: ('start' | 'end' | 'middle')[] = ['start', 'end', 'middle'];
-        const chosenPosition = posModes[i % posModes.length];
-
-        let targetWord = '';
-        let promptText = '';
-        let blankedText = '';
-
-        if (chosenPosition === 'start') {
-          // کلمه مخفی در ابتدای آیه
-          targetWord = words[0];
-          promptText = 'کلمهٔ مخفی‌شده در [ جای خالی ] کدام است؟';
-          const restWords = words.slice(1);
-          const preview = restWords.slice(0, 9).join(' ');
-          blankedText = `[ جای خالی ] ${preview}`;
-        } else if (chosenPosition === 'end') {
-          // کلمه مخفی در انتهای آیه
-          targetWord = words[words.length - 1];
-          promptText = 'کلمهٔ مخفی‌شده در [ جای خالی ] کدام است؟';
-          const leadingWords = words.slice(0, words.length - 1);
-          const preview = leadingWords.slice(Math.max(0, leadingWords.length - 9)).join(' ');
-          blankedText = `${preview} [ جای خالی ]`;
-        } else {
-          // کلمه مخفی در بخشی از آیه (میانه آیه)
-          const middleCandidates = words
-            .map((w, idx) => ({ w, idx }))
-            .filter((item) => item.idx > 0 && item.idx < words.length - 1 && item.w.length > 2);
-
-          const targetItem =
-            middleCandidates.length > 0
-              ? middleCandidates[Math.floor(Math.random() * middleCandidates.length)]
-              : { w: words[Math.min(1, words.length - 2)], idx: Math.min(1, words.length - 2) };
-
-          targetWord = targetItem.w;
-          promptText = 'کلمهٔ مخفی‌شده در [ جای خالی ] کدام است؟';
-
-          const startIdx = Math.max(0, targetItem.idx - 4);
-          const endIdx = Math.min(words.length, targetItem.idx + 5);
-          const windowWords = words.slice(startIdx, endIdx);
-
-          const formattedWindow = windowWords
-            .map((w, wIdx) => {
-              const actualIdx = startIdx + wIdx;
-              return actualIdx === targetItem.idx ? '[ جای خالی ]' : w;
-            })
+        if (words.length >= 3) {
+          const targetIdx = Math.min(words.length - 1, Math.max(1, Math.floor(words.length / 2)));
+          const targetWord = words[targetIdx];
+          const previewText = words
+            .map((w, idx) => (idx === targetIdx ? '( • • • )' : w))
+            .slice(Math.max(0, targetIdx - 3), Math.min(words.length, targetIdx + 4))
             .join(' ');
 
-          blankedText = formattedWindow;
-        }
-
-        // جمع‌آوری گزینه‌های غلط متناسب با جایگاه کلمه مخفی
-        let wrongWords: string[] = [];
-
-        if (chosenPosition === 'start') {
-          const otherStartWords = activeVerses
+          const otherWords = activeVerses
             .filter((ov) => ov.verseNumber !== v.verseNumber)
-            .map((ov) => ov.textArabic.trim().split(/\s+/)[0])
-            .filter((w) => w && w.length > 1 && w !== targetWord);
-
-          wrongWords = Array.from(new Set(otherStartWords))
-            .sort(() => Math.random() - 0.5)
+            .flatMap((ov) => ov.textArabic.trim().split(/\s+/))
+            .filter((w) => w && w.length > 2 && w !== targetWord)
             .slice(0, 3);
-        } else if (chosenPosition === 'end') {
-          const otherEndWords = activeVerses
+
+          generated.push({
+            id: `q_type_${i}_${v.verseNumber}`,
+            prompt: 'کلمه مخفی در پرانتز ( • • • ) را بنویسید یا انتخاب کنید:',
+            contextText: previewText,
+            options: [targetWord, ...otherWords].sort(() => Math.random() - 0.5),
+            correctIndex: 0,
+            explanation: `کلمه صحیح: «${targetWord}» • آیه کامل: «${v.textArabic}»`,
+            surahName: itemSurah.nameArabic,
+            verseNumber: v.verseNumber,
+            verseAudioUrl: audioUrl,
+            categoryBadge: 'تایپی و نوشتاری',
+            questionMode: 'typing',
+            targetWord,
+            isBlankFill: true,
+          });
+          continue;
+        }
+      }
+
+      // ۳. سبک تکمیل کلمه مخفی با انتخاب موقعیت از چک‌باکس‌ها (ابتدای آیه، انتهای آیه، وسط آیات)
+      if (currentStyle === 'fill_blank') {
+        const words = v.textArabic.trim().split(/\s+/);
+        if (words.length >= 3) {
+          const allowedPositions = blankPositions.length > 0 ? blankPositions : (['start', 'middle', 'end'] as BlankPosition[]);
+          const pos = allowedPositions[i % allowedPositions.length];
+
+          let targetWord = '';
+          let blankedText = '';
+
+          if (pos === 'start') {
+            targetWord = words[0];
+            const rest = words.slice(1, 9).join(' ');
+            blankedText = `( • • • ) ${rest}`;
+          } else if (pos === 'end') {
+            targetWord = words[words.length - 1];
+            const leading = words.slice(Math.max(0, words.length - 9), words.length - 1).join(' ');
+            blankedText = `${leading} ( • • • )`;
+          } else {
+            const midIndex = Math.floor(words.length / 2);
+            targetWord = words[midIndex];
+            const startIdx = Math.max(0, midIndex - 3);
+            const endIdx = Math.min(words.length, midIndex + 4);
+            blankedText = words
+              .slice(startIdx, endIdx)
+              .map((w, idx) => (startIdx + idx === midIndex ? '( • • • )' : w))
+              .join(' ');
+          }
+
+          // جمع‌آوری گزینه‌های غلط
+          const wrongCandidates = activeVerses
             .filter((ov) => ov.verseNumber !== v.verseNumber)
             .map((ov) => {
               const ws = ov.textArabic.trim().split(/\s+/);
-              return ws[ws.length - 1];
+              if (pos === 'start') return ws[0];
+              if (pos === 'end') return ws[ws.length - 1];
+              return ws[Math.floor(ws.length / 2)];
             })
-            .filter((w) => w && w.length > 1 && w !== targetWord);
+            .filter((w) => w && w !== targetWord && w.length > 1);
 
-          wrongWords = Array.from(new Set(otherEndWords))
+          const defaultFallbacks = ['الَّذِينَ', 'عَلِيمٌ', 'حَكِيمٌ', 'قَدِيرٌ', 'رَحِيمٌ'];
+          const wrongOptions = Array.from(new Set([...wrongCandidates, ...defaultFallbacks]))
+            .filter((w) => w !== targetWord)
+            .slice(0, 3);
+
+          const options = [targetWord, ...wrongOptions].sort(() => Math.random() - 0.5);
+          const correctIndex = options.indexOf(targetWord);
+
+          generated.push({
+            id: `q_blank_${i}_${v.verseNumber}`,
+            prompt: 'کلمه مخفی در پرانتز ( • • • ) کدام است؟',
+            contextText: blankedText,
+            options,
+            correctIndex,
+            explanation: `متن کامل آیه ${toPersianDigits(v.verseNumber)}: «${v.textArabic}»`,
+            surahName: activeSurah.nameArabic,
+            verseNumber: v.verseNumber,
+            verseAudioUrl: audioUrl,
+            fullVerseText: v.textArabic,
+            categoryBadge:
+              pos === 'start'
+                ? 'کلمه مخفی (ابتدای آیه)'
+                : pos === 'end'
+                ? 'کلمه مخفی (انتهای آیه)'
+                : 'کلمه مخفی (وسط آیه)',
+            isBlankFill: true,
+          });
+          continue;
+        }
+      }
+
+      // ۴. سبک اکمال آیه بعدی (next_verse)
+      if (currentStyle === 'next_verse') {
+        let nextVerse = activeVerses[vIndex + 1];
+        if (!nextVerse) nextVerse = activeVerses[vIndex - 1];
+        if (nextVerse) {
+          const wrongVerses = activeVerses
+            .filter((x) => x.verseNumber !== nextVerse.verseNumber && x.verseNumber !== v.verseNumber)
             .sort(() => Math.random() - 0.5)
             .slice(0, 3);
-        }
 
-        // اگر گزینه‌های هم‌موقعیت کافی نبود، از کل واژگان آیات سوره کمک بگیر
-        if (wrongWords.length < 3) {
-          const fallbackWords: string[] = [];
-          for (const ov of activeVerses) {
-            if (ov.verseNumber !== v.verseNumber) {
-              const ow = ov.textArabic
-                .split(/\s+/)
-                .filter((w) => w.length > 2 && w !== targetWord && !wrongWords.includes(w));
-              fallbackWords.push(...ow);
-            }
-          }
-          const uniqueFallback = Array.from(new Set(fallbackWords)).sort(() => Math.random() - 0.5);
-          wrongWords.push(...uniqueFallback.slice(0, 3 - wrongWords.length));
-        }
+          if (wrongVerses.length >= 2) {
+            const rawOptions = [nextVerse.textArabic, ...wrongVerses.map((x) => x.textArabic)].sort(
+              () => Math.random() - 0.5
+            );
+            const options = rawOptions.map((text) => getVerseSnippet(text, 22));
+            const correctIndex = rawOptions.indexOf(nextVerse.textArabic);
 
-        // پشتیبان کلمات مصحف
-        const defaultQuranWords =
-          chosenPosition === 'start'
-            ? ['إِنَّ', 'قُلْ', 'يَا أَيُّهَا', 'وَإِذْ', 'ذَٰلِكَ', 'فَلَمَّا']
-            : chosenPosition === 'end'
-            ? ['عَلِيمٌ', 'حَكِيمٌ', 'رَّحِيمٌ', 'قَدِيرٌ', 'تَعْلَمُونَ', 'يَعْمَلُونَ']
-            : ['الَّذِينَ', 'آمَنُوا', 'الصَّالِحَاتِ', 'الْكِتَابَ', 'الصَّلَاةَ'];
-
-        for (const defW of defaultQuranWords) {
-          if (wrongWords.length >= 3) break;
-          if (defW !== targetWord && !wrongWords.includes(defW)) {
-            wrongWords.push(defW);
+            generated.push({
+              id: `q_next_${i}_${v.verseNumber}`,
+              prompt: 'آیهٔ بعدی این فراز نورانی را برگزینید:',
+              contextText: getVerseSnippet(v.textArabic, 12),
+              options,
+              correctIndex,
+              explanation: `آیه بعدی آیه ${toPersianDigits(nextVerse.verseNumber)}: «${nextVerse.textArabic}»`,
+              surahName: activeSurah.nameArabic,
+              verseNumber: v.verseNumber,
+              verseAudioUrl: audioUrl,
+              fullVerseText: v.textArabic,
+              categoryBadge: 'اکمال آیه بعدی',
+            });
+            continue;
           }
         }
-
-        if (wrongWords.length < 3) continue;
-
-        const options = [targetWord, ...wrongWords.slice(0, 3)].sort(() => Math.random() - 0.5);
-        const correctIndex = options.indexOf(targetWord);
-
-        generated.push({
-          id: `q_blank_${i}_${v.verseNumber}`,
-          type: 'fill_blank',
-          prompt: promptText,
-          contextText: blankedText,
-          options,
-          correctIndex,
-          explanation: `متن کامل آیه ${toPersianDigits(v.verseNumber)}: «${v.textArabic}»`,
-          surahId: activeSurah.id,
-          surahName: activeSurah.nameArabic,
-          verseNumber: v.verseNumber,
-          verseAudioUrl: audioUrl,
-          fullVerseText: v.textArabic,
-          fullVerseTranslation: v.translationMakarem || v.translationFooladvand,
-          blankPosition: chosenPosition,
-        });
-      } else if (currentStyle === 'mutashabihat') {
-        const words = v.textArabic.trim().split(/\s+/);
-        if (words.length < 4) continue;
-
-        const endingLength = Math.min(3, Math.max(2, Math.floor(words.length / 3)));
-        const headWords = words.slice(0, words.length - endingLength).join(' ');
-        const endingText = words.slice(words.length - endingLength).join(' ');
-
-        const commonEndings = [
-          'إِنَّ اللَّهَ غَفُورٌ رَّحِيمٌ',
-          'وَاللَّهُ عَلِيمٌ حَكِيمٌ',
-          'إِنَّ اللَّهَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ',
-          'وَاللَّهُ بِمَا تَعْمَلُونَ بَصِيرٌ',
-          'إِنَّ فِي ذَٰلِكَ لَآيَاتٍ لِّقَوْمٍ يَعْقِلُونَ',
-          'وَكَانَ اللَّهُ عَزِيزًا حَكِيمًا',
-          'إِنَّ اللَّهَ شَدِيدُ الْعِقَابِ',
-          'وَإِلَيْهِ الْمَصِيرُ',
-        ].filter((e) => e !== endingText);
-
-        const wrongEndings = commonEndings.sort(() => Math.random() - 0.5).slice(0, 3);
-        const options = [endingText, ...wrongEndings].sort(() => Math.random() - 0.5);
-        const correctIndex = options.indexOf(endingText);
-
-        generated.push({
-          id: `q_mutashab_${i}_${v.verseNumber}`,
-          type: 'mutashabihat',
-          prompt: 'پایان‌بندی صحیح این آیه شریفه کدام عبارت است؟',
-          contextText: getVerseSnippet(headWords, 10),
-          options,
-          correctIndex,
-          explanation: `پایان‌بندی آیه ${toPersianDigits(v.verseNumber)}: «${v.textArabic}»`,
-          surahId: activeSurah.id,
-          surahName: activeSurah.nameArabic,
-          verseNumber: v.verseNumber,
-          verseAudioUrl: audioUrl,
-          fullVerseText: v.textArabic,
-          fullVerseTranslation: v.translationMakarem || v.translationFooladvand,
-        });
-      } else if (currentStyle === 'translation_match') {
-        const trans = v.translationMakarem || v.translationFooladvand;
-        if (!trans) continue;
-
-        const otherVerses = activeVerses
-          .filter((x) => x.verseNumber !== v.verseNumber && (x.translationMakarem || x.translationFooladvand))
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 3);
-
-        if (otherVerses.length < 3) continue;
-
-        const correctTransSnippet = getVerseSnippet(trans, 8);
-        const wrongSnippets = otherVerses.map((ov) =>
-          getVerseSnippet(ov.translationMakarem || ov.translationFooladvand || '', 8)
-        );
-
-        const options = [correctTransSnippet, ...wrongSnippets].sort(() => Math.random() - 0.5);
-        const correctIndex = options.indexOf(correctTransSnippet);
-
-        generated.push({
-          id: `q_trans_${i}_${v.verseNumber}`,
-          type: 'translation_match',
-          prompt: 'کدام ترجمه با این فراز نورانی همخوانی دارد؟',
-          contextText: getVerseSnippet(v.textArabic, 9),
-          options,
-          correctIndex,
-          explanation: `ترجمه آیه ${toPersianDigits(v.verseNumber)}: «${trans}»`,
-          surahId: activeSurah.id,
-          surahName: activeSurah.nameArabic,
-          verseNumber: v.verseNumber,
-          verseAudioUrl: audioUrl,
-          fullVerseText: v.textArabic,
-          fullVerseTranslation: trans,
-        });
-      } else if (currentStyle === 'surah_identity') {
-        const otherSurahs = ALL_SURAHS.filter((s) => s.id !== activeSurah.id)
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 3);
-
-        const options = [
-          `سوره ${activeSurah.nameArabic}`,
-          ...otherSurahs.map((s) => `سوره ${s.nameArabic}`),
-        ].sort(() => Math.random() - 0.5);
-        const correctIndex = options.indexOf(`سوره ${activeSurah.nameArabic}`);
-
-        generated.push({
-          id: `q_surahid_${i}_${v.verseNumber}`,
-          type: 'surah_identity',
-          prompt: 'این فراز شریف متعلق به کدام سورهٔ مبارکه است؟',
-          contextText: getVerseSnippet(v.textArabic, 9),
-          options,
-          correctIndex,
-          explanation: `این آیه در سوره مبارکه ${activeSurah.nameArabic} (${activeSurah.namePersian})، آیه ${toPersianDigits(v.verseNumber)} قرار دارد.`,
-          surahId: activeSurah.id,
-          surahName: activeSurah.nameArabic,
-          verseNumber: v.verseNumber,
-          verseAudioUrl: audioUrl,
-          fullVerseText: v.textArabic,
-          fullVerseTranslation: v.translationMakarem || v.translationFooladvand,
-        });
-      } else {
-        // verse_number
-        const correctNum = v.verseNumber;
-        const maxV = activeSurah.versesCount;
-        const wrongSet = new Set<number>();
-        while (wrongSet.size < 3) {
-          const delta = (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 4) + 1);
-          const candidate = Math.max(1, Math.min(maxV, correctNum + delta));
-          if (candidate !== correctNum) wrongSet.add(candidate);
-        }
-
-        const options = [correctNum, ...Array.from(wrongSet)]
-          .sort(() => Math.random() - 0.5)
-          .map((n) => `آیه ${toPersianDigits(n)}`);
-
-        const correctText = `آیه ${toPersianDigits(correctNum)}`;
-        const correctIndex = options.indexOf(correctText);
-
-        generated.push({
-          id: `q_num_${i}_${v.verseNumber}`,
-          type: 'verse_number',
-          prompt: 'این فراز نورانی چندمین آیهٔ سوره است؟',
-          contextText: getVerseSnippet(v.textArabic, 9),
-          options,
-          correctIndex,
-          explanation: `این فراز مربوط به آیه ${toPersianDigits(v.verseNumber)} سوره ${activeSurah.nameArabic} است.`,
-          surahId: activeSurah.id,
-          surahName: activeSurah.nameArabic,
-          verseNumber: v.verseNumber,
-          verseAudioUrl: audioUrl,
-          fullVerseText: v.textArabic,
-          fullVerseTranslation: v.translationMakarem || v.translationFooladvand,
-        });
       }
+
+      // ۵. سبک آیه قبلی (prev_verse)
+      if (currentStyle === 'prev_verse') {
+        let prevVerse = activeVerses[vIndex - 1];
+        if (!prevVerse) prevVerse = activeVerses[vIndex + 1];
+        if (prevVerse) {
+          const wrongVerses = activeVerses
+            .filter((x) => x.verseNumber !== prevVerse.verseNumber && x.verseNumber !== v.verseNumber)
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 3);
+
+          if (wrongVerses.length >= 2) {
+            const rawOptions = [prevVerse.textArabic, ...wrongVerses.map((x) => x.textArabic)].sort(
+              () => Math.random() - 0.5
+            );
+            const options = rawOptions.map((text) => getVerseSnippet(text, 22));
+            const correctIndex = rawOptions.indexOf(prevVerse.textArabic);
+
+            generated.push({
+              id: `q_prev_${i}_${v.verseNumber}`,
+              prompt: 'آیهٔ ماقبل (السابق) این فراز شریف کدام است؟',
+              contextText: getVerseSnippet(v.textArabic, 12),
+              options,
+              correctIndex,
+              explanation: `آیه قبل آیه ${toPersianDigits(prevVerse.verseNumber)}: «${prevVerse.textArabic}»`,
+              surahName: activeSurah.nameArabic,
+              verseNumber: v.verseNumber,
+              verseAudioUrl: audioUrl,
+              fullVerseText: v.textArabic,
+              categoryBadge: 'آیه قبلی (السابق)',
+            });
+            continue;
+          }
+        }
+      }
+
+      // ۶. سبک مشابهات و پایان‌بندی‌ها (mutashabihat)
+      if (currentStyle === 'mutashabihat') {
+        const words = v.textArabic.trim().split(/\s+/);
+        if (words.length >= 4) {
+          const endingLength = Math.min(3, Math.max(2, Math.floor(words.length / 3)));
+          const headWords = words.slice(0, words.length - endingLength).join(' ');
+          const endingText = words.slice(words.length - endingLength).join(' ');
+
+          const commonEndings = [
+            'إِنَّ اللَّهَ غَفُورٌ رَّحِيمٌ',
+            'وَاللَّهُ عَلِيمٌ حَكِيمٌ',
+            'إِنَّ اللَّهَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ',
+            'وَاللَّهُ بِمَا تَعْمَلُونَ بَصِيرٌ',
+            'وَكَانَ اللَّهُ عَزِيزًا حَكِيمًا',
+            'إِنَّ اللَّهَ شَدِيدُ الْعِقَابِ',
+            'وَإِلَيْهِ الْمَصِيرُ',
+          ].filter((e) => e !== endingText);
+
+          const wrongEndings = commonEndings.sort(() => Math.random() - 0.5).slice(0, 3);
+          const options = [endingText, ...wrongEndings].sort(() => Math.random() - 0.5);
+          const correctIndex = options.indexOf(endingText);
+
+          generated.push({
+            id: `q_mutashab_${i}_${v.verseNumber}`,
+            prompt: 'پایان‌بندی صحیح این آیه شریفه کدام است؟',
+            contextText: `${getVerseSnippet(headWords, 12)} ( • • • )`,
+            options,
+            correctIndex,
+            explanation: `پایان‌بندی آیه ${toPersianDigits(v.verseNumber)}: «${v.textArabic}»`,
+            surahName: activeSurah.nameArabic,
+            verseNumber: v.verseNumber,
+            verseAudioUrl: audioUrl,
+            fullVerseText: v.textArabic,
+            categoryBadge: 'مشابهات و فواصل',
+            isBlankFill: true,
+          });
+          continue;
+        }
+      }
+
+      // ۷. سبک تطبیق ترجمه و مفاهیم (translation_match)
+      if (currentStyle === 'translation_match') {
+        const trans = v.translationMakarem || v.translationFooladvand;
+        if (trans) {
+          const otherVerses = activeVerses
+            .filter((x) => x.verseNumber !== v.verseNumber && (x.translationMakarem || x.translationFooladvand))
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 3);
+
+          if (otherVerses.length >= 2) {
+            const correctTrans = getVerseSnippet(trans, 9);
+            const wrongSnippets = otherVerses.map((ov) =>
+              getVerseSnippet(ov.translationMakarem || ov.translationFooladvand || '', 9)
+            );
+            const options = [correctTrans, ...wrongSnippets].sort(() => Math.random() - 0.5);
+            const correctIndex = options.indexOf(correctTrans);
+
+            generated.push({
+              id: `q_trans_${i}_${v.verseNumber}`,
+              prompt: 'کدام ترجمه با این فراز نورانی منطبق است؟',
+              contextText: getVerseSnippet(v.textArabic, 11),
+              options,
+              correctIndex,
+              explanation: `ترجمه آیه ${toPersianDigits(v.verseNumber)}: «${trans}»`,
+              surahName: itemSurah.nameArabic,
+              verseNumber: v.verseNumber,
+              verseAudioUrl: audioUrl,
+              fullVerseText: v.textArabic,
+              categoryBadge: 'تطبیق ترجمه و مفاهیم',
+            });
+            continue;
+          }
+        }
+      }
+
+      // ۸. پیش‌فرض یا سبک تشخیص نام سوره (مختص آزمون کل قرآن)
+      const targetSurahObj = itemSurah || activeSurah;
+      const wrongSurahs = surahs
+        .filter((s) => s.id !== targetSurahObj.id)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+
+      const options = [targetSurahObj.nameArabic, ...wrongSurahs.map((s) => s.nameArabic)].sort(
+        () => Math.random() - 0.5
+      );
+      const correctIndex = options.indexOf(targetSurahObj.nameArabic);
+
+      generated.push({
+        id: `q_identity_${i}_${v.verseNumber}`,
+        prompt: 'این فراز نورانی متعلق به کدام سوره مبارکه است؟',
+        contextText: getVerseSnippet(v.textArabic, 12),
+        options,
+        correctIndex,
+        explanation: `این فراز مربوط به آیه ${toPersianDigits(v.verseNumber)} سوره مبارکه «${targetSurahObj.nameArabic}» است.`,
+        surahName: targetSurahObj.nameArabic,
+        verseNumber: v.verseNumber,
+        verseAudioUrl: audioUrl,
+        fullVerseText: v.textArabic,
+        categoryBadge: 'تشخیص نام سوره',
+      });
     }
 
     if (generated.length === 0) {
-      setErrorMessage('آیات کافی برای ایجاد آزمون یافت نشد. لطفاً سبک‌های بیشتری را فعال کنید.');
+      setErrorMessage('تولید سوال برای این محدوده مقدور نشد. لطفاً سبک‌های دیگری را انتخاب کنید.');
       return;
     }
 
-    setQuestions(generated);
-    setCurrentQuestionIndex(0);
-    setSelectedAnswerIndex(null);
-    setIsAnswerSubmitted(false);
-    setScore(0);
-    setUserAnswers([]);
-
-    // شروع آزمون در حالت تمام‌صفحه ریلز/شورتز
-    setIsShortsFullscreenOpen(true);
+    setGeneratedQuestions(generated);
+    setIsQuizActive(true);
   };
 
+  const handleFinishQuiz = (finalScore: number, totalQ: number) => {
+    const percent = Math.round((finalScore / Math.max(1, totalQ)) * 100);
+    const newRecord: SavedQuizResult = {
+      id: Date.now().toString(),
+      date: new Date().toLocaleDateString('fa-IR'),
+      surahName: activeSurah.nameArabic,
+      score: finalScore,
+      total: totalQ,
+      percent,
+      typeLabel: selectedStyles.length > 2 ? 'جامع ترکیبی' : 'تخصصی',
+      durationSeconds: totalQuizDurationSeconds,
+    };
+    setQuizHistory((prev) => {
+      const updated = [newRecord, ...prev].slice(0, 15);
+      try {
+        localStorage.setItem('mobin_memorization_quiz_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const handleClearHistory = () => {
+    if (confirm('آیا از حذف تمام تاریخچه آزمون‌ها اطمینان دارید؟')) {
+      setQuizHistory([]);
+      try {
+        localStorage.removeItem('mobin_memorization_quiz_history');
+      } catch {}
+    }
+  };
+
+  // میانگین درصد پیشرفت در تاریخچه
+  const averageHistoryPercent = useMemo(() => {
+    if (quizHistory.length === 0) return 0;
+    const sum = quizHistory.reduce((acc, curr) => acc + curr.percent, 0);
+    return Math.round(sum / quizHistory.length);
+  }, [quizHistory]);
+
   return (
-    <div className="space-y-4 select-none" dir="rtl">
-      {/* مرحله ۱: تنظیمات پیشرفته استودیوی آزمون */}
-      <div className="space-y-4">
-        {/* کارت سوره فعال هماهنگ با سربرگ */}
-        <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center gap-2.5">
-            {onBack && (
+    <div className="space-y-4 select-none max-w-2xl mx-auto w-full" dir="rtl">
+      {/* سربرگ خلوت و تب‌های اصلی */}
+      <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-200 dark:border-slate-800">
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="p-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all cursor-pointer active:scale-95"
+              title="بازگشت"
+            >
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+            <Brain className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            <span>آزمون‌ساز حفظ قرآن</span>
+          </h2>
+        </div>
+
+        {/* سوییچ بین آزمون‌ساز و تاریخچه */}
+        <div className="flex items-center p-1 rounded-xl bg-stone-100 dark:bg-slate-800 border border-stone-200 dark:border-slate-700 text-xs font-bold">
+          <button
+            type="button"
+            onClick={() => setActiveTab('creator')}
+            className={`px-3 py-1 rounded-lg transition-all ${
+              activeTab === 'creator'
+                ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-2xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            طراحی آزمون
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+              activeTab === 'history'
+                ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-2xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <span>تاریخچه</span>
+            {quizHistory.length > 0 && (
+              <span className="w-4 h-4 rounded-full bg-teal-600 text-white text-[10px] flex items-center justify-center">
+                {toPersianDigits(quizHistory.length)}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'creator' ? (
+        /* تب طراحی آزمون (فشرده و تک‌صفحه‌ای) */
+        <div className="space-y-3.5">
+          {/* کارت انتخاب محدوده آزمون: سوره فعلی یا کل قرآن */}
+          <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                <Compass className="w-4 h-4 text-teal-600" />
+                <span>محدوده آزمون:</span>
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {quizScope === 'all_quran' ? 'سراسر ۱۱۴ سوره' : `سوره ${activeSurah.nameArabic}`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={onBack}
-                className="p-2 sm:p-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer active:scale-95 shrink-0"
-                title="بازگشت به منوی اصلی حفظ"
+                onClick={() => {
+                  setQuizScope('surah');
+                  setSelectedStyles((prev) => prev.filter((s) => s !== 'surah_identity'));
+                }}
+                className={`p-2.5 rounded-xl border text-right transition-all flex items-center justify-between cursor-pointer ${
+                  quizScope === 'surah'
+                    ? 'border-teal-600 bg-teal-50 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 font-bold ring-1 ring-teal-500/30'
+                    : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 text-slate-600 dark:text-slate-400'
+                }`}
               >
-                <ArrowRight className="w-5 h-5" />
-              </button>
-            )}
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
-                  آزمون سوره {activeSurah.nameArabic} ({activeSurah.namePersian})
-                </h3>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 font-bold">
-                  {activeSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'}
-                </span>
-              </div>
-              <div className="text-xs text-slate-400 mt-0.5">
-                جزء {toPersianDigits(activeSurah.juzNumber)} • صفحه {toPersianDigits(activeSurah.startPage)} • {toPersianDigits(activeSurah.versesCount)} آیه
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* پیام خطا در صورت وجود */}
-        {errorMessage && (
-          <div className="p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 text-red-800 dark:text-red-300 text-xs font-medium flex items-center gap-2">
-            <XCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* انتخاب سطح سختی آزمون: آسان، متوسط، سخت */}
-        <div className="rounded-3xl p-4 sm:p-5 border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3 shadow-xs">
-          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-            <Award className="w-4 h-4 text-teal-600" />
-            <span>سطح دشواری آزمون حفظ:</span>
-          </label>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {/* آسان */}
-            <button
-              type="button"
-              onClick={() => setDifficulty('easy')}
-              className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col gap-1 cursor-pointer ${
-                difficulty === 'easy'
-                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/30 shadow-xs'
-                  : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between font-bold text-xs text-emerald-700 dark:text-emerald-400">
-                <span>سطح آسان (آرامش‌بخش)</span>
-                {difficulty === 'easy' && <Check className="w-4 h-4" />}
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                زمان آسوده (۲۵ ثانیه)، گزینه‌های متمایزتر و راهنمایی همراه
-              </p>
-            </button>
-
-            {/* متوسط */}
-            <button
-              type="button"
-              onClick={() => setDifficulty('medium')}
-              className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col gap-1 cursor-pointer ${
-                difficulty === 'medium'
-                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-amber-950 dark:text-amber-100 ring-2 ring-amber-500/30 shadow-xs'
-                  : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between font-bold text-xs text-amber-700 dark:text-amber-400">
-                <span>سطح متوسط (استاندارد)</span>
-                {difficulty === 'medium' && <Check className="w-4 h-4" />}
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                زمان ۱۵ ثانیه، گزینه‌های تراز مسابقات و فواصل معمول
-              </p>
-            </button>
-
-            {/* سخت */}
-            <button
-              type="button"
-              onClick={() => setDifficulty('hard')}
-              className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col gap-1 cursor-pointer ${
-                difficulty === 'hard'
-                  ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/30 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/30 shadow-xs'
-                  : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between font-bold text-xs text-rose-700 dark:text-rose-400">
-                <span>سطح سخت (حرفه‌ای / مسابقات)</span>
-                {difficulty === 'hard' && <Check className="w-4 h-4" />}
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                زمان ۱۰ ثانیه، متشابهات دقیق و گزینه‌های فوق‌العاده نزدیک
-              </p>
-            </button>
-          </div>
-        </div>
-
-        {/* تنوع سبک آزمون به صورت چک‌باکس و گزینه ترکیبی */}
-        <div className="rounded-3xl p-4 sm:p-5 border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-stone-100 dark:border-slate-800">
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <span>سبک‌های آزمون (امکان انتخاب همزمان یا ترکیبی):</span>
-              </label>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                سبک‌های دلخواه را تیک بزنید تا سوالات به صورت هوشمند از بین آن‌ها تولید شوند.
-              </p>
-            </div>
-
-            {/* دکمه برجسته گزینه ترکیبی */}
-            <button
-              type="button"
-              onClick={toggleCombinedMode}
-              className={`py-2 px-3.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
-                isCombinedMode
-                  ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm'
-                  : 'bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-stone-200'
-              }`}
-            >
-              {isCombinedMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-              <span>گزینه ترکیبی و جامع مسابقاتی</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-            {ALL_QUIZ_STYLES.map((style) => {
-              const isChecked = isCombinedMode || selectedStyles.includes(style.id);
-              const Icon = style.icon;
-
-              return (
-                <button
-                  key={style.id}
-                  type="button"
-                  onClick={() => toggleStyle(style.id)}
-                  className={`p-3 rounded-2xl border text-right transition-all flex flex-col gap-1.5 cursor-pointer ${
-                    isChecked
-                      ? 'border-teal-500 bg-teal-50/60 dark:bg-teal-950/20 text-slate-800 dark:text-slate-100'
-                      : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 dark:hover:bg-slate-800/50 text-slate-500 opacity-70'
+                <div className="min-w-0">
+                  <div className="text-xs font-bold truncate">سوره انتخابی</div>
+                  <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                    {activeSurah.nameArabic} ({toPersianDigits(activeSurah.versesCount)} آیه)
+                  </div>
+                </div>
+                <div
+                  className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                    quizScope === 'surah'
+                      ? 'border-teal-600 bg-teal-600 text-white'
+                      : 'border-stone-300 dark:border-slate-600'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold flex items-center gap-1.5 text-teal-800 dark:text-teal-300">
-                      <Icon className="w-4 h-4 text-teal-600" />
-                      <span>{style.title}</span>
-                    </span>
-                    {isChecked ? (
-                      <CheckSquare className="w-4 h-4 text-teal-600 shrink-0" />
-                    ) : (
-                      <Square className="w-4 h-4 text-stone-400 shrink-0" />
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    {style.desc}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+                  {quizScope === 'surah' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+              </button>
 
-        {/* تعیین محدوده (آیات یا صفحات مصحف شریف) و تعداد سوالات */}
-        <div className="rounded-3xl p-4 sm:p-5 border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 shadow-xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* تعداد سوالات */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
-                تعداد سوالات آزمون:
-              </label>
-              <div className="flex items-center gap-2">
-                {[5, 10, 15, 20].map((cnt) => (
-                  <button
-                    key={cnt}
-                    type="button"
-                    onClick={() => setQuestionCount(cnt)}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-                      questionCount === cnt
-                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                        : 'border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    {toPersianDigits(cnt)} سوال
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* قاری برای تلاوت آیات سوالات */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
-                قاری صوت ترتیل (۱۲ قاری برجسته جهان اسلام):
-              </label>
-              <select
-                value={selectedReciterId}
-                onChange={(e) => setSelectedReciterId(e.target.value as ReciterId)}
-                className="w-full p-2.5 rounded-xl bg-stone-50 dark:bg-slate-800 border border-stone-200 dark:border-slate-700 text-xs font-bold text-teal-700 dark:text-teal-300 focus:outline-hidden"
+              <button
+                type="button"
+                onClick={() => {
+                  setQuizScope('all_quran');
+                  setSelectedStyles((prev) => (prev.includes('surah_identity') ? prev : [...prev, 'surah_identity']));
+                }}
+                className={`p-2.5 rounded-xl border text-right transition-all flex items-center justify-between cursor-pointer ${
+                  quizScope === 'all_quran'
+                    ? 'border-teal-600 bg-teal-50 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 font-bold ring-1 ring-teal-500/30'
+                    : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 text-slate-600 dark:text-slate-400'
+                }`}
               >
-                {(Object.keys(RECITER_NAMES) as ReciterId[]).map((rid) => (
-                  <option key={rid} value={rid}>
-                    {RECITER_NAMES[rid].name} ({RECITER_NAMES[rid].title})
-                  </option>
-                ))}
-              </select>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold truncate">کل قرآن کریم</div>
+                  <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                    ۱۱۴ سوره • جامع و تصادفی
+                  </div>
+                </div>
+                <div
+                  className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                    quizScope === 'all_quran'
+                      ? 'border-teal-600 bg-teal-600 text-white'
+                      : 'border-stone-300 dark:border-slate-600'
+                  }`}
+                >
+                  {quizScope === 'all_quran' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+              </button>
             </div>
+
+            {/* در صورت انتخاب تک‌سوره، دکمه تغییر سوره نمایش داده شود */}
+            {quizScope === 'surah' && (
+              <div className="pt-1 flex items-center justify-between border-t border-stone-100 dark:border-slate-800">
+                <span className="text-[11px] text-slate-500">
+                  سوره فعال: <strong className="text-teal-700 dark:text-teal-300">سوره {activeSurah.nameArabic}</strong> (جزء {toPersianDigits(activeSurah.juzNumber)})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsSurahPickerOpen(true)}
+                  className="px-2.5 py-1 rounded-lg border border-teal-500/30 bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-200 font-bold text-[11px] hover:bg-teal-100 transition-all cursor-pointer active:scale-95"
+                >
+                  تغییر سوره
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* تعیین محدوده بر اساس آیات یا صفحات مصحف */}
-          <div className="pt-3 border-t border-stone-100 dark:border-slate-800 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="custom-range-toggle-studio"
-                  checked={isRangeCustom}
-                  onChange={(e) => setIsRangeCustom(e.target.checked)}
-                  className="rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
-                />
-                <label
-                  htmlFor="custom-range-toggle-studio"
-                  className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer"
-                >
-                  تعیین محدوده مشخص (تمرین صفحه به صفحه یا بازه آیات)
-                </label>
+          {/* پیام خطا در صورت وجود */}
+          {errorMessage && (
+            <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 text-red-800 dark:text-red-300 text-xs font-medium flex items-center gap-2">
+              <XCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* دسته‌بندی سبک‌های آزمون (۴ گزینه‌ای، چینشی، وصلی، تایپی) */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-slate-800 pb-2">
+              <label className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-teal-600" />
+                <span>سبک‌ها و قالب‌های آزمون:</span>
+              </label>
+
+              {/* نشان خودکار سطح سختی */}
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${calculatedDifficultyLevel.color}`}>
+                سطح تخمینی: {calculatedDifficultyLevel.label}
+              </span>
+            </div>
+
+            {/* دسته‌بندی ۱: چهارگزینه‌ای‌ها */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 block">قالب ۴ گزینه‌ای:</span>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'next_verse' as QuizType, title: 'اکمال آیه بعدی' },
+                  { id: 'prev_verse' as QuizType, title: 'آیه ماقبل (السابق)' },
+                  { id: 'fill_blank' as QuizType, title: 'تکمیل کلمه مخفی ( • • • )' },
+                  { id: 'mutashabihat' as QuizType, title: 'مشابهات و فواصل' },
+                  { id: 'translation_match' as QuizType, title: 'تطبیق ترجمه و مفاهیم' },
+                  { id: 'surah_identity' as QuizType, title: 'تشخیص نام سوره' },
+                ].map((item) => {
+                  const isSurahIdentityDisabled = item.id === 'surah_identity' && quizScope === 'surah';
+                  const isChecked = selectedStyles.includes(item.id) && !isSurahIdentityDisabled;
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      disabled={isSurahIdentityDisabled}
+                      onClick={() => {
+                        if (!isSurahIdentityDisabled) toggleStyle(item.id);
+                      }}
+                      className={`p-2.5 rounded-xl border text-right transition-all flex items-center justify-between text-xs font-bold ${
+                        isSurahIdentityDisabled
+                          ? 'border-dashed border-stone-300 dark:border-slate-700 bg-stone-100/60 dark:bg-slate-800/40 text-slate-400 cursor-not-allowed opacity-75'
+                          : isChecked
+                          ? 'border-teal-600 bg-teal-50 dark:bg-teal-950/30 text-teal-900 dark:text-teal-200 ring-1 ring-teal-500/30 cursor-pointer'
+                          : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 text-slate-600 dark:text-slate-400 cursor-pointer'
+                      }`}
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate">{item.title}</span>
+                        {isSurahIdentityDisabled && (
+                          <span className="text-[9px] font-normal text-amber-600 dark:text-amber-400 mt-0.5">
+                            (مختص آزمون کل قرآن)
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mr-1 ${
+                          isSurahIdentityDisabled
+                            ? 'border-stone-300 bg-stone-200/50 dark:bg-slate-700/50'
+                            : isChecked
+                            ? 'bg-teal-600 border-teal-600 text-white'
+                            : 'border-stone-300'
+                        }`}
+                      >
+                        {isChecked && <Check className="w-3 h-3" />}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
 
-              {isRangeCustom && (
-                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-stone-100 dark:bg-slate-800 text-[11px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setRangeMode('verses')}
-                    className={`py-1 px-3 rounded-lg transition-all ${
-                      rangeMode === 'verses'
-                        ? 'bg-teal-600 text-white shadow-xs'
-                        : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    بر اساس شماره آیات
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRangeMode('pages')}
-                    className={`py-1 px-3 rounded-lg transition-all ${
-                      rangeMode === 'pages'
-                        ? 'bg-teal-600 text-white shadow-xs'
-                        : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    بر اساس صفحات مصحف
-                  </button>
+              {/* زیرگزینه هوشمند موقعیت کلمه مخفی با چک‌باکس‌های چندگانه */}
+              {selectedStyles.includes('fill_blank') && (
+                <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/20 space-y-2 animate-fadeIn">
+                  <span className="text-xs font-bold text-teal-900 dark:text-teal-200 block">
+                    موقعیت کلمه مخفی در آیات (انتخاب با چک‌باکس):
+                  </span>
+                  <div className="grid grid-cols-3 gap-2 text-xs font-medium">
+                    {[
+                      { id: 'start' as BlankPosition, title: 'ابتدای آیات' },
+                      { id: 'middle' as BlankPosition, title: 'وسط آیات' },
+                      { id: 'end' as BlankPosition, title: 'انتهای آیات' },
+                    ].map((pos) => {
+                      const isChecked = blankPositions.includes(pos.id);
+                      return (
+                        <button
+                          key={pos.id}
+                          type="button"
+                          onClick={() => {
+                            if (isChecked && blankPositions.length === 1) return; // حداقل یکی فعال بماند
+                            setBlankPositions((prev) =>
+                              isChecked ? prev.filter((p) => p !== pos.id) : [...prev, pos.id]
+                            );
+                          }}
+                          className={`py-2 px-2.5 rounded-lg border text-right transition-all flex items-center justify-between cursor-pointer ${
+                            isChecked
+                              ? 'bg-teal-600/15 border-teal-600 text-teal-900 dark:text-teal-200 font-bold shadow-2xs'
+                              : 'bg-white dark:bg-slate-800 border-stone-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          <span className="text-[11px]">{pos.title}</span>
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                              isChecked
+                                ? 'bg-teal-600 border-teal-600 text-white'
+                                : 'border-stone-300 dark:border-slate-600 bg-transparent'
+                            }`}
+                          >
+                            {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* کنترل‌های محدوده آیات یا صفحات */}
-            {isRangeCustom && (
-              <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-slate-800/50 border border-stone-200 dark:border-slate-800 flex flex-wrap items-center gap-3 text-xs">
-                {rangeMode === 'verses' ? (
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-600 dark:text-slate-300">از آیه:</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={rangeEnd}
-                      value={rangeStart}
-                      onChange={(e) => setRangeStart(Math.max(1, Number(e.target.value)))}
-                      className="w-20 p-2 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-center font-bold"
-                    />
-                    <span className="font-bold text-slate-600 dark:text-slate-300">تا آیه:</span>
-                    <input
-                      type="number"
-                      min={rangeStart}
-                      max={activeSurah.versesCount || 286}
-                      value={rangeEnd}
-                      onChange={(e) =>
-                        setRangeEnd(Math.min(activeSurah.versesCount || 286, Number(e.target.value)))
-                      }
-                      className="w-20 p-2 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-center font-bold"
-                    />
-                    <span className="text-slate-400">
-                      (شامل {toPersianDigits(Math.max(1, rangeEnd - rangeStart + 1))} آیه)
-                    </span>
+            {/* دسته‌بندی ۲ و ۳ و ۴: قالب‌های تعاملی نوین (چینشی، تایپی) */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-bold text-slate-500 block">قالب‌های تعاملی و مهارتی:</span>
+              <div className="grid grid-cols-2 gap-2">
+                {/* سبک چینشی */}
+                <button
+                  type="button"
+                  onClick={() => toggleStyle('ordering')}
+                  className={`p-2.5 rounded-xl border text-right transition-all flex items-center justify-between text-xs font-bold cursor-pointer ${
+                    selectedStyles.includes('ordering')
+                      ? 'border-teal-600 bg-teal-50 dark:bg-teal-950/30 text-teal-900 dark:text-teal-200 ring-1 ring-teal-500/30'
+                      : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <AlignJustify className="w-3.5 h-3.5 text-teal-600" />
+                    <span className="truncate">چینشی (مرتب‌سازی)</span>
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-600 dark:text-slate-300">از صفحه:</span>
-                    <select
-                      value={selectedStartPage}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setSelectedStartPage(val);
-                        if (val > selectedEndPage) setSelectedEndPage(val);
-                      }}
-                      className="p-2 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
-                    >
-                      {surahPages.map((p) => (
-                        <option key={p} value={p}>
-                          صفحه {toPersianDigits(p)}
-                        </option>
-                      ))}
-                    </select>
+                  <div
+                    className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                      selectedStyles.includes('ordering') ? 'bg-teal-600 border-teal-600 text-white' : 'border-stone-300'
+                    }`}
+                  >
+                    {selectedStyles.includes('ordering') && <Check className="w-3 h-3" />}
+                  </div>
+                </button>
 
-                    <span className="font-bold text-slate-600 dark:text-slate-300">تا صفحه:</span>
-                    <select
-                      value={selectedEndPage}
-                      onChange={(e) => setSelectedEndPage(Number(e.target.value))}
-                      className="p-2 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
-                    >
-                      {surahPages
-                        .filter((p) => p >= selectedStartPage)
-                        .map((p) => (
-                          <option key={p} value={p}>
-                            صفحه {toPersianDigits(p)}
-                          </option>
-                        ))}
-                    </select>
-                    <span className="text-slate-400">مصحف عثمان‌طه مدینه منوره</span>
+                {/* سبک تایپی */}
+                <button
+                  type="button"
+                  onClick={() => toggleStyle('typing')}
+                  className={`p-2.5 rounded-xl border text-right transition-all flex items-center justify-between text-xs font-bold cursor-pointer ${
+                    selectedStyles.includes('typing')
+                      ? 'border-teal-600 bg-teal-50 dark:bg-teal-950/30 text-teal-900 dark:text-teal-200 ring-1 ring-teal-500/30'
+                      : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Keyboard className="w-3.5 h-3.5 text-teal-600" />
+                    <span className="truncate">تایپی و نوشتاری</span>
                   </div>
-                )}
+                  <div
+                    className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                      selectedStyles.includes('typing') ? 'bg-teal-600 border-teal-600 text-white' : 'border-stone-300'
+                    }`}
+                  >
+                    {selectedStyles.includes('typing') && <Check className="w-3 h-3" />}
+                  </div>
+                </button>
               </div>
-            )}
-          </div>
-
-          {/* سوییچ تایمر سرعت پاسخگویی */}
-          <div className="pt-2 border-t border-stone-100 dark:border-slate-800 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-500" />
-              <span className="font-bold text-slate-700 dark:text-slate-300">
-                تایمر سنجش سرعت پاسخگویی ({toPersianDigits(timePerQuestionSeconds)} ثانیه برای هر سوال)
-              </span>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsTimerEnabled(!isTimerEnabled)}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                isTimerEnabled ? 'bg-teal-600 text-white shadow-xs' : 'bg-stone-200 dark:bg-slate-800 text-slate-500'
-              }`}
-            >
-              {isTimerEnabled ? 'فعال' : 'غیرفعال'}
-            </button>
           </div>
-        </div>
 
-        {/* دکمه شروع آزمون (فقط در حالت تمام‌صفحه ریلز و شورتز باز می‌شود با آیکون ساده) */}
-        <div className="pt-1">
+          {/* تعداد سوالات و زمان‌بندی کل آزمون */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 space-y-3.5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <Sliders className="w-4 h-4 text-teal-600" />
+                <span>تعداد سوالات:</span>
+              </label>
+
+              <div className="flex items-center gap-1.5">
+                {[5, 10, 15, 20, 30].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setQuestionCount(num)}
+                    className={`w-8 h-8 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                      questionCount === num
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-stone-200'
+                    }`}
+                  >
+                    {toPersianDigits(num)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* زمان کل آزمون با قابلیت فعال/غیرفعال‌سازی */}
+            <div className="pt-2 border-t border-stone-100 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">
+                  زمان کل آزمون:
+                </span>
+                <span className="text-[11px] text-slate-400 block">
+                  {isTimerEnabled
+                    ? `${toPersianDigits(Math.round(totalQuizDurationSeconds / 60))} دقیقه برای کل سوالات (محاسبه هوشمند)`
+                    : 'بدون محدودیت زمانی'}
+                </span>
+              </div>
+
+              {/* سوییچ تاگل زمان */}
+              <button
+                type="button"
+                onClick={() => setIsTimerEnabled((prev) => !prev)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  isTimerEnabled ? 'bg-teal-600' : 'bg-stone-300 dark:bg-slate-700'
+                }`}
+                role="switch"
+                aria-checked={isTimerEnabled}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    isTimerEnabled ? '-translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* قاری ترتیل با لیست کشویی شیک */}
+            <div className="pt-2 border-t border-stone-100 dark:border-slate-800">
+              <ReciterSelectorDropdown
+                selectedId={selectedReciterId}
+                onSelect={(id) => setSelectedReciterId(id)}
+                darkMode={darkMode}
+                label="قاری ترتیل برای پخش صوتی سوالات:"
+              />
+            </div>
+          </div>
+
+          {/* دکمه شروع آزمون */}
           <button
-            onClick={() => generateQuestions(true)}
-            disabled={isLoadingVerses}
-            className="w-full py-4 px-6 rounded-3xl bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 active:scale-[0.99] text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-lg shadow-teal-900/20 disabled:opacity-50"
+            type="button"
+            onClick={generateQuestions}
+            className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
           >
-            <Play className="w-5 h-5 fill-current" />
+            <Play className="w-4 h-4 fill-current" />
             <span>
-              {isLoadingVerses
-                ? 'در حال آماده‌سازی...'
-                : `شروع آزمون (${toPersianDigits(questionCount)} سوال)`}
+              {quizScope === 'all_quran'
+                ? 'شروع آزمون جامع حفظ کل قرآن کریم'
+                : `شروع آزمون حفظ سوره ${activeSurah.nameArabic}`}
             </span>
           </button>
         </div>
+      ) : (
+        /* تب تاریخچه و پیشرفت آزمون‌ها */
+        <div className="space-y-4 animate-fadeIn">
+          {/* کارت خلاصه آمار */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 flex items-center justify-around text-center shadow-2xs">
+            <div>
+              <span className="text-xl sm:text-2xl font-black text-teal-700 dark:text-teal-400 block">
+                {toPersianDigits(quizHistory.length)}
+              </span>
+              <span className="text-xs text-slate-400">آزمون‌های انجام‌شده</span>
+            </div>
+            <div className="w-px h-8 bg-stone-200 dark:bg-slate-800" />
+            <div>
+              <span className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 block">
+                {toPersianDigits(averageHistoryPercent)}٪
+              </span>
+              <span className="text-xs text-slate-400">میانگین تسلط</span>
+            </div>
+          </div>
 
-        {/* تاریخچه آخرین آزمون‌ها */}
-        {quizHistory.length > 0 && (
-          <div className="rounded-3xl p-4 sm:p-5 border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3">
-            <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-teal-600" />
-              <span>سوابق آخرین آزمون‌های حفظ شما:</span>
-            </h3>
-            <div className="space-y-2">
-              {quizHistory.slice(0, 5).map((item) => (
+          {/* لیست تاریخچه */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400 px-1">
+              <span>سوابق آزمون‌ها ({toPersianDigits(quizHistory.length)})</span>
+              {quizHistory.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearHistory}
+                  className="text-red-500 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>پاک‌سازی تاریخچه</span>
+                </button>
+              )}
+            </div>
+
+            {quizHistory.length === 0 ? (
+              <div className="p-8 text-center rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 text-xs text-slate-400">
+                هنوز آزمونی ثبت نشده است. با تکمیل اولین آزمون، سوابق و درصد پیشرفت شما در اینجا نمایش داده می‌شود.
+              </div>
+            ) : (
+              quizHistory.map((item) => (
                 <div
                   key={item.id}
-                  className="p-3 rounded-2xl bg-stone-50 dark:bg-slate-800/60 border border-stone-200/80 dark:border-slate-700/60 flex items-center justify-between text-xs"
+                  className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 flex items-center justify-between gap-3 text-xs shadow-2xs"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-bold text-slate-800 dark:text-slate-100">
-                      سوره {item.surahName}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-stone-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                      {item.typeLabel}
-                    </span>
-                    <span className="text-[10px] text-slate-400 hidden xs:inline">{item.date}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-900 dark:text-slate-100">
+                        سوره {item.surahName}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-slate-800 text-slate-500">
+                        {item.typeLabel}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">{item.date}</span>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-bold text-teal-700 dark:text-teal-400">
+
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
                       {toPersianDigits(item.score)} از {toPersianDigits(item.total)}
                     </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-700 dark:text-teal-300 font-bold">
+                    <span
+                      className={`px-2 py-0.5 rounded-lg font-black text-xs ${
+                        item.percent >= 80
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : item.percent >= 50
+                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                          : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                      }`}
+                    >
                       {toPersianDigits(item.percent)}٪
                     </span>
                   </div>
                 </div>
-              ))}
-            </div>
+              ))
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* صفحه آزمون واقعی و استاندارد حفظ قرآن با بازخورد صوتی و گذار خودکار */}
-      {isShortsFullscreenOpen && (
+      {/* مودال انتخاب سوره زیبا و کامل */}
+      <SurahSelectorModal
+        isOpen={isSurahPickerOpen}
+        onClose={() => setIsSurahPickerOpen(false)}
+        surahs={surahs}
+        currentSurahId={activeSurah.id}
+        onSelectSurah={(surah) => {
+          if (onSelectSurah) onSelectSurah(surah);
+          setIsSurahPickerOpen(false);
+        }}
+        darkMode={darkMode}
+      />
+
+      {/* کامپوننت آزمون سنجش واقعی با تایمر کل و حالت Review */}
+      {isQuizActive && (
         <RealisticQuizView
-          questions={questions.map((q) => ({
-            id: q.id,
-            prompt: q.prompt,
-            contextText: q.contextText,
-            options: q.options,
-            correctIndex: q.correctIndex,
-            explanation: q.explanation,
-            surahName: q.surahName,
-            verseNumber: q.verseNumber,
-            verseAudioUrl: q.verseAudioUrl,
-            categoryBadge:
-              q.type === 'quran_stories'
-                ? 'قصص قرآنی'
-                : q.type === 'next_verse'
-                ? 'اکمال آیه'
-                : q.type === 'prev_verse'
-                ? 'آیه قبلی'
-                : q.type === 'fill_blank'
-                ? q.blankPosition === 'start'
-                  ? 'کلمه مخفی (ابتدای آیه)'
-                  : q.blankPosition === 'end'
-                  ? 'کلمه مخفی (انتهای آیه)'
-                  : 'کلمه مخفی (میانه آیه)'
-                : q.type === 'mutashabihat'
-                ? 'مشابهات'
-                : q.type === 'translation_match'
-                ? 'ترجمه و مفاهیم'
-                : q.type === 'surah_identity'
-                ? 'تشخیص سوره'
-                : 'شماره آیه',
-            fullVerseText: q.fullVerseText,
-            fullVerseTranslation: q.fullVerseTranslation,
-            isBlankFill: q.type === 'fill_blank',
-          }))}
+          questions={generatedQuestions}
           title={`آزمون حفظ سوره ${activeSurah.nameArabic}`}
-          timePerQuestion={timePerQuestionSeconds}
-          difficulty={difficulty}
-          onClose={() => setIsShortsFullscreenOpen(false)}
+          totalQuizTimeSeconds={totalQuizDurationSeconds}
+          isTimerEnabled={isTimerEnabled}
+          onClose={() => setIsQuizActive(false)}
           onRestart={() => {
-            generateQuestions(true);
+            generateQuestions();
           }}
-          onFinish={(finalScore, totalQ) => {
-            const percent = Math.round((finalScore / Math.max(1, totalQ)) * 100);
-            const newRecord: SavedQuizResult = {
-              id: Date.now().toString(),
-              date: new Date().toLocaleDateString('fa-IR'),
-              surahName: activeSurah.nameArabic,
-              score: finalScore,
-              total: totalQ,
-              percent,
-              typeLabel: isCombinedMode ? 'جامع ترکیبی' : 'تخصصی',
-            };
-            setQuizHistory((prev) => {
-              const updated = [newRecord, ...prev].slice(0, 10);
-              try {
-                localStorage.setItem('mobin_memorization_quiz_history', JSON.stringify(updated));
-              } catch {}
-              return updated;
-            });
-          }}
+          onFinish={handleFinishQuiz}
         />
       )}
     </div>

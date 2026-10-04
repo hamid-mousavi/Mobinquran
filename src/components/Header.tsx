@@ -7,7 +7,7 @@ import {
   FileText,
   ChevronsDown,
   ChevronDown,
-  Home,
+  Settings,
 } from 'lucide-react';
 import { Surah, ViewMode } from '../types';
 import { toPersianDigits } from '../utils/textNormalization';
@@ -22,6 +22,7 @@ interface HeaderProps {
   onToggleDarkMode: () => void;
   isAutoScrollActive: boolean;
   onToggleAutoScroll: () => void;
+  onOpenSettings?: () => void;
   onToggleHomeView?: () => void;
 }
 
@@ -35,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleDarkMode,
   isAutoScrollActive,
   onToggleAutoScroll,
+  onOpenSettings,
   onToggleHomeView,
 }) => {
   return (
@@ -46,19 +48,19 @@ export const Header: React.FC<HeaderProps> = ({
           : 'bg-teal-900 text-white border-teal-800 shadow-sm backdrop-blur-md'
       }`}
     >
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 h-15 flex items-center justify-between gap-2">
-        {/* راست: دکمه آیکونی خانه و انتخاب سوره */}
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 h-16 flex items-center justify-between gap-2">
+        {/* راست: دکمه آیکونی تنظیمات قلم و ترجمه و انتخاب سوره */}
         <div className="flex items-center gap-2 min-w-0">
-          {/* دکمه آیکونی بازگشت به خانه */}
-          {onToggleHomeView && (
+          {/* دکمه آیکونی تنظیمات قلم و ترجمه */}
+          {onOpenSettings && (
             <button
-              id="btn-header-home-toggle"
-              onClick={onToggleHomeView}
-              className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white border border-white/15 transition-all shrink-0"
-              title="بازگشت به صفحه اصلی"
-              aria-label="صفحه اصلی"
+              id="btn-header-settings-toggle"
+              onClick={onOpenSettings}
+              className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white border border-white/15 transition-all shrink-0 cursor-pointer"
+              title="تنظیمات قلم و ترجمه"
+              aria-label="تنظیمات قلم و ترجمه"
             >
-              <Home className="w-4 h-4 sm:w-5 sm:h-5" />
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
 

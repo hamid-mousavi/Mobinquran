@@ -441,6 +441,21 @@ export default function App() {
     setActivePlayingVerseNumber(1);
   };
 
+  // ناوبری سوره بعد و قبل با اسلاید لمسی در صفحه قرائت
+  const handleNextSurah = useCallback(() => {
+    const currentIndex = surahs.findIndex((s) => s.id === currentSurah.id);
+    if (currentIndex >= 0 && currentIndex < surahs.length - 1) {
+      handleSelectSurah(surahs[currentIndex + 1]);
+    }
+  }, [surahs, currentSurah.id]);
+
+  const handlePrevSurah = useCallback(() => {
+    const currentIndex = surahs.findIndex((s) => s.id === currentSurah.id);
+    if (currentIndex > 0) {
+      handleSelectSurah(surahs[currentIndex - 1]);
+    }
+  }, [surahs, currentSurah.id]);
+
   return (
     <div
       id="app-root"
@@ -461,7 +476,7 @@ export default function App() {
           onToggleDarkMode={handleToggleDarkMode}
           isAutoScrollActive={isAutoScrollActive}
           onToggleAutoScroll={() => setIsAutoScrollActive((prev) => !prev)}
-          onToggleHomeView={() => setActivePage('home')}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
         />
       )}
 
@@ -572,6 +587,8 @@ export default function App() {
           onReadingPositionChange={handleReadingPositionChange}
           initialScrollToVerseNumber={resumeScrollVerse}
           onInitialScrollHandled={() => setResumeScrollVerse(null)}
+          onNextSurah={handleNextSurah}
+          onPrevSurah={handlePrevSurah}
         />
       ) : (
         <MushafPageView
@@ -628,7 +645,7 @@ export default function App() {
           }}
           allSurahs={surahs.map((s) => ({ id: s.id, nameArabic: s.nameArabic }))}
           darkMode={settings.darkMode}
-          hasBottomNav={activePage !== 'ai'}
+          hasBottomNav={true}
         />
       )}
 
@@ -746,23 +763,21 @@ export default function App() {
       <OfflineIndicator />
 
       {/* منوی ناوبری دسترسی سریع پایین صفحه */}
-      {activePage !== 'ai' && (
-        <BottomNavigation
-          activePage={activePage}
-          onNavigateHome={() => setActivePage('home')}
-          onNavigateReader={() => {
-            setActivePage('reader');
-            if (lastReadPosition?.verseNumber) {
-              setResumeScrollVerse(lastReadPosition.verseNumber);
-              setTimeout(() => requestQuranScrollToVerse(lastReadPosition.verseNumber), 150);
-            }
-          }}
-          onNavigateAI={() => handleOpenAI(null)}
-          onNavigateMemorization={handleOpenMemorization}
-          onOpenMoreMenu={() => setIsMoreMenuOpen(true)}
-          darkMode={settings.darkMode}
-        />
-      )}
+      <BottomNavigation
+        activePage={activePage}
+        onNavigateHome={() => setActivePage('home')}
+        onNavigateReader={() => {
+          setActivePage('reader');
+          if (lastReadPosition?.verseNumber) {
+            setResumeScrollVerse(lastReadPosition.verseNumber);
+            setTimeout(() => requestQuranScrollToVerse(lastReadPosition.verseNumber), 150);
+          }
+        }}
+        onNavigateAI={() => handleOpenAI(null)}
+        onNavigateMemorization={handleOpenMemorization}
+        onOpenMoreMenu={() => setIsMoreMenuOpen(true)}
+        darkMode={settings.darkMode}
+      />
 
       {/* مودال منوی امکانات و ابزارهای قرآنی */}
       <MoreMenuModal

@@ -26,6 +26,8 @@ import { toPersianDigits } from '../utils/textNormalization';
 import { QuranicCard } from './QuranicOrnament';
 import { MemorizationQuizStudio } from './MemorizationQuizStudio';
 import { QuranStoriesExplorer } from './QuranStoriesExplorer';
+import { ReciterSelectorDropdown } from './ReciterSelectorDropdown';
+import { SurahSelectorModal } from './SurahSelectorModal';
 import {
   getMemorizationProgress,
   getSurahMemorizationStats,
@@ -96,6 +98,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
 
   // حالت انتخاب محدوده: بر اساس آیات یا صفحات مصحف
   const [rangeMode, setRangeMode] = useState<'verses' | 'pages'>('verses');
+  const [isSurahPickerOpen, setIsSurahPickerOpen] = useState(false);
 
   // فیلتر صفحه کارنامه
   const [progressFilter, setProgressFilter] = useState<'all' | 'memorized' | 'review_needed' | 'unstarted'>('all');
@@ -241,25 +244,16 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             </h1>
           </div>
 
-          {/* چیپ سوره فعال */}
+          {/* دکمه انتخاب سوره با استایل کشویی شیک */}
           <div className="flex items-center gap-2">
-            <select
-              value={currentSurah.id}
-              onChange={(e) => {
-                const target = surahs.find((s) => s.id === Number(e.target.value));
-                if (target) {
-                  stopSession();
-                  onSelectSurah(target);
-                }
-              }}
-              className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl sm:rounded-2xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs sm:text-sm font-bold text-teal-700 dark:text-teal-300 focus:outline-hidden cursor-pointer shadow-2xs"
+            <button
+              type="button"
+              onClick={() => setIsSurahPickerOpen(true)}
+              className="px-3 py-1.5 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs sm:text-sm font-bold text-teal-700 dark:text-teal-300 flex items-center gap-1.5 shadow-2xs hover:border-teal-500 transition-all cursor-pointer active:scale-95"
             >
-              {surahs.map((s) => (
-                <option key={s.id} value={s.id}>
-                  سوره {s.nameArabic} ({toPersianDigits(s.versesCount)} آیه)
-                </option>
-              ))}
-            </select>
+              <span>سوره {currentSurah.nameArabic}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+            </button>
           </div>
         </div>
 
@@ -692,31 +686,14 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             </div>
           </div>
 
-          {/* قاری ترتیل */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-              قاری ترتیل:
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {MEMO_RECITERS.map((r) => {
-                const isSelected = reciterId === r.id;
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setReciterId(r.id)}
-                    className={`p-3 rounded-2xl border text-right transition-all flex items-center justify-between cursor-pointer ${
-                      isSelected
-                        ? 'border-teal-600 bg-teal-600 text-white font-bold shadow-xs'
-                        : 'border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
-                    }`}
-                  >
-                    <span className="text-xs truncate">{r.name}</span>
-                    {isSelected && <Check className="w-3.5 h-3.5 shrink-0 mr-1" />}
-                  </button>
-                );
-              })}
-            </div>
+          {/* قاری ترتیل با لیست کشویی شیک */}
+          <div className="space-y-1">
+            <ReciterSelectorDropdown
+              selectedId={reciterId}
+              onSelect={(id) => setReciterId(id)}
+              darkMode={darkMode}
+              label="قاری ترتیل آموزشی:"
+            />
           </div>
 
           {/* محدوده و تکرار */}
@@ -928,6 +905,20 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
           </QuranicCard>
         </div>
       )}
+
+      {/* مودال انتخاب سوره زیبا و کامل */}
+      <SurahSelectorModal
+        isOpen={isSurahPickerOpen}
+        onClose={() => setIsSurahPickerOpen(false)}
+        surahs={surahs}
+        currentSurahId={currentSurah.id}
+        onSelectSurah={(surah) => {
+          stopSession();
+          onSelectSurah(surah);
+          setIsSurahPickerOpen(false);
+        }}
+        darkMode={darkMode}
+      />
     </div>
   );
 };

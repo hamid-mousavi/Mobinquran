@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { QURAN_STORIES, QuranStory } from '../data/quranStories';
 import { toPersianDigits } from '../utils/textNormalization';
-import { FullscreenShortsQuiz, ShortsQuestion } from './FullscreenShortsQuiz';
+import { RealisticQuizView, QuizQuestionItem } from './RealisticQuizView';
 import { QuranStoryDetailModal } from './QuranStoryDetailModal';
 import { QuranicCard } from './QuranicOrnament';
 
@@ -44,9 +44,10 @@ export const QuranStoriesExplorer: React.FC<QuranStoriesExplorerProps> = ({
 }) => {
   const [selectedStory, setSelectedStory] = useState<QuranStory | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isShortsQuizOpen, setIsShortsQuizOpen] = useState(false);
-  const [quizQuestions, setQuizQuestions] = useState<ShortsQuestion[]>([]);
+  const [isRealisticQuizOpen, setIsRealisticQuizOpen] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestionItem[]>([]);
   const [quizTitle, setQuizTitle] = useState('مسابقه داستان‌های قرآنی');
+  const [currentQuizStory, setCurrentQuizStory] = useState<QuranStory | null>(null);
 
   const filteredStories = QURAN_STORIES.filter(
     (story) =>
@@ -56,9 +57,10 @@ export const QuranStoriesExplorer: React.FC<QuranStoriesExplorerProps> = ({
       story.summary.includes(searchQuery)
   );
 
-  // شروع آزمون شورتز برای یک داستان خاص
+  // شروع آزمون تخصصی برای یک داستان خاص
   const handleStartStoryQuiz = (story: QuranStory) => {
-    const formattedQuestions: ShortsQuestion[] = story.questions.map((q) => ({
+    setCurrentQuizStory(story);
+    const formattedQuestions: QuizQuestionItem[] = story.questions.map((q) => ({
       id: q.id,
       prompt: q.prompt,
       contextText: q.contextAyah,
@@ -68,16 +70,20 @@ export const QuranStoriesExplorer: React.FC<QuranStoriesExplorerProps> = ({
       surahName: q.surahName,
       verseNumber: q.verseNumber,
       categoryBadge: `داستان ${story.title}`,
+      fullVerseText: q.contextAyah,
+      fullVerseTranslation: q.explanation,
+      isBlankFill: false,
     }));
 
     setQuizQuestions(formattedQuestions);
     setQuizTitle(`آزمون داستان ${story.title}`);
-    setIsShortsQuizOpen(true);
+    setIsRealisticQuizOpen(true);
   };
 
   // شروع آزمون جامع از تمام داستان‌های قرآنی
   const handleStartAllStoriesQuiz = () => {
-    const allQuestions: ShortsQuestion[] = [];
+    setCurrentQuizStory(null);
+    const allQuestions: QuizQuestionItem[] = [];
     QURAN_STORIES.forEach((story) => {
       story.questions.forEach((q) => {
         allQuestions.push({
@@ -90,6 +96,9 @@ export const QuranStoriesExplorer: React.FC<QuranStoriesExplorerProps> = ({
           surahName: q.surahName,
           verseNumber: q.verseNumber,
           categoryBadge: `داستان ${story.title}`,
+          fullVerseText: q.contextAyah,
+          fullVerseTranslation: q.explanation,
+          isBlankFill: false,
         });
       });
     });
@@ -98,7 +107,15 @@ export const QuranStoriesExplorer: React.FC<QuranStoriesExplorerProps> = ({
     const shuffled = allQuestions.sort(() => Math.random() - 0.5);
     setQuizQuestions(shuffled);
     setQuizTitle('آزمون جامع داستان‌ها و حکمت‌های قرآنی');
-    setIsShortsQuizOpen(true);
+    setIsRealisticQuizOpen(true);
+  };
+
+  const handleRestartQuiz = () => {
+    if (currentQuizStory) {
+      handleStartStoryQuiz(currentQuizStory);
+    } else {
+      handleStartAllStoriesQuiz();
+    }
   };
 
   return (
@@ -236,13 +253,17 @@ export const QuranStoriesExplorer: React.FC<QuranStoriesExplorerProps> = ({
         />
       )}
 
-      {/* کامپوننت آزمون شورتز تمام‌صفحه */}
-      <FullscreenShortsQuiz
-        isOpen={isShortsQuizOpen}
-        onClose={() => setIsShortsQuizOpen(false)}
-        questions={quizQuestions}
-        title={quizTitle}
-      />
+      {/* کامپوننت آزمون استاندارد و تخصصی داستان‌های قرآنی */}
+      {isRealisticQuizOpen && (
+        <RealisticQuizView
+          questions={quizQuestions}
+          title={quizTitle}
+          totalQuizTimeSeconds={Math.round(quizQuestions.length * 45)}
+          isTimerEnabled={true}
+          onClose={() => setIsRealisticQuizOpen(false)}
+          onRestart={handleRestartQuiz}
+        />
+      )}
     </div>
   );
 };

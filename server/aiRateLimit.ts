@@ -33,6 +33,28 @@ export function hashRateLimitKey(ip: string, deviceId: string): string {
   return crypto.createHash('sha256').update(`${ip}|${deviceId}`).digest('hex');
 }
 
+export async function getDailyQuotaUsage(key: string): Promise<number> {
+  const storageKey = `quran-ai:${new Date().toISOString().slice(0, 10)}:${key}`;
+  const url = env('UPSTASH_REDIS_REST_URL');
+  const token = env('UPSTASH_REDIS_REST_TOKEN');
+  if (url && token) {
+    try {
+      const response = await fetch(`${url}/get/${storageKey}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json() as { result?: string | number };
+        return Number(data?.result || 0);
+      }
+    } catch {}
+  }
+  const counter = memoryCounters.get(storageKey);
+  if (counter && counter.resetAt > Date.now()) {
+    return counter.count;
+  }
+  return 0;
+}
+
 async function incrementUpstash(key: string, resetAt: number): Promise<number | null> {
   const url = env('UPSTASH_REDIS_REST_URL');
   const token = env('UPSTASH_REDIS_REST_TOKEN');

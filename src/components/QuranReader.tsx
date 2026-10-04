@@ -102,6 +102,8 @@ interface QuranReaderProps {
   onReadingPositionChange?: (verse: Verse) => void;
   initialScrollToVerseNumber?: number | null;
   onInitialScrollHandled?: () => void;
+  onNextSurah?: () => void;
+  onPrevSurah?: () => void;
 }
 
 // ثبت شنوندگان سراسری اسکرول (برای هماهنگی بین کامپوننت‌ها)
@@ -129,12 +131,69 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   onReadingPositionChange,
   initialScrollToVerseNumber,
   onInitialScrollHandled,
+  onNextSurah,
+  onPrevSurah,
 }) => {
   // مرجع جدیدترین تابع جهت استفاده در شنوندهٔ اسکرول
   const onReadingPositionChangeRef = useRef(onReadingPositionChange);
   useEffect(() => {
     onReadingPositionChangeRef.current = onReadingPositionChange;
   }, [onReadingPositionChange]);
+
+  // رهگیری اسلایدهای لمسی افقی جهت جابجایی بین سوره‌ها
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const touchDeltaXRef = useRef<number>(0);
+  const isSwipingHorizontalRef = useRef<boolean>(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+      touchDeltaXRef.current = 0;
+      isSwipingHorizontalRef.current = false;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const diffX = currentX - touchStartXRef.current;
+    const diffY = currentY - touchStartYRef.current;
+
+    // تشخیص حرکت افقی مسلط (برای جلوگیری از تداخل با اسکرول عمودی عادی)
+    if (Math.abs(diffX) > 20 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+      isSwipingHorizontalRef.current = true;
+      touchDeltaXRef.current = diffX;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartXRef.current !== null && isSwipingHorizontalRef.current) {
+      const deltaX = touchDeltaXRef.current;
+      const SWIPE_THRESHOLD = 75; // پیکسل حداقل برای تایید کشیدن
+
+      // در چیدمان راست‌به‌چپ (RTL):
+      // کشیدن به سمت چپ (deltaX منفی) -> رفتن به سوره بعد
+      // کشیدن به سمت راست (deltaX مثبت) -> رفتن به سوره قبل
+      if (deltaX < -SWIPE_THRESHOLD) {
+        if (onNextSurah) {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          onNextSurah();
+        }
+      } else if (deltaX > SWIPE_THRESHOLD) {
+        if (onPrevSurah) {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          onPrevSurah();
+        }
+      }
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    touchDeltaXRef.current = 0;
+    isSwipingHorizontalRef.current = false;
+  };
 
   // پرچم قفل‌کردن ردیاب مطالعه در هنگام اسکرول برنامه‌ای (جلوگیری از ثبت اشتباه آیات میانی)
   const isProgrammaticScrollRef = useRef(false);
@@ -332,7 +391,10 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   return (
     <main
       id="quran-reader-container"
-      className="max-w-3xl mx-auto px-3 sm:px-4 py-6 pb-36 space-y-6"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className="max-w-3xl mx-auto px-3 sm:px-4 py-6 pb-36 space-y-6 select-text"
     >
       {/* کتیبه فشرده و فاخر سرسوره قرآنی */}
       <QuranicSurahBanner surah={currentSurah} darkMode={darkMode} />
@@ -544,6 +606,43 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
               </article>
             );
             })}
+
+            {/* نوار ناوبری سوره بعد و قبل با راهنمای اسلاید لمسی */}
+            <div className="pt-6 pb-4 border-t border-stone-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onPrevSurah) {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    onPrevSurah();
+                  }
+                }}
+                disabled={!onPrevSurah || currentSurah.id <= 1}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-2xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-stone-50 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none text-slate-700 dark:text-slate-200 font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
+              >
+                <span>← سوره قبلی</span>
+                <span className="text-[10px] text-slate-400 font-normal hidden xs:inline">(اسلاید به راست)</span>
+              </button>
+
+              <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium text-center">
+                <span>جابجایی سریع سوره‌ها با اسلاید لمسی به چپ و راست</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (onNextSurah) {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    onNextSurah();
+                  }
+                }}
+                disabled={!onNextSurah || currentSurah.id >= 114}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-2xl border border-teal-500/30 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 dark:hover:bg-teal-900/60 disabled:opacity-30 disabled:pointer-events-none text-teal-800 dark:text-teal-200 font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
+              >
+                <span className="text-[10px] text-teal-600 dark:text-teal-400 font-normal hidden xs:inline">(اسلاید به چپ)</span>
+                <span>سوره بعدی →</span>
+              </button>
+            </div>
           </>
         )}
       </div>

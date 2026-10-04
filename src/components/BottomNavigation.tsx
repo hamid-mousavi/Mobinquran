@@ -63,14 +63,14 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     <nav
       id="app-bottom-navigation"
       aria-label="ناوبری اصلی پایین صفحه"
-      className={`fixed bottom-0 inset-x-0 z-40 transition-all select-none border-t backdrop-blur-lg ${
+      className={`fixed bottom-0 inset-x-0 z-50 transition-all select-none border-t backdrop-blur-lg ${
         darkMode
           ? 'bg-slate-950/95 border-slate-800/80 text-slate-300'
           : 'bg-white/95 border-slate-200/90 text-slate-600'
       }`}
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 4px)' }}
     >
-      <div className="max-w-md sm:max-w-lg mx-auto px-2 flex items-center justify-around h-15">
+      <div className="max-w-md sm:max-w-lg mx-auto px-2 flex items-center justify-around h-16">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isCurrent = item.isActive;

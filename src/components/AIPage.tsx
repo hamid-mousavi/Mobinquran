@@ -12,7 +12,6 @@ import {
   Languages,
   ShieldCheck,
   Loader2,
-  Home,
   Copy,
   Check,
   X,
@@ -49,47 +48,6 @@ interface AIPageProps {
   onNavigateToVerse?: (surahId: number, verseNumber: number) => void;
 }
 
-export type AIAgentId = 'moral' | 'conceptual' | 'literary' | 'rational';
-
-interface AIAgentInfo {
-  id: AIAgentId;
-  name: string;
-  badge: string;
-  description: string;
-  icon: React.FC<{ className?: string }>;
-}
-
-const AI_AGENTS: AIAgentInfo[] = [
-  {
-    id: 'moral',
-    name: 'اخلاقی و کاربردی',
-    badge: 'سبک زندگی و آرامش دل',
-    description: 'کاربرد آموزه‌های آیه در زندگی، آرامش دل، امیدبخشی و اخلاق فردی و اجتماعی',
-    icon: Heart,
-  },
-  {
-    id: 'conceptual',
-    name: 'تدبّر مفهومی',
-    badge: 'معارف و توحید',
-    description: 'تأمل در پیام‌های کلی، پیوند آیه با سایر آموزه‌های قرآن و معارف توحیدی',
-    icon: BookOpen,
-  },
-  {
-    id: 'literary',
-    name: 'ادبی و واژه‌شناسی',
-    badge: 'فصاحت و واژگان',
-    description: 'بررسی ریشه لغوی واژگان، اشتقاق، تناسب واژه‌ها و وجوه بلاغی آیه شریفه',
-    icon: Languages,
-  },
-  {
-    id: 'rational',
-    name: 'عقلی و اعتقادی',
-    badge: 'استدلال و باورها',
-    description: 'پاسخ‌های استدلالی به پرسش‌های فکری و مبانی اعتقادی در پرتو آیه',
-    icon: ShieldCheck,
-  },
-];
-
 const SUGGESTED_QUESTIONS = [
   'پیام‌های کاربردی این آیه برای زندگی امروز چیست؟',
   'نکات تفسیری و لطایف معنایی آیه را توضیح دهید.',
@@ -106,7 +64,6 @@ export const AIPage: React.FC<AIPageProps> = ({
   onNavigateHome,
   onNavigateToVerse,
 }) => {
-  const [selectedAgentId, setSelectedAgentId] = useState<AIAgentId>('moral');
   const [historyList, setHistoryList] = useState<AiChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>(() => `session_${Date.now()}`);
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
@@ -117,9 +74,29 @@ export const AIPage: React.FC<AIPageProps> = ({
   const [reflectionText, setReflectionText] = useState('');
   const [savedReflection, setSavedReflection] = useState('');
   const [reflectionStatus, setReflectionStatus] = useState('');
+  const [aiQuota, setAiQuota] = useState<{ dailyLimit: number; used: number; remaining: number } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const fetchAiQuota = async () => {
+    try {
+      const deviceId = localStorage.getItem('quran_ai_device_id') || '';
+      const res = await fetch(`/api/ai/status?deviceId=${encodeURIComponent(deviceId)}`, {
+        headers: deviceId ? { 'X-Device-ID': deviceId } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.dailyLimit === 'number') {
+          setAiQuota({
+            dailyLimit: data.dailyLimit,
+            used: data.used || 0,
+            remaining: typeof data.remaining === 'number' ? data.remaining : Math.max(0, data.dailyLimit - (data.used || 0)),
+          });
+        }
+      }
+    } catch {}
+  };
 
   const reloadHistory = () => {
     setHistoryList(getAiHistory());
@@ -127,6 +104,7 @@ export const AIPage: React.FC<AIPageProps> = ({
 
   useEffect(() => {
     reloadHistory();
+    fetchAiQuota();
   }, []);
 
   useEffect(() => {
@@ -155,11 +133,10 @@ export const AIPage: React.FC<AIPageProps> = ({
           role: 'assistant',
           content: initialText,
           timestamp: Date.now(),
-          agentName: AI_AGENTS.find((a) => a.id === selectedAgentId)?.name,
         },
       ]);
     }
-  }, [currentVerse, currentSurah, selectedAgentId]);
+  }, [currentVerse, currentSurah]);
 
   useEffect(() => {
     if (messages.length > 1 || isLoading) {
@@ -176,7 +153,6 @@ export const AIPage: React.FC<AIPageProps> = ({
         role: 'assistant',
         content: `گفتگوی جدید آغاز شد. می‌توانید پرسش خود را پیرامون آیات یا مفاهیم قرآنی مطرح فرمایید.`,
         timestamp: Date.now(),
-        agentName: AI_AGENTS.find((a) => a.id === selectedAgentId)?.name,
       },
     ]);
     setShowHistoryDrawer(false);
@@ -253,7 +229,7 @@ export const AIPage: React.FC<AIPageProps> = ({
               }
             : null,
           lang: 'fa',
-          agent: selectedAgentId,
+          agent: 'moral',
         }),
       });
 
@@ -322,7 +298,6 @@ export const AIPage: React.FC<AIPageProps> = ({
         aiAnalysis,
         practicalTakeaway,
         timestamp: Date.now(),
-        agentName: AI_AGENTS.find((a) => a.id === selectedAgentId)?.name,
         tafsirCitations: tafsirCitations.length > 0 ? tafsirCitations : undefined,
         socraticQuestions: socraticQuestions.length > 0 ? socraticQuestions : undefined,
         sources: sources.length > 0 ? sources : undefined,
@@ -359,6 +334,7 @@ export const AIPage: React.FC<AIPageProps> = ({
       setMessages([...updatedMessages, errorMsg]);
     } finally {
       setIsLoading(false);
+      fetchAiQuota();
     }
   };
 
@@ -405,42 +381,21 @@ export const AIPage: React.FC<AIPageProps> = ({
     setTimeout(() => setCopiedMsgId(null), 2000);
   };
 
-  const activeAgent = AI_AGENTS.find((a) => a.id === selectedAgentId) || AI_AGENTS[0];
-  const ActiveIcon = activeAgent.icon;
-
-  const handleReturnHome = () => {
-    if (onNavigateHome) {
-      onNavigateHome();
-    } else {
-      onBack();
-    }
-  };
-
   return (
     <div
       id="ai-fullscreen-chat"
-      className="fixed inset-0 z-50 flex flex-col h-screen h-dvh w-full bg-[#faf8f5] dark:bg-[#070b14] text-slate-800 dark:text-slate-100 overflow-hidden font-['Vazirmatn'] select-none"
+      className="flex flex-col w-full h-[calc(100dvh-64px-env(safe-area-inset-bottom,0px))] max-h-[calc(100dvh-64px-env(safe-area-inset-bottom,0px))] bg-[#faf8f5] dark:bg-[#070b14] text-slate-800 dark:text-slate-100 overflow-hidden font-['Vazirmatn'] select-none relative"
       dir="rtl"
     >
-      {/* سربرگ اختصاصی و مدرن فول‌اسکرین چت */}
+      {/* سربرگ اختصاصی دستیار تدبّر */}
       <header className="shrink-0 h-16 border-b border-stone-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xs">
-        {/* سمت راست: دکمه صفحه اصلی، دکمه بازگشت و عنوان */}
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-          {/* دکمه آیکونی رفتن به صفحه اصلی */}
-          <button
-            onClick={handleReturnHome}
-            className="p-2 sm:p-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all active:scale-95 shrink-0"
-            title="بازگشت به صفحه اصلی"
-            aria-label="صفحه اصلی"
-          >
-            <Home className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
-
-          {/* دکمه آیکونی بازگشت به نمای قبل */}
+        {/* سمت راست: دکمه بازگشت و عنوان */}
+        <div className="flex items-center gap-2 min-w-0">
+          {/* دکمه آیکونی بازگشت به نمای قبل در صورت وجود */}
           <button
             onClick={onBack}
-            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-700/80 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-95 shrink-0"
-            title="بازگشت به نمای قبل"
+            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-700/80 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-95 shrink-0 cursor-pointer"
+            title="بازگشت به صفحه قبل"
             aria-label="بازگشت"
           >
             <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -571,33 +526,28 @@ export const AIPage: React.FC<AIPageProps> = ({
         </div>
       )}
 
-      {/* نوار انتخاب رویکرد تدبر (Agent Selector) - تمیز و بدون شلوغی */}
-      <div className="shrink-0 bg-white/70 dark:bg-slate-900/50 border-b border-stone-200/60 dark:border-slate-800/60 px-3 sm:px-6 py-2 overflow-x-auto scrollbar-none">
-        <div className="max-w-3xl mx-auto flex items-center gap-1.5 sm:gap-2">
-          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0 ml-1">
-            رویکرد:
-          </span>
-          {AI_AGENTS.map((agent) => {
-            const isSelected = agent.id === selectedAgentId;
-            const Icon = agent.icon;
-            return (
-              <button
-                key={agent.id}
-                onClick={() => setSelectedAgentId(agent.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs transition-all shrink-0 ${
-                  isSelected
-                    ? 'bg-teal-600 text-white font-bold shadow-xs'
-                    : 'bg-stone-100 hover:bg-stone-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-                title={agent.description}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
-                <span>{agent.name}</span>
-              </button>
-            );
-          })}
+      {/* نوار نمایش سهمیه روزانه هوش مصنوعی */}
+      {aiQuota && (
+        <div className="shrink-0 bg-stone-100/80 dark:bg-slate-900/80 border-b border-stone-200/70 dark:border-slate-800/70 px-3 sm:px-6 py-2">
+          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+              <span className="font-bold text-slate-700 dark:text-slate-300">سهمیه روزانه تدبّر هوشمند:</span>
+              <span className="px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 font-bold text-[11px] truncate">
+                {toPersianDigits(aiQuota.remaining)} از {toPersianDigits(aiQuota.dailyLimit)} پرسش باقی‌مانده
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="w-20 sm:w-28 bg-stone-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.round((aiQuota.remaining / Math.max(1, aiQuota.dailyLimit)) * 100))}%` }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ناحیه اسکرول پیام‌های گفتگو - فول‌اسکرین در سراسر ارتفاع صفحه */}
       <main className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 space-y-4">
@@ -682,7 +632,7 @@ export const AIPage: React.FC<AIPageProps> = ({
               >
                 {!isUser && (
                   <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
-                    <ActiveIcon className="w-4 h-4" />
+                    <Bot className="w-4 h-4" />
                   </div>
                 )}
 
@@ -897,8 +847,8 @@ export const AIPage: React.FC<AIPageProps> = ({
         </div>
       </main>
 
-      {/* نوار ورودی چت پایین صفحه - کاملاً سازگار با کیبورد مجازی موبایل و ناچ */}
-      <footer className="shrink-0 border-t border-stone-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 10px)' }}>
+      {/* نوار ورودی چت پایین صفحه - متصل به بالای منوی ناوبری */}
+      <footer className="shrink-0 border-t border-stone-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3">
         <div className="max-w-3xl mx-auto space-y-2">
           {/* پرسش‌های پیشنهادی سریع در صورت کم بودن پیام‌ها */}
           {messages.length <= 3 && (
