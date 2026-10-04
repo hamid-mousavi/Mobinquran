@@ -1397,7 +1397,7 @@ export const MemorizationQuizStudio: React.FC<MemorizationQuizStudioProps> = ({
 
                   <div className="flex items-center gap-2.5 shrink-0">
                     <span className="font-bold text-slate-700 dark:text-slate-300">
-                      {toPersianDigits(item.score)} از {toPersianDigits(item.total)}
+                      {toPersianDigits(item.score)} درست از {toPersianDigits(item.total)} سوال
                     </span>
                     <span
                       className={`px-2 py-0.5 rounded-lg font-black text-xs ${

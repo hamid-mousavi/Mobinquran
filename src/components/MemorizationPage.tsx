@@ -18,6 +18,7 @@ import {
   Filter,
   Layers,
   ChevronDown,
+  Mic,
 } from 'lucide-react';
 import { Surah, Verse, AppSettings } from '../types';
 import { ReciterId, RECITER_NAMES, getAudioSourceUrl } from '../services/audioSources';
@@ -26,6 +27,7 @@ import { toPersianDigits } from '../utils/textNormalization';
 import { QuranicCard } from './QuranicOrnament';
 import { MemorizationQuizStudio } from './MemorizationQuizStudio';
 import { QuranStoriesExplorer } from './QuranStoriesExplorer';
+import { VoiceDiscussionStudio } from './VoiceDiscussionStudio';
 import { ReciterSelectorDropdown } from './ReciterSelectorDropdown';
 import { SurahSelectorModal } from './SurahSelectorModal';
 import {
@@ -58,7 +60,7 @@ interface MemorizationPageProps {
   onBack: () => void;
 }
 
-type MemorizationView = 'menu' | 'practice' | 'quiz' | 'stories' | 'progress';
+type MemorizationView = 'menu' | 'practice' | 'quiz' | 'discussion' | 'stories' | 'progress';
 
 const MEMO_RECITERS: { id: ReciterId; name: string }[] = (
   Object.keys(RECITER_NAMES) as ReciterId[]
@@ -301,7 +303,33 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             <ChevronLeft className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 group-hover:-translate-x-1 transition-transform" />
           </div>
 
-          {/* کارت ۳: داستان‌ها و حکمت‌های قرآنی */}
+          {/* کارت ۳: مباحثه صوتی هوشمند */}
+          <div
+            onClick={() => setCurrentView('discussion')}
+            className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-white to-white dark:from-emerald-950/20 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-emerald-500 transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 group"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 group-hover:scale-105 transition-transform shrink-0">
+                <Mic className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                    مباحثه صوتی هوشمند
+                  </h2>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
+                    جدید
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                  هم‌مباحثه صوتی آیه به آیه، اکمال و مسابقه
+                </p>
+              </div>
+            </div>
+            <ChevronLeft className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 group-hover:-translate-x-1 transition-transform" />
+          </div>
+
+          {/* کارت ۴: داستان‌ها و حکمت‌های قرآنی */}
           <div
             onClick={() => setCurrentView('stories')}
             className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-white to-white dark:from-purple-950/20 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-purple-500 transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 group"
@@ -431,7 +459,25 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   }
 
   // -------------------------------------------------------------
-  // ۳. صفحه اختصاصی داستان‌ها و حکمت‌های قرآنی
+  // ۳. صفحه اختصاصی مباحثه صوتی هوشمند (هم‌مباحثه حفظ)
+  // -------------------------------------------------------------
+  if (currentView === 'discussion') {
+    return (
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 pb-28 space-y-6" dir="rtl">
+        <VoiceDiscussionStudio
+          currentSurah={currentSurah}
+          surahs={surahs}
+          verses={verses}
+          darkMode={darkMode}
+          onSelectSurah={onSelectSurah}
+          onBack={() => setCurrentView('menu')}
+        />
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // ۴. صفحه اختصاصی داستان‌ها و حکمت‌های قرآنی
   // -------------------------------------------------------------
   if (currentView === 'stories') {
     return (

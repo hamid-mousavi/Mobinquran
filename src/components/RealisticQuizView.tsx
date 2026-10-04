@@ -117,6 +117,7 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
+  const scoreRef = useRef(0);
   const [streak, setStreak] = useState(0);
   const [maxStreak, setMaxStreak] = useState(0);
   const [userAnswers, setUserAnswers] = useState<
@@ -133,7 +134,8 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
 
   // وضعیت باز/بسته بودن متن طولانی آیه (فقط اگر آیه طولانی باشد)
   const [isQuestionExpanded, setIsQuestionExpanded] = useState(false);
-  const [expandedOptionIndex, setExpandedOptionIndex] = useState<number | null>(null);
+  // وضعیت باز/بسته بودن گزینه‌های چندخطی بر اساس ایندکس گزینه
+  const [expandedOptions, setExpandedOptions] = useState<Record<number, boolean>>({});
 
   // وضعیت‌های اختصاصی سبک چینشی (Ordering)
   const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
@@ -167,7 +169,7 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
     setSelectedOption(null);
     setIsAnswered(false);
     setIsQuestionExpanded(false);
-    setExpandedOptionIndex(null);
+    setExpandedOptions({});
     setSelectedTokens([]);
     setTypedAnswer('');
     setMatchedPairs({});
@@ -180,6 +182,7 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
 
   // ریست کامل وضعیت هنگام تغییر لیست سوالات یا فراخوانی تکرار
   const resetEntireQuiz = useCallback(() => {
+    scoreRef.current = 0;
     setCurrentIndex(0);
     setSelectedOption(null);
     setIsAnswered(false);
@@ -190,7 +193,7 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
     setIsFinished(false);
     setIsReviewMode(false);
     setIsQuestionExpanded(false);
-    setExpandedOptionIndex(null);
+    setExpandedOptions({});
     setSelectedTokens([]);
     setTypedAnswer('');
     setMatchedPairs({});
@@ -224,9 +227,9 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
     setIsFinished(true);
     quizAudio.playIncorrect();
     if (onFinish) {
-      onFinish(score, questions.length);
+      onFinish(scoreRef.current, questions.length);
     }
-  }, [score, questions.length, onFinish]);
+  }, [questions.length, onFinish]);
 
   // پاک‌سازی تایمر خودکار هنگام خروج
   useEffect(() => {
@@ -247,7 +250,8 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
     const isCorrect = index === currentQ.correctIndex;
 
     if (isCorrect) {
-      setScore((s) => s + 1);
+      scoreRef.current += 1;
+      setScore(scoreRef.current);
       const newStreak = streak + 1;
       setStreak(newStreak);
       if (newStreak > maxStreak) setMaxStreak(newStreak);
@@ -290,7 +294,8 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
       const isCorrect = userText.trim() === expectedText.trim();
 
       if (isCorrect) {
-        setScore((s) => s + 1);
+        scoreRef.current += 1;
+        setScore(scoreRef.current);
         setStreak((s) => s + 1);
         quizAudio.playCorrect();
       } else {
@@ -334,7 +339,8 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
     const isCorrect = cleanUser === cleanTarget || typedAnswer.trim() === (currentQ.targetWord || '');
 
     if (isCorrect) {
-      setScore((s) => s + 1);
+      scoreRef.current += 1;
+      setScore(scoreRef.current);
       setStreak((s) => s + 1);
       quizAudio.playCorrect();
     } else {
@@ -365,7 +371,7 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
     } else {
       setIsFinished(true);
       if (onFinish) {
-        onFinish(score + (selectedOption === currentQ?.correctIndex ? 1 : 0), questions.length);
+        onFinish(scoreRef.current, questions.length);
       }
     }
   };
@@ -504,20 +510,20 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
               </div>
             </div>
 
-            {/* کارت سوال و آیه شریفه */}
-            <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs space-y-3">
-              {/* صورت سوال */}
-              <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-relaxed text-right">
+            {/* کارت سوال و آیه شریفه با فونت بزرگ، بسیار خوانا و چشم‌نواز */}
+            <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs space-y-3.5">
+              {/* صورت سوال - فونت درشت‌تر، خوانا و تفکیک‌شده */}
+              <h3 className="font-['Vazirmatn'] text-base sm:text-lg md:text-xl font-extrabold text-slate-900 dark:text-slate-50 leading-relaxed sm:leading-loose text-right tracking-tight">
                 {currentQ.prompt}
               </h3>
 
               {/* باکس آیه شریفه با نقطه‌های قرمز به جای [جای خالی] */}
               {currentQ.contextText && (
-                <div className="relative p-3.5 sm:p-5 rounded-2xl bg-teal-50/40 dark:bg-slate-800/60 border border-teal-500/20 dark:border-slate-700">
+                <div className="relative p-4 sm:p-6 rounded-2xl bg-teal-50/50 dark:bg-slate-800/70 border border-teal-500/25 dark:border-slate-700">
                   {/* دکمه فلش کنار باکس فقط در صورتی که آیه واقعاً طولانی باشد ظاهر می‌شود */}
-                  <div className="flex items-center justify-between pb-2 border-b border-teal-500/15 dark:border-slate-700/60 mb-2">
-                    <span className="text-[11px] font-bold text-teal-800 dark:text-teal-300">
-                      فراز قرآنی آیه {toPersianDigits(currentQ.verseNumber)} سوره {currentQ.surahName}
+                  <div className="flex items-center justify-between pb-2 border-b border-teal-500/15 dark:border-slate-700/60 mb-2.5">
+                    <span className="text-xs font-bold text-teal-800 dark:text-teal-300">
+                      فراز قرآنی آیه {toPersianDigits(currentQ.verseNumber)} سوره مبارکه {currentQ.surahName}
                     </span>
 
                     {/* دکمه گسترش فقط برای آیات طولانی و بدون افشای پاسخ */}
@@ -525,7 +531,7 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setIsQuestionExpanded((prev) => !prev)}
-                        className="p-1 rounded-lg bg-white dark:bg-slate-800 border border-teal-500/30 text-teal-700 dark:text-teal-300 hover:bg-teal-50 transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold active:scale-95 shadow-2xs"
+                        className="px-2 py-1 rounded-xl bg-white dark:bg-slate-800 border border-teal-500/30 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-slate-700 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold active:scale-95 shadow-2xs"
                         title={isQuestionExpanded ? 'کوتاه‌سازی نمایش' : 'مشاهده کل فراز سوال'}
                       >
                         <span>{isQuestionExpanded ? 'خلاصه' : 'متن کامل سوال'}</span>
@@ -534,12 +540,12 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
                     )}
                   </div>
 
-                  {/* متن فراز آیه با نقطه‌های قرمز بدون لو رفتن جواب */}
+                  {/* متن فراز آیه با رسم‌الخط قرآنی درشت، واضح و نقطه‌های قرمز */}
                   <div
-                    className={`text-xl sm:text-2xl md:text-3xl font-normal leading-[2.3] text-teal-950 dark:text-teal-100 text-center transition-all ${
+                    className={`text-2xl sm:text-3xl md:text-4xl font-normal leading-[2.4] sm:leading-[2.6] text-teal-950 dark:text-teal-100 text-center transition-all ${
                       !isQuestionExpanded && isQuestionTextLong ? 'line-clamp-3' : ''
                     }`}
-                    style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
+                    style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', 'Scheherazade New', serif" }}
                     dir="rtl"
                   >
                     <bdi dir="rtl" className="unicode-isolate">
@@ -650,15 +656,16 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
               </form>
             ) : (
               /* سبک کلاسیک ۴ گزینه‌ای */
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {currentQ.options.map((optionRaw, optIndex) => {
                   const optionText = sanitizeOptionText(optionRaw);
                   const isSelected = selectedOption === optIndex;
                   const isCorrectOption = optIndex === currentQ.correctIndex;
                   const showCorrectHighlight = isAnswered && isCorrectOption;
                   const showWrongHighlight = isAnswered && isSelected && !isCorrectOption;
-                  const isExpanded = expandedOptionIndex === optIndex;
-                  const isLongOption = optionText.length > 55;
+                  const isExpanded = !!expandedOptions[optIndex];
+                  // اگر متن گزینه بیشتر از یک خط بود (بیشتر از ۳۵ کاراکتر یا شامل خط جدید)
+                  const isMultiLine = optionText.length > 35 || optionText.includes('\n');
 
                   let borderBgClass = 'border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-teal-500 hover:bg-stone-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-100';
 
@@ -673,13 +680,17 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
                   return (
                     <div
                       key={optIndex}
-                      onClick={() => handleSelectOption(optIndex)}
-                      className={`p-3 sm:p-3.5 rounded-2xl border transition-all flex items-start gap-2.5 cursor-pointer shadow-2xs ${borderBgClass} ${
-                        isAnswered ? 'cursor-default pointer-events-none' : 'active:scale-[0.99]'
+                      onClick={() => {
+                        if (!isAnswered) {
+                          handleSelectOption(optIndex);
+                        }
+                      }}
+                      className={`p-3 sm:p-4 rounded-2xl border transition-all flex items-start gap-3 shadow-2xs ${borderBgClass} ${
+                        isAnswered ? 'cursor-default' : 'cursor-pointer active:scale-[0.99]'
                       }`}
                     >
                       <div
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 transition-colors ${
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-xs sm:text-sm font-black shrink-0 transition-colors ${
                           showCorrectHighlight
                             ? 'bg-emerald-600 text-white shadow-xs'
                             : showWrongHighlight
@@ -688,9 +699,9 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
                         }`}
                       >
                         {showCorrectHighlight ? (
-                          <Check className="w-4 h-4" />
+                          <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                         ) : showWrongHighlight ? (
-                          <X className="w-4 h-4" />
+                          <X className="w-4 h-4 sm:w-5 sm:h-5" />
                         ) : (
                           OPTION_LABELS[optIndex] || toPersianDigits(optIndex + 1)
                         )}
@@ -698,8 +709,8 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
 
                       <div className="flex-1 min-w-0 pt-0.5">
                         <div
-                          className={`text-sm sm:text-base font-medium leading-relaxed text-right ${
-                            !isExpanded && isLongOption ? 'line-clamp-2' : ''
+                          className={`font-['Vazirmatn'] text-sm sm:text-base md:text-lg font-semibold leading-relaxed sm:leading-loose text-right ${
+                            !isExpanded && isMultiLine ? 'line-clamp-1 truncate' : ''
                           }`}
                           dir="rtl"
                         >
@@ -709,17 +720,26 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
                         </div>
                       </div>
 
-                      {isLongOption && (
+                      {/* فلش کنار جواب برای گزینه‌های بیش از یک خط */}
+                      {isMultiLine && (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setExpandedOptionIndex((prev) => (prev === optIndex ? null : optIndex));
+                            setExpandedOptions((prev) => ({
+                              ...prev,
+                              [optIndex]: !prev[optIndex],
+                            }));
                           }}
-                          className="p-1 rounded-lg bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-400 transition-all shrink-0 cursor-pointer"
-                          title={isExpanded ? 'بستن' : 'مشاهده کامل'}
+                          className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 transition-all shrink-0 cursor-pointer pointer-events-auto border border-stone-200/60 dark:border-slate-700/60 active:scale-95"
+                          title={isExpanded ? 'بستن متن کامل' : 'مشاهده متن کامل گزینه'}
+                          aria-label="نمایش متن کامل گزینه"
                         >
-                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          {isExpanded ? (
+                            <ChevronUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
                         </button>
                       )}
                     </div>
