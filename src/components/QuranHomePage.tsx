@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   BookOpen,
   FileText,
@@ -23,6 +23,8 @@ import {
   Trophy,
   X,
   ChevronRight,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { Surah, Verse, KhatmPlan, KhatmType } from '../types';
 import { AyahEndMarker } from './QuranReader';
@@ -334,6 +336,81 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
     window.dispatchEvent(new CustomEvent('mobin-khatm-updated'));
   };
 
+  // وضعیت و منطق جستجوی صوتی در صفحه نخست
+  const [isVoiceListening, setIsVoiceListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const voiceRecognitionRef = useRef<any>(null);
+
+  const handleToggleVoiceSearch = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      if (!SpeechRecognition) {
+        onOpenSearch();
+        return;
+      }
+
+      if (isVoiceListening) {
+        try {
+          voiceRecognitionRef.current?.stop();
+        } catch {}
+        setIsVoiceListening(false);
+        return;
+      }
+
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'fa-IR';
+
+        recognition.onstart = () => {
+          setIsVoiceListening(true);
+          setVoiceTranscript('');
+        };
+
+        recognition.onresult = (event: any) => {
+          let interim = '';
+          for (let i = 0; i < event.results.length; i++) {
+            interim += event.results[i][0].transcript;
+          }
+          setVoiceTranscript(interim);
+          if (event.results[0]?.isFinal) {
+            const finalQuery = event.results[0][0].transcript.trim();
+            setIsVoiceListening(false);
+            if (finalQuery) {
+              onOpenSearch(finalQuery);
+            }
+          }
+        };
+
+        recognition.onerror = () => {
+          setIsVoiceListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsVoiceListening(false);
+          setVoiceTranscript((prev) => {
+            const queryToSearch = prev.trim();
+            if (queryToSearch) {
+              setTimeout(() => onOpenSearch(queryToSearch), 50);
+            }
+            return '';
+          });
+        };
+
+        voiceRecognitionRef.current = recognition;
+        recognition.start();
+      } catch {
+        setIsVoiceListening(false);
+        onOpenSearch();
+      }
+    },
+    [isVoiceListening, onOpenSearch]
+  );
+
   return (
     <main
       id="quran-home-page"
@@ -383,24 +460,79 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
         </div>
       </header>
 
-      {/* نوار جستجوی اختصاصی و فوق‌العاده شکیل */}
+      {/* نوار جستجوی اختصاصی و فوق‌العاده شکیل با قابلیت جستجوی صوتی */}
       <section id="home-search-bar" className="space-y-2.5">
         <div
-          onClick={() => onOpenSearch()}
-          className="group relative flex items-center justify-between rounded-2xl border border-stone-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-3 sm:p-3.5 shadow-sm hover:border-teal-500/80 hover:shadow-md hover:shadow-teal-600/10 transition-all cursor-pointer backdrop-blur-md"
+          onClick={() => {
+            if (isVoiceListening) {
+              try {
+                voiceRecognitionRef.current?.stop();
+              } catch {}
+              setIsVoiceListening(false);
+            }
+            onOpenSearch();
+          }}
+          className={`group relative flex items-center justify-between rounded-2xl border transition-all cursor-pointer backdrop-blur-md p-2.5 sm:p-3 shadow-sm ${
+            isVoiceListening
+              ? 'border-teal-500 bg-teal-500/10 dark:bg-teal-950/30 ring-2 ring-teal-500/30 shadow-md shadow-teal-500/10'
+              : 'border-stone-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 hover:border-teal-500/80 hover:shadow-md hover:shadow-teal-600/10'
+          }`}
         >
-          <div className="flex items-center gap-3 text-slate-400 dark:text-slate-400 min-w-0 flex-1 px-1">
-            <div className="w-8 h-8 rounded-xl bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 transition-transform group-hover:scale-110">
+          <div className="flex items-center gap-2.5 sm:gap-3 text-slate-400 dark:text-slate-400 min-w-0 flex-1 px-1">
+            <div
+              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
+                isVoiceListening
+                  ? 'bg-rose-500 text-white animate-pulse'
+                  : 'bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 group-hover:scale-110'
+              }`}
+            >
               <Search className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
             </div>
-            <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 truncate">
-              جستجو در متن آیات، ترجمه‌ها، سوره‌ها و موضوعات قرآن…
-            </span>
+            {isVoiceListening ? (
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="text-xs sm:text-sm font-bold text-teal-700 dark:text-teal-300 animate-pulse truncate">
+                  {voiceTranscript
+                    ? `در حال شنیدن: "${voiceTranscript}"`
+                    : 'در حال شنیدن صدای شما... (مثلاً بگویید: سوره یس)'}
+                </span>
+              </div>
+            ) : (
+              <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 truncate">
+                جستجو در متن آیات، ترجمه‌ها، سوره‌ها و موضوعات قرآن…
+              </span>
+            )}
           </div>
 
-          <div className="hidden xs:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100 dark:bg-slate-800/80 border border-stone-200/60 dark:border-slate-700/60 text-[11px] font-semibold text-slate-500 dark:text-slate-400 shrink-0">
-            <span>جستجو</span>
-            <Search className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* دکمه جستجوی صوتی */}
+            <button
+              type="button"
+              onClick={handleToggleVoiceSearch}
+              title={isVoiceListening ? 'توقف شنیدن صدا' : 'جستجوی صوتی قرآن (فارسی / عربی)'}
+              aria-label="جستجوی صوتی"
+              className={`p-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer text-xs font-bold ${
+                isVoiceListening
+                  ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30 animate-pulse ring-2 ring-rose-300'
+                  : 'bg-stone-100 hover:bg-teal-50 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 border border-stone-200/60 dark:border-slate-700/60 active:scale-95'
+              }`}
+            >
+              {isVoiceListening ? (
+                <>
+                  <MicOff className="w-4 h-4" />
+                  <span className="hidden xs:inline text-[11px]">پایان</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  <span className="hidden xs:inline text-[11px] text-slate-600 dark:text-slate-300">صوتی</span>
+                </>
+              )}
+            </button>
+
+            <div className="hidden xs:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800/80 border border-stone-200/60 dark:border-slate-700/60 text-[11px] font-semibold text-slate-500 dark:text-slate-400 shrink-0">
+              <span>جستجو</span>
+              <Search className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+            </div>
           </div>
         </div>
 

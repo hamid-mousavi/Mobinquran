@@ -143,7 +143,7 @@ const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanelProps> 
 
   return (
     <div
-      className={`p-4 sm:p-5 rounded-3xl border transition-all space-y-3.5 ${
+      className={`p-4 sm:p-5 rounded-3xl border transition-all space-y-3.5 max-w-full overflow-hidden break-words ${
         hasTranscribed
           ? isApproved
             ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
@@ -552,6 +552,8 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any>(null);
+  const isExplicitlyRecordingRef = useRef<boolean>(false);
+  const accumulatedTranscriptRef = useRef<string>('');
 
   // همگام‌سازی محدوده آیات و صفحات هنگام تغییر سوره
   useEffect(() => {
@@ -721,7 +723,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     return evaluateRecitation(currentTargetRecitationText, transcribedText, strictnessLevel);
   }, [currentTargetRecitationText, transcribedText, strictnessLevel]);
 
-  // کنترل Web Speech API برای تشخیص صدای کاربر در مرورگر
+  // کنترل Web Speech API برای تشخیص صدای کاربر در مرورگر با قابلیت ادامه‌دار و حفظ متن در مکث‌ها
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -730,22 +732,49 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
+      recognition.maxAlternatives = 3;
       recognition.lang = speechDialect; // لهجه عربی و ترتیل قرآنی
 
       recognition.onresult = (event: any) => {
-        let transcript = '';
+        let currentSessionTranscript = '';
         for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript + ' ';
+          const res = event.results[i];
+          if (res && res[0]) {
+            currentSessionTranscript += res[0].transcript + ' ';
+          }
         }
-        setTranscribedText(transcript.trim());
+        const fullTranscript = (
+          accumulatedTranscriptRef.current + ' ' + currentSessionTranscript
+        )
+          .replace(/\s+/g, ' ')
+          .trim();
+        setTranscribedText(fullTranscript);
       };
 
-      recognition.onerror = () => {
-        setIsRecording(false);
+      recognition.onerror = (event: any) => {
+        if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
+          isExplicitlyRecordingRef.current = false;
+          setIsRecording(false);
+        }
       };
 
       recognition.onend = () => {
-        setIsRecording(false);
+        // اگر کاربر عمداً دکمه توقف را نزده، بلکه به خاطر مکث بین کلمات یا نفس کشیدن بوده:
+        if (isExplicitlyRecordingRef.current) {
+          setTranscribedText((prev) => {
+            accumulatedTranscriptRef.current = prev;
+            return prev;
+          });
+          setTimeout(() => {
+            if (isExplicitlyRecordingRef.current && recognitionRef.current) {
+              try {
+                recognitionRef.current.start();
+              } catch {}
+            }
+          }, 60);
+        } else {
+          setIsRecording(false);
+        }
       };
 
       recognitionRef.current = recognition;
@@ -762,14 +791,16 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
 
   // تلاش مجدد و پاک کردن متن ضبط شده
   const handleRetryRecording = () => {
+    isExplicitlyRecordingRef.current = false;
+    accumulatedTranscriptRef.current = '';
     setTranscribedText('');
     hasTriggeredPassAudioRef.current = false;
-    if (isRecording && recognitionRef.current) {
+    if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {}
-      setIsRecording(false);
     }
+    setIsRecording(false);
   };
 
   // شروع یا توقف ضبط صوت
@@ -780,11 +811,14 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
     }
 
     if (isRecording) {
+      isExplicitlyRecordingRef.current = false;
       try {
         recognitionRef.current.stop();
       } catch {}
       setIsRecording(false);
     } else {
+      isExplicitlyRecordingRef.current = true;
+      accumulatedTranscriptRef.current = '';
       setTranscribedText('');
       try {
         recognitionRef.current.start();
@@ -1144,12 +1178,14 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
   // تایید مقطع کاربر و رفتن به مقطع بعد در روش ۵: مقطع به مقطع
   const advanceToNextSection = (wasMastered = true) => {
     stopAudio();
-    if (isRecording && recognitionRef.current) {
+    isExplicitlyRecordingRef.current = false;
+    accumulatedTranscriptRef.current = '';
+    if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {}
-      setIsRecording(false);
     }
+    setIsRecording(false);
 
     if (wasMastered) {
       setMasteredCount((prev) => prev + 1);
@@ -1176,12 +1212,14 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
   // تایید صفحه کاربر و رفتن به صفحه بعد در روش صفحه به صفحه
   const advanceToNextPage = (wasMastered = true) => {
     stopAudio();
-    if (isRecording && recognitionRef.current) {
+    isExplicitlyRecordingRef.current = false;
+    accumulatedTranscriptRef.current = '';
+    if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {}
-      setIsRecording(false);
     }
+    setIsRecording(false);
 
     if (wasMastered) {
       setMasteredCount((prev) => prev + 1);
@@ -1207,12 +1245,14 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
 
   // تایید آیه کاربر و رفتن به آیه بعد
   const handleCompleteUserTurn = (wasMastered = true) => {
-    if (isRecording && recognitionRef.current) {
+    isExplicitlyRecordingRef.current = false;
+    accumulatedTranscriptRef.current = '';
+    if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {}
-      setIsRecording(false);
     }
+    setIsRecording(false);
 
     if (wasMastered) {
       setMasteredCount((prev) => prev + 1);
@@ -1227,12 +1267,14 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
   const handleCompetitiveSuccess = () => {
     stopAudio();
     setIsTimerRunning(false);
-    if (isRecording && recognitionRef.current) {
+    isExplicitlyRecordingRef.current = false;
+    accumulatedTranscriptRef.current = '';
+    if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {}
-      setIsRecording(false);
     }
+    setIsRecording(false);
 
     const speedBonus = timeLeft * 5;
     const streakBonus = Math.min(competitiveStreak, 5) * 20;
@@ -1279,11 +1321,14 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
   // خروج از جلسه
   const handleExitSession = () => {
     stopAudio();
-    if (isRecording && recognitionRef.current) {
+    isExplicitlyRecordingRef.current = false;
+    accumulatedTranscriptRef.current = '';
+    if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {}
     }
+    setIsRecording(false);
     setIsSessionActive(false);
     setIsSessionFinished(false);
   };
@@ -1312,9 +1357,9 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
   }, [sectionFirstVerse]);
 
   return (
-    <div className="space-y-4 select-none max-w-2xl mx-auto w-full" dir="rtl">
+    <div className="space-y-4 select-none max-w-2xl mx-auto w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
       {/* سربرگ خلوت و تب‌های اصلی */}
-      <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-200 dark:border-slate-800">
+      <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-200 dark:border-slate-800 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
@@ -1636,7 +1681,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                 <label className="text-xs text-slate-500 dark:text-slate-400 block font-bold">
                   میزان فراز ابتدایی سیستم (درجه سختی اکمال):
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setCompletionSplit('half')}
@@ -1647,7 +1692,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                     }`}
                   >
                     <span className="block font-black">نیمی از آیه</span>
-                    <span className="text-[10px] opacity-75 font-normal block mt-0.5">متعادل</span>
+                    <span className="text-[10px] opacity-75 font-normal block mt-0.5 truncate">متعادل</span>
                   </button>
 
                   <button
@@ -1660,7 +1705,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                     }`}
                   >
                     <span className="block font-black">۳ کلمه اول</span>
-                    <span className="text-[10px] opacity-75 font-normal block mt-0.5">چالش بالا</span>
+                    <span className="text-[10px] opacity-75 font-normal block mt-0.5 truncate">چالش بالا</span>
                   </button>
 
                   <button
@@ -1673,7 +1718,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                     }`}
                   >
                     <span className="block font-black">دو سوم آیه</span>
-                    <span className="text-[10px] opacity-75 font-normal block mt-0.5">مرور پایان آیات</span>
+                    <span className="text-[10px] opacity-75 font-normal block mt-0.5 truncate">مرور پایان آیات</span>
                   </button>
                 </div>
               </div>
@@ -1684,7 +1729,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1 font-bold">
                     زمان پاسخگویی به هر سوال (ثانیه):
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
                     {[15, 20, 30].map((sec) => (
                       <button
                         key={sec}
@@ -1697,7 +1742,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                         }`}
                       >
                         <span className="block font-black">{toPersianDigits(sec)} ثانیه</span>
-                        <span className="text-[10px] opacity-75 font-normal block mt-0.5">
+                        <span className="text-[10px] opacity-75 font-normal block mt-0.5 truncate">
                           {sec === 15 ? 'سرعتی و هیجانی' : sec === 20 ? 'استاندارد مسابقات' : 'فرصت بیشتر'}
                         </span>
                       </button>
@@ -1746,7 +1791,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1 font-bold">
                     حجم هر مقطع محتوایی (تعداد آیات در هر فراز):
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
                     {[3, 5, 7].map((size) => (
                       <button
                         key={size}
@@ -1759,7 +1804,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                         }`}
                       >
                         <span className="block font-black">{toPersianDigits(size)} آیه</span>
-                        <span className="text-[10px] opacity-75 font-normal block mt-0.5">
+                        <span className="text-[10px] opacity-75 font-normal block mt-0.5 truncate">
                           {size === 3 ? 'فرازهای کوتاه' : size === 5 ? 'سیاق استاندارد' : 'مقطع طولانی'}
                         </span>
                       </button>
@@ -1891,7 +1936,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setStrictnessLevel('easy')}
@@ -1902,7 +1947,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   }`}
                 >
                   <span className="block font-black">آسان</span>
-                  <span className="text-[10px] opacity-75 font-normal block mt-0.5">اغماض در لهجه و تجوید</span>
+                  <span className="text-[10px] opacity-75 font-normal block mt-0.5 truncate">اغماض در لهجه و تجوید</span>
                 </button>
 
                 <button
@@ -1915,7 +1960,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   }`}
                 >
                   <span className="block font-black">استاندارد</span>
-                  <span className="text-[10px] opacity-75 font-normal block mt-0.5">تطابق دقیق کلمات</span>
+                  <span className="text-[10px] opacity-75 font-normal block mt-0.5 truncate">تطابق دقیق کلمات</span>
                 </button>
 
                 <button
@@ -1928,7 +1973,7 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                   }`}
                 >
                   <span className="block font-black">مسابقه‌ای</span>
-                  <span className="text-[10px] opacity-75 font-normal block mt-0.5">بدون کمترین کلمه جاافتاده</span>
+                  <span className="text-[10px] opacity-75 font-normal block mt-0.5 truncate">بدون کلمه جاافتاده</span>
                 </button>
               </div>
 
@@ -1955,11 +2000,11 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
               </div>
 
               {/* انتخاب لهجه مدل تشخیص گفتار مرورگر */}
-              <div className="pt-2 border-t border-stone-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap text-xs">
+              <div className="pt-2 border-t border-stone-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                 <span className="font-bold text-slate-700 dark:text-slate-300">
                   لهجه مدل شنیداری مرورگر:
                 </span>
-                <div className="flex items-center gap-1.5 font-bold">
+                <div className="flex items-center gap-1.5 font-bold flex-wrap">
                   <button
                     type="button"
                     onClick={() => setSpeechDialect('ar-EG')}
@@ -2013,29 +2058,29 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
         /* ============================================================ */
         <div className="space-y-4 animate-fadeIn">
             {/* نوار وضعیت بالای جلسه صفحه به صفحه */}
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
               <span className="text-slate-600 dark:text-slate-400">
-                صفحه {toPersianDigits(currentPageIndex + 1)} از {toPersianDigits(sessionPages.length)} (صفحه {toPersianDigits(currentPageNumber)} مصحف)
+                صفحه {toPersianDigits(currentPageIndex + 1)} از {toPersianDigits(sessionPages.length)} (ص {toPersianDigits(currentPageNumber)})
               </span>
 
               {/* نشانگر نوبت جاری */}
               <div
-                className={`px-3 py-1 rounded-full flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all text-[11px] sm:text-xs ${
                   isSystemPageTurn
                     ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30'
                     : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 animate-pulse'
                 }`}
               >
-                {isSystemPageTurn ? <Bot className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+                {isSystemPageTurn ? <Bot className="w-3.5 h-3.5 shrink-0" /> : <User className="w-3.5 h-3.5 shrink-0" />}
                 <span>
-                  {isSystemPageTurn ? 'نوبت تلاوت سیستم (ترتیل صفحه)' : 'نوبت شما (تلاوت صفحه از حفظ)'}
+                  {isSystemPageTurn ? 'نوبت سیستم (ترتیل)' : 'نوبت شما (تلاوت صفحه)'}
                 </span>
               </div>
 
               <button
                 type="button"
                 onClick={handleExitSession}
-                className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer"
+                className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer text-xs"
                 title="پایان مباحثه"
               >
                 خروج
@@ -2303,21 +2348,21 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
           /* ============================================================ */
           <div className="space-y-4 animate-fadeIn">
             {/* نوار وضعیت بالای جلسه مباحثه تکمیلی */}
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
               <span className="text-slate-600 dark:text-slate-400">
                 آیه {toPersianDigits(currentVerseIndex + 1)} از {toPersianDigits(sessionVerses.length)}
               </span>
 
               {/* نشانگر روش تکمیلی */}
-              <div className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 animate-pulse text-emerald-600 dark:text-emerald-400" />
-                <span>مباحثه تکمیلی (اکمال فراز)</span>
+              <div className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 text-[11px] sm:text-xs">
+                <Sparkles className="w-3.5 h-3.5 animate-pulse text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>مباحثه تکمیلی (اکمال)</span>
               </div>
 
               <button
                 type="button"
                 onClick={handleExitSession}
-                className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer"
+                className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer text-xs"
                 title="پایان مباحثه"
               >
                 خروج
@@ -2502,14 +2547,14 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
           /* ============================================================ */
           <div className="space-y-4 animate-fadeIn">
             {/* نوار وضعیت بالای جلسه مسابقه‌ای */}
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
               <span className="text-slate-600 dark:text-slate-400">
                 سوال {toPersianDigits(currentVerseIndex + 1)} از {toPersianDigits(sessionVerses.length)}
               </span>
 
               {/* نشانگر تایمر معکوس */}
               <div
-                className={`px-3 py-1 rounded-full flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all text-[11px] sm:text-xs ${
                   timeLeft <= 5
                     ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40 animate-pulse'
                     : timeLeft <= 10
@@ -2517,26 +2562,26 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                     : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
                 }`}
               >
-                <Clock className="w-3.5 h-3.5" />
+                <Clock className="w-3.5 h-3.5 shrink-0" />
                 <span>زمان: {toPersianDigits(timeLeft)} ثانیه</span>
               </div>
 
               {/* امتیاز و زنجیره */}
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 flex items-center gap-1">
-                  <Award className="w-3.5 h-3.5 text-amber-500" />
-                  <span>{toPersianDigits(competitiveScore)} امتیاز</span>
+                <span className="px-2 py-0.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 flex items-center gap-1 text-[11px]">
+                  <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>{toPersianDigits(competitiveScore)}</span>
                 </span>
                 {competitiveStreak > 0 && (
-                  <span className="px-2 py-1 rounded-xl bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30 flex items-center gap-1 animate-pulse">
-                    <Zap className="w-3.5 h-3.5 text-orange-500" />
-                    <span>🔥 {toPersianDigits(competitiveStreak)}</span>
+                  <span className="px-1.5 py-0.5 rounded-xl bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30 flex items-center gap-0.5 animate-pulse text-[11px]">
+                    <Zap className="w-3 h-3 text-orange-500 shrink-0" />
+                    <span>{toPersianDigits(competitiveStreak)}</span>
                   </span>
                 )}
                 <button
                   type="button"
                   onClick={handleExitSession}
-                  className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer mr-1"
+                  className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer text-xs mr-1"
                   title="پایان مسابقه"
                 >
                   خروج
@@ -2774,31 +2819,31 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
           /* ============================================================ */
           <div className="space-y-4 animate-fadeIn">
             {/* نوار وضعیت بالای جلسه مقطع به مقطع */}
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
               <span className="text-slate-600 dark:text-slate-400">
                 مقطع {toPersianDigits(currentSectionIndex + 1)} از {toPersianDigits(thematicSections.length)}
               </span>
 
               {/* نشانگر نوبت جاری */}
               <div
-                className={`px-3 py-1 rounded-full flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all text-[11px] sm:text-xs ${
                   isSystemSectionTurn
                     ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30'
                     : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 animate-pulse'
                 }`}
               >
-                {isSystemSectionTurn ? <Bot className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+                {isSystemSectionTurn ? <Bot className="w-3.5 h-3.5 shrink-0" /> : <User className="w-3.5 h-3.5 shrink-0" />}
                 <span>
                   {isSystemSectionTurn
-                    ? 'نوبت تلاوت سیستم (ترتیل پیوسته مقطع)'
-                    : 'نوبت شما (تلاوت پیوسته مقطع از حفظ)'}
+                    ? 'نوبت سیستم (ترتیل مقطع)'
+                    : 'نوبت شما (تلاوت مقطع)'}
                 </span>
               </div>
 
               <button
                 type="button"
                 onClick={handleExitSession}
-                className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer"
+                className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer text-xs"
                 title="پایان مباحثه"
               >
                 خروج
@@ -3099,27 +3144,27 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
           /* ============================================================ */
           <div className="space-y-4 animate-fadeIn">
             {/* نوار وضعیت بالای جلسه */}
-            <div className="flex items-center justify-between px-3 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 shadow-2xs text-xs font-bold">
               <span className="text-slate-600 dark:text-slate-400">
                 آیه {toPersianDigits(currentVerseIndex + 1)} از {toPersianDigits(sessionVerses.length)}
               </span>
 
               {/* نشانگر نوبت جاری */}
               <div
-                className={`px-3 py-1 rounded-full flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all text-[11px] sm:text-xs ${
                   isSystemTurn
                     ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30'
                     : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 animate-pulse'
                 }`}
               >
-                {isSystemTurn ? <Bot className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
-                <span>{isSystemTurn ? 'نوبت تلاوت سیستم (هم‌مباحثه)' : 'نوبت تلاوت شماست'}</span>
+                {isSystemTurn ? <Bot className="w-3.5 h-3.5 shrink-0" /> : <User className="w-3.5 h-3.5 shrink-0" />}
+                <span>{isSystemTurn ? 'نوبت سیستم' : 'نوبت شما'}</span>
               </div>
 
               <button
                 type="button"
                 onClick={handleExitSession}
-                className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer"
+                className="text-stone-400 hover:text-rose-500 transition-colors cursor-pointer text-xs"
                 title="پایان مباحثه"
               >
                 خروج

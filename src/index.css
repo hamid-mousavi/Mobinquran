@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --breakpoint-xs: 380px;
+}
+
 /* استفاده از کلاس .dark برای کنترل کامل حالت شب (به‌جای تنظیمات سیستم‌عامل) */
 @custom-variant dark (&:is(.dark *));
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, X, BookOpen, Loader2, ChevronLeft, Sparkles, Filter, Zap } from 'lucide-react';
+import { Search, X, BookOpen, Loader2, ChevronLeft, Sparkles, Filter, Zap, Mic, MicOff } from 'lucide-react';
 import { Surah, SearchResultItem } from '../types';
 import { QuranService } from '../services/quranService';
 import { toPersianDigits, parseJuzQuery, parsePageQuery } from '../utils/textNormalization';
@@ -162,6 +162,76 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     }
   };
 
+  // جستجوی صوتی در داخل مدال جستجو
+  const [isVoiceListening, setIsVoiceListening] = useState(false);
+  const voiceRecognitionRef = useRef<any>(null);
+
+  const handleToggleVoiceSearch = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    if (isVoiceListening) {
+      try {
+        voiceRecognitionRef.current?.stop();
+      } catch {}
+      setIsVoiceListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'fa-IR';
+
+      recognition.onstart = () => {
+        setIsVoiceListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        for (let i = 0; i < event.results.length; i++) {
+          interim += event.results[i][0].transcript;
+        }
+        setQuery(interim);
+        if (event.results[0]?.isFinal) {
+          const finalQuery = event.results[0][0].transcript.trim();
+          setIsVoiceListening(false);
+          if (finalQuery) {
+            handleQueryChange(finalQuery);
+            executeSearch(finalQuery, scope, selectedSurahFilter, selectedJuzFilter);
+          }
+        }
+      };
+
+      recognition.onerror = () => {
+        setIsVoiceListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsVoiceListening(false);
+      };
+
+      voiceRecognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setIsVoiceListening(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen && isVoiceListening) {
+      try {
+        voiceRecognitionRef.current?.stop();
+      } catch {}
+      setIsVoiceListening(false);
+    }
+  }, [isOpen, isVoiceListening]);
+
   const highlightMatch = (text: string, keyword: string) => {
     if (!text || !keyword) return text;
     // حذف علائم اضافی از کلمه جستجو برای ساخت ریجکس امن
@@ -295,9 +365,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder="جستجوی کلمه، شماره صفحه (مثلاً ۴۵) یا جزء (مثلاً جزء ۳۰)..."
-              className={`w-full pr-11 pl-20 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-medium border transition-all outline-none ${
-                darkMode
+              placeholder={isVoiceListening ? 'در حال شنیدن صدای شما...' : 'جستجوی کلمه، شماره صفحه (مثلاً ۴۵) یا جزء (مثلاً جزء ۳۰)...'}
+              className={`w-full pr-11 pl-24 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-medium border transition-all outline-none ${
+                isVoiceListening
+                  ? 'border-teal-500 bg-teal-500/10 dark:bg-teal-950/20 ring-2 ring-teal-500/20'
+                  : darkMode
                   ? 'bg-slate-800/80 border-slate-700 text-slate-100 focus:border-teal-500 focus:bg-slate-800'
                   : 'bg-white border-stone-300 text-slate-900 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/10'
               }`}
@@ -305,6 +377,20 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute right-3.5 top-3 sm:top-3.5 text-slate-400" />
 
             <div className="absolute left-2 top-1.5 sm:top-2 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleToggleVoiceSearch}
+                className={`p-1.5 rounded-xl transition-all cursor-pointer ${
+                  isVoiceListening
+                    ? 'bg-rose-500 text-white animate-pulse shadow-xs ring-2 ring-rose-300'
+                    : 'text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-500/10'
+                }`}
+                title={isVoiceListening ? 'توقف ضبط صدا' : 'جستجوی صوتی (بگویید نام سوره، آیه یا کلمه)'}
+                aria-label="جستجوی صوتی"
+              >
+                {isVoiceListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+
               {query && (
                 <button
                   onClick={() => {
@@ -313,7 +399,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     setTotalCount(0);
                     setHasSearched(false);
                   }}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                   title="پاک کردن"
                 >
                   <X className="w-4 h-4" />

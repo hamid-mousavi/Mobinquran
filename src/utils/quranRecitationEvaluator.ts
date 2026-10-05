@@ -1,7 +1,8 @@
 /**
  * موتور تخصصی ارزیابی هوشمند صحت تلاوت و حفظ قرآن کریم
- * با پشتیبانی از تطبیق فراگیر (Global Sequence Alignment)، همسان‌سازی تجویدی و آوایی (Phonetic Normalization)
- * و رفع خطاهای رایج تشخیص صوت مرورگر در زبان و تلاوت قرآنی
+ * با پشتیبانی از تطبیق فراگیر (Global Sequence Alignment & LCS)،
+ * همسان‌سازی تجویدی و آوایی (Phonetic & Tajweed Normalization)،
+ * تطبیق ادغام‌ها، مدها، الف خنجری، رسم‌الخط عثمانی و رفع قطعی خطاهای Web Speech API مرورگر.
  */
 
 export type StrictnessLevel = 'easy' | 'normal' | 'strict';
@@ -9,7 +10,7 @@ export type StrictnessLevel = 'easy' | 'normal' | 'strict';
 const STRICTNESS_THRESHOLDS: Record<StrictnessLevel, number> = {
   easy: 60,    // اغماض در تلفظ‌های ریز مرورگر و ادغام‌های تجویدی
   normal: 75,  // استاندارد جلسات حفظ
-  strict: 90,  // مسابقه‌ای و سخت‌گیرانه
+  strict: 88,  // مسابقه‌ای و سخت‌گیرانه
 };
 
 /**
@@ -28,6 +29,59 @@ const TATWEEL_AND_SPECIALS_REGEX = /[\u0640\u200B-\u200F\uFEFF\u202A-\u202E\u06D
 const PUNCTUATION_REGEX = /[«»""''،؛؟?.,:!()\[\]{}ـ\-_/\\+*=&^%$#@~`><|0-9۰-۹]/g;
 
 /**
+ * جدول نگاشت کلمات خاص رسم‌الخط عثمانی به نگارش مرسوم گفتاری
+ */
+const QURANIC_RASM_EQUIVALENTS: Record<string, string> = {
+  'الرحمن': 'الرحمان',
+  'الرحمٰن': 'الرحمان',
+  'الصلوة': 'الصلاه',
+  'الصلاة': 'الصلاه',
+  'الزکوة': 'الزکاه',
+  'الزكاة': 'الزکاه',
+  'الحیوة': 'الحیاه',
+  'الحياة': 'الحیاه',
+  'الربوا': 'الربا',
+  'الربا': 'الربا',
+  'اولئک': 'اولایک',
+  'اولائک': 'اولایک',
+  'أولئك': 'اولایک',
+  'ابرهیم': 'ابراهیم',
+  'إبراهيم': 'ابراهیم',
+  'اسمعیل': 'اسماعیل',
+  'إسماعيل': 'اسماعیل',
+  'اسحق': 'اسحاق',
+  'إسحاق': 'اسحاق',
+  'هرون': 'هارون',
+  'هارون': 'هارون',
+  'سلیمن': 'سلیمان',
+  'سليمان': 'سلیمان',
+  'داود': 'داوود',
+  'داوود': 'داوود',
+  'هاذا': 'هذا',
+  'هاذه': 'هذه',
+  'ذالک': 'ذلک',
+  'ذٰلك': 'ذلک',
+  'لاکن': 'لکن',
+  'طاها': 'طه',
+  'یاسین': 'یس',
+  'اسرائیل': 'اسرايل',
+  'اسراءیل': 'اسرايل',
+  'إسرائيل': 'اسرايل',
+  'السموات': 'السماوات',
+  'السمٰوٰت': 'السماوات',
+  'القیمة': 'القیامه',
+  'القيامة': 'القیامه',
+  'العلمین': 'العالمین',
+  'العٰلمین': 'العالمین',
+  'العالمين': 'العالمین',
+  'امنوا': 'امنو',
+  'ءامنوا': 'امنو',
+  'قالوا': 'قالو',
+  'کانوا': 'کانو',
+  'عملوا': 'عملو',
+};
+
+/**
  * نرمال‌سازی متون برای مقایسه گفتاری پایه:
  * ۱. حذف کامل اعراب و علائم تجویدی و وقفی
  * ۲. یکسان‌سازی همزه‌ها (أ، إ، آ، ٱ، ء -> ا)
@@ -39,7 +93,7 @@ const PUNCTUATION_REGEX = /[«»""''،؛؟?.,:!()\[\]{}ـ\-_/\\+*=&^%$#@~`><|0-9
  */
 export function normalizeForSpeechMatch(text: string): string {
   if (!text) return '';
-  return text
+  let cleaned = text
     .replace(DIACRITICS_AND_MARKS_REGEX, '')
     .replace(TATWEEL_AND_SPECIALS_REGEX, '')
     .replace(PUNCTUATION_REGEX, ' ')
@@ -53,6 +107,13 @@ export function normalizeForSpeechMatch(text: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+
+  // تبدیل رسم‌الخط عثمانی
+  if (QURANIC_RASM_EQUIVALENTS[cleaned]) {
+    cleaned = QURANIC_RASM_EQUIVALENTS[cleaned];
+  }
+
+  return cleaned;
 }
 
 /**
@@ -63,6 +124,7 @@ export function normalizeForSpeechMatch(text: string): string {
  * ذ -> ز
  * ث -> س
  * غ -> ق
+ * ح -> ه (در صورت ضعف میکروفون)
  */
 export function normalizePhoneticEquivalents(word: string): string {
   if (!word) return '';
@@ -72,15 +134,50 @@ export function normalizePhoneticEquivalents(word: string): string {
     .replace(/[ضظ]/g, 'ز')
     .replace(/ذ/g, 'ز')
     .replace(/ث/g, 'س')
-    .replace(/غ/g, 'ق');
+    .replace(/غ/g, 'ق')
+    .replace(/ح/g, 'ه');
+}
+
+/**
+ * بازکردن یا تطبیق ادغام‌های معروف تجویدی (نون ساکنه و تنوین در یرملون):
+ * مَن یَقولُ -> مَیَّقول (ASR: میقول)
+ * مِن رَّبّهم -> مِرَّبهم (ASR: مربهم)
+ * مِن وَالٍ -> مِوَّال (ASR: موال)
+ * عَن مَّا -> عَمَّا (عما)
+ * أَن لَّا -> أَلَّا (الا)
+ */
+export function getTajweedIdghamEquivalents(word1: string, word2?: string): string[] {
+  const list: string[] = [];
+  if (!word2) return list;
+
+  const w1 = normalizeForSpeechMatch(word1);
+  const w2 = normalizeForSpeechMatch(word2);
+
+  // ادغام ان لا -> الا
+  if (w1 === 'ان' && w2 === 'لا') list.push('الا');
+  // ادغام عن ما -> عما
+  if (w1 === 'عن' && w2 === 'ما') list.push('عما');
+  // ادغام ان ما -> انما
+  if (w1 === 'ان' && w2 === 'ما') list.push('انما');
+  // ادغام من ما -> مما
+  if (w1 === 'من' && w2 === 'ما') list.push('مما');
+
+  // نون ساکنه در حروف یرملون: من + یقول -> میقول / من + ربهم -> مربهم
+  if (w1 === 'من' && w2.length > 1) {
+    if (w2.startsWith('ی')) list.push('م' + w2);
+    if (w2.startsWith('ر')) list.push('م' + w2);
+    if (w2.startsWith('و')) list.push('م' + w2);
+    if (w2.startsWith('م')) list.push('م' + w2);
+  }
+
+  return list;
 }
 
 /**
  * حذف پیشوندهای چسبان عربی (حروف عطف، جر و الف و لام)
- * برای مواردی که مرورگر پیشوند را نشنیده یا اضافه نوشته است
- * مثل: والشمس -> الشمس / شمس
+ * و پسوندهای ضمیری برای مقایسه ریشه واژه
  */
-export function stripArabicPrefixes(word: string): string[] {
+export function stripArabicAffixes(word: string): string[] {
   const forms: string[] = [word];
   let current = word;
 
@@ -93,12 +190,22 @@ export function stripArabicPrefixes(word: string): string[] {
 
   // حذف پیشوند ال
   if (current.startsWith('ال') && current.length > 3) {
-    forms.push(current.slice(2));
+    const withoutAl = current.slice(2);
+    forms.push(withoutAl);
+    current = withoutAl;
   }
 
-  // حذف پیشوند ب یا ل
-  if ((word.startsWith('ب') || word.startsWith('ل')) && word.length > 2) {
+  // حذف پیشوند ب یا ل یا ک
+  if ((word.startsWith('ب') || word.startsWith('ل') || word.startsWith('ک')) && word.length > 2) {
     forms.push(word.slice(1));
+  }
+
+  // حذف پسوندهای ضمیری (هم، هن، کم، نا، ها، ه، ی)
+  const suffixes = ['هم', 'هن', 'کم', 'کن', 'نا', 'ها', 'ه', 'ی'];
+  for (const suf of suffixes) {
+    if (current.endsWith(suf) && current.length > suf.length + 2) {
+      forms.push(current.slice(0, -suf.length));
+    }
   }
 
   return Array.from(new Set(forms));
@@ -161,26 +268,49 @@ export function calculateWordSimilarity(word1: string, word2: string): number {
 
   // ۱. شباهت مستقیم نرمال‌شده
   let bestSim = rawStringSimilarity(norm1, norm2);
-  if (bestSim >= 0.95) return 1.0;
+  if (bestSim >= 0.92) return 1.0;
 
   // ۲. شباهت آوایی (Phonetic)
   const phone1 = normalizePhoneticEquivalents(norm1);
   const phone2 = normalizePhoneticEquivalents(norm2);
+  if (phone1 === phone2) return 0.98;
+
   const phoneSim = rawStringSimilarity(phone1, phone2);
-  bestSim = Math.max(bestSim, phoneSim * 0.98); // ضریب سبک برای تبدیل‌های آوایی مجاز
+  bestSim = Math.max(bestSim, phoneSim * 0.96);
 
-  // ۳. شباهت بدون پیشوندهای چسبان (Clitics)
-  const prefixes1 = stripArabicPrefixes(norm1);
-  const prefixes2 = stripArabicPrefixes(norm2);
+  // ۳. شباهت بدون پیشوندها و پسوندها (Affixes)
+  const forms1 = stripArabicAffixes(norm1);
+  const forms2 = stripArabicAffixes(norm2);
 
-  for (const p1 of prefixes1) {
-    for (const p2 of prefixes2) {
-      const pSim = rawStringSimilarity(p1, p2);
-      // تطابق ریشه کلمه با اغماض پیشوند
-      if (pSim >= 0.9) {
-        bestSim = Math.max(bestSim, pSim * 0.95);
+  for (const f1 of forms1) {
+    for (const f2 of forms2) {
+      if (f1 === f2) {
+        bestSim = Math.max(bestSim, 0.93);
+        continue;
+      }
+      const sim = rawStringSimilarity(f1, f2);
+      if (sim >= 0.85) {
+        bestSim = Math.max(bestSim, sim * 0.92);
+      }
+      // بررسی آوایی ریشه‌ها
+      const pSim = rawStringSimilarity(
+        normalizePhoneticEquivalents(f1),
+        normalizePhoneticEquivalents(f2)
+      );
+      if (pSim >= 0.88) {
+        bestSim = Math.max(bestSim, pSim * 0.90);
       }
     }
+  }
+
+  // ۴. تطابق مد و کشش: اگر یکی با «ا» تمام شده و دیگری با «ء» یا بدون آن
+  if (
+    (norm1.endsWith('ا') && norm2.endsWith('اء')) ||
+    (norm2.endsWith('ا') && norm1.endsWith('اء')) ||
+    (norm1 + 'ا' === norm2) ||
+    (norm2 + 'ا' === norm1)
+  ) {
+    bestSim = Math.max(bestSim, 0.94);
   }
 
   return Math.min(1.0, Math.max(0, bestSim));
@@ -207,8 +337,8 @@ export interface RecitationEvaluation {
 }
 
 /**
- * ارزیابی هوشمند متن تلاوت با الگوریتم تطبیق سرتاسری ترتیبی (Global Needleman-Wunsch Alignment)
- * این الگوریتم مانع از قفل شدن روی کلمات جاافتاده می‌شود و خطاهای متوالی را خنثی می‌کند.
+ * ارزیابی هوشمند متن تلاوت با الگوریتم تطبیق سرتاسری ترتیبی (Needleman-Wunsch & Multi-Span Alignment)
+ * با پشتیبانی از کشف ادغام کلمات، لغزش‌های وقف، تجوید و جهش‌های بازشناختی مرورگر
  */
 export function evaluateRecitation(
   targetText: string,
@@ -263,11 +393,9 @@ export function evaluateRecitation(
   const M = spokenWords.length;
 
   // آستانه قبولی هر کلمه بر اساس درجه سخت‌گیری
-  const wordAcceptThreshold = strictness === 'strict' ? 0.82 : strictness === 'normal' ? 0.68 : 0.58;
+  const wordAcceptThreshold = strictness === 'strict' ? 0.78 : strictness === 'normal' ? 0.65 : 0.54;
 
-  // ماتریس برنامه‌ریزی پویا برای تطبیق بهینه کلی (Needleman-Wunsch)
-  // dp[i][j] = بیشترین امتیاز تطابق ترتیبی T[0..i-1] با S[0..j-1]
-  const dp: number[][] = Array.from({ length: N + 1 }, () => Array(M + 1).fill(0));
+  // ماتریس شباهت اولیه
   const simMatrix: number[][] = Array.from({ length: N }, () => Array(M).fill(0));
 
   for (let i = 0; i < N; i++) {
@@ -276,22 +404,49 @@ export function evaluateRecitation(
     }
   }
 
-  // پر کردن جدول DP
+  // بررسی کلمات ادغام شده تجویدی (مثل من یقول -> میقول)
+  for (let i = 0; i < N - 1; i++) {
+    const idghams = getTajweedIdghamEquivalents(targetWords[i].normalized, targetWords[i + 1].normalized);
+    if (idghams.length > 0) {
+      for (let j = 0; j < M; j++) {
+        for (const idg of idghams) {
+          const sim = rawStringSimilarity(idg, spokenWords[j]);
+          if (sim >= 0.85) {
+            simMatrix[i][j] = Math.max(simMatrix[i][j], sim);
+            simMatrix[i + 1][j] = Math.max(simMatrix[i + 1][j], sim);
+          }
+        }
+      }
+    }
+
+    // بررسی کلمات به هم چسبیده (مانند بسم + الله -> بسمالله)
+    const combined = targetWords[i].normalized + targetWords[i + 1].normalized;
+    for (let j = 0; j < M; j++) {
+      const sim = rawStringSimilarity(combined, spokenWords[j]);
+      if (sim >= 0.88) {
+        simMatrix[i][j] = Math.max(simMatrix[i][j], sim);
+        simMatrix[i + 1][j] = Math.max(simMatrix[i + 1][j], sim);
+      }
+    }
+  }
+
+  // برنامه‌ریزی پویا (Needleman-Wunsch با اغماض پرش)
+  const dp: number[][] = Array.from({ length: N + 1 }, () => Array(M + 1).fill(0));
+
   for (let i = 1; i <= N; i++) {
     for (let j = 1; j <= M; j++) {
       const matchScore = simMatrix[i - 1][j - 1];
-      // امتیاز تطابق اگر بالای آستانه باشد
       const gain = matchScore >= wordAcceptThreshold ? matchScore : 0;
 
       dp[i][j] = Math.max(
         dp[i - 1][j - 1] + gain, // تطبیق کلمه i با j
-        dp[i - 1][j],           // جا انداختن کلمه i از آیه (بدون جریمه مسدودکننده)
-        dp[i][j - 1]            // رد شدن از کلمه اضافی j در گفتار
+        dp[i - 1][j],           // جا انداختن کلمه i از آیه (بدون جریمه کشنده)
+        dp[i][j - 1]            // رد شدن از کلمه اضافی یا نویز در گفتار
       );
     }
   }
 
-  // ردیابی به عقب (Backtracking) برای استخراج وضعیت تک‌تک کلمات
+  // ردیابی به عقب (Backtracking)
   let i = N;
   let j = M;
   const matchedTargetIndices = new Map<number, { spokenIdx: number; similarity: number }>();
@@ -312,6 +467,28 @@ export function evaluateRecitation(
     }
   }
 
+  // مرحله بازیابی کمکی (Secondary Sliding Window Match):
+  // اگر برخی کلمات به دلیل جهش کوچک یا مکث ASR جا افتاده باشند ولی در متن شنیده‌شده حضور دارند:
+  for (let idx = 0; idx < N; idx++) {
+    if (!matchedTargetIndices.has(idx)) {
+      const targetNorm = targetWords[idx].normalized;
+      let bestFoundSim = 0;
+      let bestFoundJ = -1;
+
+      for (let sj = 0; sj < M; sj++) {
+        const s = calculateWordSimilarity(targetNorm, spokenWords[sj]);
+        if (s > bestFoundSim && s >= wordAcceptThreshold) {
+          bestFoundSim = s;
+          bestFoundJ = sj;
+        }
+      }
+
+      if (bestFoundSim >= wordAcceptThreshold && bestFoundJ !== -1) {
+        matchedTargetIndices.set(idx, { spokenIdx: bestFoundJ, similarity: bestFoundSim });
+      }
+    }
+  }
+
   // تدوین نتیجه کلمه به کلمه برای رابط کاربری
   const wordResults: WordEvaluationResult[] = [];
   let totalScore = 0;
@@ -323,7 +500,7 @@ export function evaluateRecitation(
     const match = matchedTargetIndices.get(idx);
 
     if (match && match.similarity >= wordAcceptThreshold) {
-      const isExact = match.similarity >= 0.92;
+      const isExact = match.similarity >= 0.88;
       wordResults.push({
         originalWord: target.original,
         normalizedWord: target.normalized,
@@ -353,9 +530,9 @@ export function evaluateRecitation(
   let verdictType: RecitationEvaluation['verdictType'] = 'needs_practice';
   let message = '';
 
-  if (accuracy >= 90) {
+  if (accuracy >= 88) {
     verdictType = 'perfect';
-    message = 'احسنت! تلاوت بدون نقص و با تسلط کامل بر تمام کلمات انجام شد.';
+    message = 'احسنت! تلاوت با تسلط کامل بر تمام کلمات آیه انجام شد.';
   } else if (isPass) {
     verdictType = 'passed';
     message = `تلاوت مورد تایید است (${accuracy}٪ تطابق با مصحف شریف).`;
@@ -364,7 +541,7 @@ export function evaluateRecitation(
     if (firstMissed) {
       message = `دقت فرمایید: کلمه «${firstMissed}» یا کلمات بعدی در ترتیل شما به وضوح شنیده نشد.`;
     } else {
-      message = `درصد تسلط (${accuracy}٪) کمتر از آستانه قبولی (${threshold}٪) است. دوباره بخوانید.`;
+      message = `میزان تسلط (${accuracy}٪) کمتر از آستانه قبولی (${threshold}٪) است. دوباره با صوت بخوانید.`;
     }
   }
 

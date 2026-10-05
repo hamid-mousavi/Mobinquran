@@ -105,6 +105,12 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   // فیلتر صفحه کارنامه
   const [progressFilter, setProgressFilter] = useState<'all' | 'memorized' | 'review_needed' | 'unstarted'>('all');
 
+  // تغییر صفحه بدون باقی ماندن وضعیت مودال انتخاب سوره
+  const navigateToView = (view: MemorizationView) => {
+    setIsSurahPickerOpen(false);
+    setCurrentView(view);
+  };
+
   const surahPages = useMemo(() => {
     const pageSet = new Set<number>();
     verses.forEach((v) => {
@@ -263,7 +269,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           {/* کارت ۱: تمرین و خط‌بر حفظ */}
           <div
-            onClick={() => setCurrentView('practice')}
+            onClick={() => navigateToView('practice')}
             className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-teal-500/30 bg-gradient-to-br from-teal-500/10 via-white to-white dark:from-teal-950/20 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-teal-500 transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 group"
           >
             <div className="flex items-center gap-3.5 min-w-0">
@@ -284,7 +290,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
 
           {/* کارت ۲: آزمون‌ساز تخصصی */}
           <div
-            onClick={() => setCurrentView('quiz')}
+            onClick={() => navigateToView('quiz')}
             className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-white to-white dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-amber-500 transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 group"
           >
             <div className="flex items-center gap-3.5 min-w-0">
@@ -305,7 +311,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
 
           {/* کارت ۳: مباحثه صوتی هوشمند */}
           <div
-            onClick={() => setCurrentView('discussion')}
+            onClick={() => navigateToView('discussion')}
             className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-white to-white dark:from-emerald-950/20 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-emerald-500 transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 group"
           >
             <div className="flex items-center gap-3.5 min-w-0">
@@ -331,7 +337,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
 
           {/* کارت ۴: داستان‌ها و حکمت‌های قرآنی */}
           <div
-            onClick={() => setCurrentView('stories')}
+            onClick={() => navigateToView('stories')}
             className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-white to-white dark:from-purple-950/20 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-purple-500 transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 group"
           >
             <div className="flex items-center gap-3.5 min-w-0">
@@ -350,9 +356,9 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             <ChevronLeft className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0 group-hover:-translate-x-1 transition-transform" />
           </div>
 
-          {/* کارت ۴: کارنامه و پایش وضعیت آیات */}
+          {/* کارت ۵: کارنامه و پایش وضعیت آیات */}
           <div
-            onClick={() => setCurrentView('progress')}
+            onClick={() => navigateToView('progress')}
             className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-sky-500/30 bg-gradient-to-br from-sky-500/10 via-white to-white dark:from-sky-950/20 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-sky-500 transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 group"
           >
             <div className="flex items-center gap-3.5 min-w-0">
@@ -436,6 +442,20 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             </div>
           </div>
         </div>
+
+        {/* مودال انتخاب سوره در منوی اصلی */}
+        <SurahSelectorModal
+          isOpen={isSurahPickerOpen}
+          onClose={() => setIsSurahPickerOpen(false)}
+          surahs={surahs}
+          currentSurahId={currentSurah.id}
+          onSelectSurah={(surah) => {
+            stopSession();
+            onSelectSurah(surah);
+            setIsSurahPickerOpen(false);
+          }}
+          darkMode={darkMode}
+        />
       </div>
     );
   }
@@ -445,14 +465,14 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   // -------------------------------------------------------------
   if (currentView === 'quiz') {
     return (
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 pb-28 space-y-6" dir="rtl">
+      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
         <MemorizationQuizStudio
           currentSurah={currentSurah}
           surahs={surahs}
           verses={verses}
           darkMode={darkMode}
           onSelectSurah={onSelectSurah}
-          onBack={() => setCurrentView('menu')}
+          onBack={() => navigateToView('menu')}
         />
       </div>
     );
@@ -463,14 +483,14 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   // -------------------------------------------------------------
   if (currentView === 'discussion') {
     return (
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 pb-28 space-y-6" dir="rtl">
+      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
         <VoiceDiscussionStudio
           currentSurah={currentSurah}
           surahs={surahs}
           verses={verses}
           darkMode={darkMode}
           onSelectSurah={onSelectSurah}
-          onBack={() => setCurrentView('menu')}
+          onBack={() => navigateToView('menu')}
         />
       </div>
     );
@@ -481,11 +501,11 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   // -------------------------------------------------------------
   if (currentView === 'stories') {
     return (
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 pb-28 space-y-6" dir="rtl">
+      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
         <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setCurrentView('menu')}
+              onClick={() => navigateToView('menu')}
               className="p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer active:scale-95"
               title="بازگشت به منوی حفظ"
             >
@@ -509,16 +529,16 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   }
 
   // -------------------------------------------------------------
-  // ۴. صفحه اختصاصی کارنامه و وضعیت آیات سوره
+  // ۵. صفحه اختصاصی کارنامه و وضعیت آیات سوره
   // -------------------------------------------------------------
   if (currentView === 'progress') {
     return (
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 pb-28 space-y-5" dir="rtl">
+      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-5 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
         {/* سربرگ کارنامه */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setCurrentView('menu')}
+              onClick={() => navigateToView('menu')}
               className="p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer active:scale-95"
               title="بازگشت به منوی حفظ"
             >
@@ -630,10 +650,10 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   }
 
   // -------------------------------------------------------------
-  // ۵. صفحه اختصاصی تمرین و خط‌بر حفظ
+  // ۶. صفحه اختصاصی تمرین و خط‌بر حفظ
   // -------------------------------------------------------------
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 pb-28 space-y-6" dir="rtl">
+    <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
       {/* المان صوتی */}
       <audio
         ref={audioRef}
@@ -651,7 +671,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
           <button
             onClick={() => {
               if (session) stopSession();
-              setCurrentView('menu');
+              navigateToView('menu');
             }}
             className="p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer active:scale-95"
             title="بازگشت به منوی حفظ"
@@ -668,12 +688,21 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
           </div>
         </div>
 
-        {session && (
+        {session ? (
           <button
             onClick={stopSession}
             className="px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-600 font-bold text-xs hover:bg-rose-500/20 transition-all cursor-pointer"
           >
             خروج از جلسه
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsSurahPickerOpen(true)}
+            className="px-3 py-1.5 rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs sm:text-sm font-bold text-teal-700 dark:text-teal-300 flex items-center gap-1.5 shadow-2xs hover:border-teal-500 transition-all cursor-pointer active:scale-95"
+          >
+            <span>سوره {currentSurah.nameArabic}</span>
+            <ChevronDown className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
           </button>
         )}
       </div>
