@@ -21,6 +21,7 @@ import { Verse, Surah, AppSettings, ArabicFont } from '../types';
 import { toPersianDigits } from '../utils/textNormalization';
 import { ReciterId, getAudioSourceUrl } from '../services/audioSources';
 import { getArabicFontFamily } from '../utils/fontHelper';
+import { addAyahToReview } from '../services/activityTracker';
 
 interface FullscreenShortsPracticeProps {
   isOpen: boolean;
@@ -91,6 +92,7 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
   const [isSlideAnimating, setIsSlideAnimating] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'up' | 'down'>('up');
   const [autoAdvance, setAutoAdvance] = useState(true);
+  const [addedToLeitner, setAddedToLeitner] = useState<Set<number>>(new Set());
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
@@ -472,6 +474,22 @@ export const FullscreenShortsPractice: React.FC<FullscreenShortsPracticeProps> =
             title={isMasked ? 'آشکارسازی متن' : 'پنهان‌سازی متن آیه'}
           >
             {isMasked ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+          </button>
+
+          {/* افزودن این آیه به جعبه لایتنر */}
+          <button
+            onClick={() => {
+              addAyahToReview(surah.id, surah.nameArabic, currentAyahNumber, true);
+              setAddedToLeitner((prev) => new Set(prev).add(currentAyahNumber));
+            }}
+            className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-all cursor-pointer active:scale-90 ${
+              addedToLeitner.has(currentAyahNumber)
+                ? 'bg-amber-500 border-amber-300 text-slate-950 font-bold shadow-md shadow-amber-500/30'
+                : 'bg-black/40 border-white/20 text-white/80 hover:bg-white/20'
+            }`}
+            title={addedToLeitner.has(currentAyahNumber) ? 'به جعبه لایتنر افزوده شد' : 'افزودن این آیه به جعبه لایتنر'}
+          >
+            <RotateCcw className={`w-5 h-5 ${addedToLeitner.has(currentAyahNumber) ? 'text-slate-950' : 'text-amber-400'}`} />
           </button>
 
           {/* تغییر تم رنگی */}

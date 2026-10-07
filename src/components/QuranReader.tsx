@@ -6,6 +6,7 @@ import { prefersReducedMotion } from '../utils/motion';
 import { shareAyah } from '../utils/shareAyah';
 import { QuranicSurahBanner } from './QuranicOrnament';
 import { toPersianDigits } from '../utils/textNormalization';
+import { recordUserActivity } from '../services/activityTracker';
 
 export interface VerseCandidate {
   verse: Verse;
@@ -139,6 +140,13 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   useEffect(() => {
     onReadingPositionChangeRef.current = onReadingPositionChange;
   }, [onReadingPositionChange]);
+
+  // ثبت روزانه همراهی و استمرار با تلاوت قرآن
+  useEffect(() => {
+    if (verses && verses.length > 0) {
+      recordUserActivity('read');
+    }
+  }, [currentSurah.id, verses.length]);
 
   // رهگیری اسلایدهای لمسی افقی جهت جابجایی بین سوره‌ها
   const touchStartXRef = useRef<number | null>(null);
@@ -455,8 +463,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                 data-verse-number={verse.verseNumber}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest('button, a, input, select')) return;
-                  onPlayVerseAudio(verse.verseNumber);
-                  performScrollToVerse(verse.verseNumber, 'smooth');
+                  onOpenVerseAction(verse);
                 }}
                 className={`reader-verse-card p-4 sm:p-5 rounded-2xl border transition-all duration-200 relative group cursor-pointer ${
                   isCurrentlyPlaying

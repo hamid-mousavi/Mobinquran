@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   BookOpen,
@@ -6,38 +6,196 @@ import {
   Users,
   Compass,
   Play,
+  Square,
   Share2,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Flame,
   Award,
+  ExternalLink,
+  Bookmark,
+  BookmarkCheck,
+  Volume2,
+  VolumeX,
+  Clock,
+  Check,
+  Layers,
+  ArrowRight,
 } from 'lucide-react';
 import { QuranStory } from '../data/quranStories';
 import { toPersianDigits } from '../utils/textNormalization';
+import { getAudioSourceUrl } from '../services/audioSources';
 
 interface QuranStoryDetailModalProps {
   story: QuranStory | null;
   onClose: () => void;
   onStartQuiz: (story: QuranStory) => void;
+  onNavigateToSurah?: (surahId: number) => void;
 }
 
 export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
   story,
   onClose,
   onStartQuiz,
+  onNavigateToSurah,
 }) => {
   const [activeTab, setActiveTab] = useState<'narrative' | 'ayahs' | 'wisdoms'>('narrative');
-  const [activeSectionIndex, setActiveSectionIndex] = useState(0);
+  const [readingMode, setReadingMode] = useState<'interactive' | 'full'>('interactive');
+  const [interactiveStep, setInteractiveStep] = useState(0);
+  const [playingVerse, setPlayingVerse] = useState<number | null>(null);
+  const [copiedToast, setCopiedToast] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // وضعیت بوک‌مارک و خوانده‌شده در حافظه محلی
+  const [isBookmarked, setIsBookmarked] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('quran_bookmarked_stories');
+      if (saved && story) {
+        const arr: string[] = JSON.parse(saved);
+        return arr.includes(story.id);
+      }
+    } catch {}
+    return false;
+  });
+
+  const [isRead, setIsRead] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('quran_read_stories');
+      if (saved && story) {
+        const arr: string[] = JSON.parse(saved);
+        return arr.includes(story.id);
+      }
+    } catch {}
+    return false;
+  });
+
+  // هماهنگی مجدد استیت هنگام تغییر داستان
+  useEffect(() => {
+    if (!story) return;
+    setInteractiveStep(0);
+    try {
+      const savedBm = localStorage.getItem('quran_bookmarked_stories');
+      if (savedBm) {
+        const arr: string[] = JSON.parse(savedBm);
+        setIsBookmarked(arr.includes(story.id));
+      }
+      const savedRd = localStorage.getItem('quran_read_stories');
+      if (savedRd) {
+        const arr: string[] = JSON.parse(savedRd);
+        setIsRead(arr.includes(story.id));
+      }
+    } catch {}
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setPlayingVerse(null);
+    };
+  }, [story?.id]);
+
+  const toggleBookmark = () => {
+    if (!story) return;
+    try {
+      const saved = localStorage.getItem('quran_bookmarked_stories');
+      let arr: string[] = saved ? JSON.parse(saved) : [];
+      if (arr.includes(story.id)) {
+        arr = arr.filter((id) => id !== story.id);
+        setIsBookmarked(false);
+      } else {
+        arr.push(story.id);
+        setIsBookmarked(true);
+      }
+      localStorage.setItem('quran_bookmarked_stories', JSON.stringify(arr));
+    } catch {}
+  };
+
+  const toggleRead = () => {
+    if (!story) return;
+    try {
+      const saved = localStorage.getItem('quran_read_stories');
+      let arr: string[] = saved ? JSON.parse(saved) : [];
+      if (arr.includes(story.id)) {
+        arr = arr.filter((id) => id !== story.id);
+        setIsRead(false);
+      } else {
+        arr.push(story.id);
+        setIsRead(true);
+      }
+      localStorage.setItem('quran_read_stories', JSON.stringify(arr));
+    } catch {}
+  };
+
+  // پخش و توقف صوت فراز قرآنی
+  const handlePlayVerse = (verseNumber?: number) => {
+    if (!story || !verseNumber) return;
+
+    if (playingVerse === verseNumber) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setPlayingVerse(null);
+      return;
+    }
+
+    const url =
+      getAudioSourceUrl('parhizgar', story.surahId, verseNumber, 0) ||
+      getAudioSourceUrl('afasy', story.surahId, verseNumber, 0) ||
+      getAudioSourceUrl('abdulbasit', story.surahId, verseNumber, 0);
+
+    if (!url) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    setPlayingVerse(verseNumber);
+
+    audio.onended = () => {
+      setPlayingVerse(null);
+    };
+    audio.onerror = () => {
+      setPlayingVerse(null);
+    };
+    audio.play().catch(() => setPlayingVerse(null));
+  };
+
+  // کپی حکمت داستان در کلیپ‌بورد
+  const handleCopyWisdom = () => {
+    if (!story) return;
+    const textToCopy = `📖 ${story.title} (سوره ${story.surahName}، ${story.versesRange})\n\n«${story.summary}»\n\n✨ حکمت‌ها و عبرت‌های زندگی:\n` +
+      story.wisdoms.map((w, i) => `${i + 1}. ${w}`).join('\n');
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      setCopiedToast(true);
+      setTimeout(() => setCopiedToast(false), 2500);
+    });
+  };
 
   if (!story) return null;
 
+  const currentSection = story.narrative[interactiveStep] || story.narrative[0];
+  const totalChapters = story.narrative.length;
+  const progressPercent = Math.round(((interactiveStep + 1) / totalChapters) * 100);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-5 bg-black/75 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
       dir="rtl"
     >
-      <div className="bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+      <div className="bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl relative">
+        {/* پیام کپی موفق */}
+        {copiedToast && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-60 bg-teal-600 text-white text-xs font-bold py-2 px-4 rounded-xl shadow-lg flex items-center gap-1.5 animate-bounce">
+            <Check className="w-3.5 h-3.5" />
+            <span>متن و حکمت‌های داستان با موفقیت کپی شد</span>
+          </div>
+        )}
+
         {/* سربرگ مودال با طراحی فاخر و شأن قرآنی */}
         <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-gradient-to-r from-teal-900/10 via-amber-600/5 to-transparent dark:from-slate-800 dark:via-slate-800/80 dark:to-slate-900">
           <div className="flex items-center gap-3 min-w-0">
@@ -45,27 +203,70 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
               <BookOpen className="w-6 h-6" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-xl font-black text-slate-800 dark:text-slate-100 truncate">
-                {story.title}
-              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-xl font-black text-slate-800 dark:text-slate-100 truncate">
+                  {story.title}
+                </h2>
+                {isRead && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>مطالعه شده</span>
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 font-medium truncate mt-0.5">
                 <span>سوره {story.surahName}</span>
                 <span>•</span>
                 <span>{story.versesRange}</span>
+                {story.estimatedReadTimeMinutes && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                      <Clock className="w-3 h-3" />
+                      <span>{toPersianDigits(story.estimatedReadTimeMinutes)} دقیقه مطالعه</span>
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {/* دکمه شروع آزمون شورتز با آیکون ساده و خوانا */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* دکمه نشان کردن */}
+            <button
+              type="button"
+              onClick={toggleBookmark}
+              className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                isBookmarked
+                  ? 'border-amber-400 bg-amber-400/15 text-amber-600 dark:text-amber-400'
+                  : 'border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'
+              }`}
+              title={isBookmarked ? 'حذف از نشان‌شده‌ها' : 'نشان کردن این داستان'}
+              aria-label="نشان کردن"
+            >
+              {isBookmarked ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+            </button>
+
+            {/* دکمه کپی حکمت */}
+            <button
+              type="button"
+              onClick={handleCopyWisdom}
+              className="p-2 rounded-xl border border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-all cursor-pointer"
+              title="اشتراک‌گذاری و کپی حکمت داستان"
+              aria-label="کپی"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+
+            {/* دکمه شروع آزمون شورتز */}
             <button
               onClick={() => onStartQuiz(story)}
-              className="py-2 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+              className="py-2 px-3 sm:px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
               title="شروع آزمون"
               aria-label="شروع آزمون"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span className="hidden sm:inline">آزمون این داستان</span>
+              <span className="hidden sm:inline">آزمون داستان</span>
             </button>
 
             <button
@@ -80,46 +281,76 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
         </div>
 
         {/* برچسب‌های تب مطالعه برای دسترسی عمیق به جزئیات */}
-        <div className="flex items-center gap-1.5 px-4 sm:px-6 pt-3 pb-2 border-b border-stone-100 dark:border-slate-800 bg-stone-50 dark:bg-slate-800/40 text-xs font-bold overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('narrative')}
-            className={`py-2 px-3.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-              activeTab === 'narrative'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-stone-200/60 dark:hover:bg-slate-700/60'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>شرح تفصیلی وقایع و صحنه‌ها</span>
-          </button>
+        <div className="flex items-center justify-between px-4 sm:px-6 pt-3 pb-2 border-b border-stone-100 dark:border-slate-800 bg-stone-50 dark:bg-slate-800/40 text-xs font-bold gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setActiveTab('narrative')}
+              className={`py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                activeTab === 'narrative'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-stone-200/60 dark:hover:bg-slate-700/60'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>شرح تفصیلی ماجرا</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('ayahs')}
-            className={`py-2 px-3.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-              activeTab === 'ayahs'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-stone-200/60 dark:hover:bg-slate-700/60'
-            }`}
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>فرازها و آیات کلیدی</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('ayahs')}
+              className={`py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                activeTab === 'ayahs'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-stone-200/60 dark:hover:bg-slate-700/60'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>فرازها و آیات</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('wisdoms')}
-            className={`py-2 px-3.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-              activeTab === 'wisdoms'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-stone-200/60 dark:hover:bg-slate-700/60'
-            }`}
-          >
-            <Award className="w-4 h-4" />
-            <span>حکمت‌ها و درس‌های زندگی ({toPersianDigits(story.wisdoms.length)})</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('wisdoms')}
+              className={`py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                activeTab === 'wisdoms'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-stone-200/60 dark:hover:bg-slate-700/60'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>حکمت‌ها ({toPersianDigits(story.wisdoms.length)})</span>
+            </button>
+          </div>
+
+          {/* سوییچ حالت مطالعه در تب شرح ماجرا */}
+          {activeTab === 'narrative' && (
+            <div className="flex items-center gap-1 bg-stone-200/70 dark:bg-slate-700/60 p-0.5 rounded-xl shrink-0">
+              <button
+                type="button"
+                onClick={() => setReadingMode('interactive')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  readingMode === 'interactive'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                پرده‌به‌پرده
+              </button>
+              <button
+                type="button"
+                onClick={() => setReadingMode('full')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  readingMode === 'full'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                نمایش کامل
+              </button>
+            </div>
+          )}
         </div>
 
         {/* بدنه محتوای داستان با فونت فوق‌العاده خوانا و جزئیات فراگیر */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
           {/* معرفی اجمالی و شخصیت‌ها */}
           <div className="rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/20 dark:via-slate-800/60 dark:to-transparent border border-amber-500/25 space-y-2.5">
             <div className="text-xs font-bold text-amber-800 dark:text-amber-300">
@@ -128,74 +359,244 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
             <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-normal">
               {story.summary}
             </p>
-            <div className="pt-2 border-t border-amber-500/20 flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-bold text-teal-700 dark:text-teal-400 flex items-center gap-1">
-                <Users className="w-3.5 h-3.5" />
-                <span>شخصیت‌های محوری:</span>
-              </span>
-              <span className="text-slate-600 dark:text-slate-300 font-medium">
-                {story.character}
-              </span>
+            <div className="pt-2 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-teal-700 dark:text-teal-400 flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5" />
+                  <span>شخصیت‌های محوری:</span>
+                </span>
+                <span className="text-slate-600 dark:text-slate-300 font-medium">
+                  {story.character}
+                </span>
+              </div>
+
+              {/* دکمه علامت‌گذاری به عنوان خوانده‌شده */}
+              <button
+                type="button"
+                onClick={toggleRead}
+                className={`py-1 px-2.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isRead
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-stone-100 dark:bg-slate-800 border-stone-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-stone-200'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{isRead ? 'خوانده شد ✓' : 'علامت به عنوان خوانده‌شده'}</span>
+              </button>
             </div>
           </div>
 
           {/* تب ۱: شرح تفصیلی و جزء‌به‌جزء ماجرا */}
           {activeTab === 'narrative' && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
-                  فصول و وقایع تفصیلی داستان:
-                </h3>
-                <span className="text-[11px] text-slate-400 font-medium">
-                  {toPersianDigits(story.narrative.length)} فصل روایی
-                </span>
-              </div>
-
-              {story.narrative.map((sec, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-2xl p-4 sm:p-6 bg-stone-50 dark:bg-slate-800/60 border border-stone-200/80 dark:border-slate-700/60 space-y-3.5 transition-all hover:border-teal-500/30"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                      <span className="w-7 h-7 rounded-xl bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                        {toPersianDigits(idx + 1)}
+            <>
+              {/* حالت پرده‌به‌پرده (قصه‌گویی تعاملی) */}
+              {readingMode === 'interactive' ? (
+                <div className="space-y-4">
+                  {/* نوار پیشرفت فصول */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-teal-700 dark:text-teal-400">
+                        فصل {toPersianDigits(interactiveStep + 1)} از {toPersianDigits(totalChapters)}
                       </span>
-                      <span>{sec.sectionTitle}</span>
+                      <span className="text-slate-400">{toPersianDigits(progressPercent)}٪ مطالعه</span>
                     </div>
-                    {sec.keyAyahRef && (
-                      <span className="text-[11px] px-2 py-0.5 rounded-lg bg-stone-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium">
-                        {sec.keyAyahRef}
-                      </span>
+                    <div className="w-full h-2 rounded-full bg-stone-200 dark:bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-l from-teal-500 to-emerald-500 transition-all duration-300 rounded-full"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* کارت فصل جاری */}
+                  <div className="rounded-3xl p-5 sm:p-7 bg-stone-50 dark:bg-slate-800/80 border border-stone-200 dark:border-slate-700 space-y-4 shadow-sm animate-fadeIn">
+                    <div className="flex items-center justify-between border-b border-stone-200/80 dark:border-slate-700 pb-3">
+                      <div className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2.5">
+                        <span className="w-8 h-8 rounded-xl bg-teal-600 text-white text-xs font-black flex items-center justify-center shrink-0">
+                          {toPersianDigits(interactiveStep + 1)}
+                        </span>
+                        <span>{currentSection.sectionTitle}</span>
+                      </div>
+                      {currentSection.keyAyahRef && (
+                        <span className="text-xs px-2.5 py-1 rounded-lg bg-stone-200/80 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
+                          {currentSection.keyAyahRef}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-sm sm:text-base text-slate-700 dark:text-slate-200 leading-loose text-justify font-normal">
+                      {currentSection.text}
+                    </p>
+
+                    {/* فراز قرآنی عثمان‌طه همراه با دکمه پخش صوت */}
+                    {currentSection.keyAyahText && (
+                      <div className="pt-2">
+                        <div className="p-4 sm:p-6 rounded-2xl bg-amber-50/80 dark:bg-slate-900 border border-amber-300/40 dark:border-amber-600/30 text-center relative shadow-xs group">
+                          <div
+                            className="font-bold text-xl sm:text-2xl text-slate-900 dark:text-amber-100 leading-[2.4]"
+                            style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
+                          >
+                            «{currentSection.keyAyahText}»
+                          </div>
+
+                          {/* دکمه گوش دادن به صوت تلاوت این آیه */}
+                          {currentSection.keyAyahVerseNumber && (
+                            <div className="mt-3 flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={() => handlePlayVerse(currentSection.keyAyahVerseNumber)}
+                                className={`py-1.5 px-3.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-xs ${
+                                  playingVerse === currentSection.keyAyahVerseNumber
+                                    ? 'bg-amber-600 text-white animate-pulse'
+                                    : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-slate-700 border border-amber-300 dark:border-slate-700'
+                                }`}
+                              >
+                                {playingVerse === currentSection.keyAyahVerseNumber ? (
+                                  <>
+                                    <Square className="w-3.5 h-3.5 fill-current" />
+                                    <span>در حال پخش تلاوت... (توقف)</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Volume2 className="w-3.5 h-3.5" />
+                                    <span>شنیدن تلاوت آیه (صوت پرهیزگار)</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
 
-                  {/* متن تفصیلی با پاراگراف‌بندی و فونت خوانا */}
-                  <p className="text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-200 leading-loose text-justify font-normal">
-                    {sec.text}
-                  </p>
+                  {/* دکمه‌های ناوبری فصول */}
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      disabled={interactiveStep === 0}
+                      onClick={() => setInteractiveStep((prev) => Math.max(0, prev - 1))}
+                      className="py-2.5 px-4 rounded-xl border border-stone-300 dark:border-slate-700 disabled:opacity-40 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:cursor-not-allowed hover:bg-stone-100 dark:hover:bg-slate-800"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                      <span>فصل قبلی</span>
+                    </button>
 
-                  {/* فراز قرآنی عثمان‌طه */}
-                  {sec.keyAyahText && (
-                    <div className="pt-2">
-                      <div
-                        className="p-4 sm:p-5 rounded-2xl bg-amber-50/70 dark:bg-slate-900/90 border border-amber-300/40 dark:border-amber-600/30 text-center font-bold text-lg sm:text-2xl text-slate-900 dark:text-amber-100 leading-[2.4] shadow-xs"
-                        style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
-                      >
-                        «{sec.keyAyahText}»
-                      </div>
+                    <div className="flex items-center gap-1.5">
+                      {story.narrative.map((_, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setInteractiveStep(i)}
+                          className={`w-3 h-3 rounded-full transition-all cursor-pointer ${
+                            interactiveStep === i
+                              ? 'bg-teal-600 scale-125'
+                              : 'bg-stone-300 dark:bg-slate-700 hover:bg-stone-400'
+                          }`}
+                          title={`فصل ${toPersianDigits(i + 1)}`}
+                        />
+                      ))}
                     </div>
-                  )}
+
+                    {interactiveStep < totalChapters - 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => setInteractiveStep((prev) => Math.min(totalChapters - 1, prev + 1))}
+                        className="py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <span>فصل بعدی</span>
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsRead(true);
+                          toggleRead();
+                          setActiveTab('wisdoms');
+                        }}
+                        className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <Award className="w-4 h-4" />
+                        <span>مشاهده حکمت‌ها</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+              ) : (
+                /* حالت پیوسته و کامل تمام فصول */
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                      فصول و وقایع تفصیلی داستان:
+                    </h3>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      {toPersianDigits(story.narrative.length)} فصل روایی
+                    </span>
+                  </div>
+
+                  {story.narrative.map((sec, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-2xl p-4 sm:p-6 bg-stone-50 dark:bg-slate-800/60 border border-stone-200/80 dark:border-slate-700/60 space-y-3.5 transition-all hover:border-teal-500/30"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-xl bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                            {toPersianDigits(idx + 1)}
+                          </span>
+                          <span>{sec.sectionTitle}</span>
+                        </div>
+                        {sec.keyAyahRef && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-lg bg-stone-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium">
+                            {sec.keyAyahRef}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-200 leading-loose text-justify font-normal">
+                        {sec.text}
+                      </p>
+
+                      {sec.keyAyahText && (
+                        <div className="pt-2">
+                          <div
+                            className="p-4 sm:p-5 rounded-2xl bg-amber-50/70 dark:bg-slate-900/90 border border-amber-300/40 dark:border-amber-600/30 text-center font-bold text-lg sm:text-2xl text-slate-900 dark:text-amber-100 leading-[2.4] shadow-xs"
+                            style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
+                          >
+                            «{sec.keyAyahText}»
+                          </div>
+
+                          {sec.keyAyahVerseNumber && (
+                            <div className="mt-2.5 flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={() => handlePlayVerse(sec.keyAyahVerseNumber)}
+                                className={`py-1 px-3 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                                  playingVerse === sec.keyAyahVerseNumber
+                                    ? 'bg-amber-600 text-white'
+                                    : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100 border border-amber-300/60 dark:border-slate-700'
+                                }`}
+                              >
+                                <Volume2 className="w-3.5 h-3.5" />
+                                <span>شنیدن تلاوت آیه</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
-          {/* تب ۲: فقط آیات شریفه و ترجمه */}
+          {/* تب ۲: فقط فرازهای منتخب و آیات عثمان‌طه */}
           {activeTab === 'ayahs' && (
             <div className="space-y-4">
               <h3 className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
-                فرازهای منتخب قرآن کریم در این سرگذشت:
+                فرازهای کلیدی و آیات شریفه در این سرگذشت:
               </h3>
 
               {story.narrative
@@ -220,6 +621,23 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
                     <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                       {sec.text}
                     </p>
+
+                    {sec.keyAyahVerseNumber && (
+                      <div className="flex items-center justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handlePlayVerse(sec.keyAyahVerseNumber)}
+                          className={`py-1.5 px-3 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            playingVerse === sec.keyAyahVerseNumber
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-amber-100/70 dark:bg-slate-800 text-amber-800 dark:text-amber-300 hover:bg-amber-200/70'
+                          }`}
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                          <span>شنیدن تلاوت آیه</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
             </div>
@@ -252,7 +670,7 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
                     آیا مایلید محفوظات خود از این داستان را بیازمایید؟
                   </div>
                   <div className="text-xs text-teal-700 dark:text-teal-300/80 mt-0.5">
-                    شامل {toPersianDigits(story.questions.length)} سوال چهارگزینه‌ای تخصصی همراه با صوت آیات
+                    شامل {toPersianDigits(story.questions.length)} سوال چهارگزینه‌ای تطبیقی با شأن قرآنی
                   </div>
                 </div>
 
@@ -271,10 +689,24 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
         {/* پانوشت مودال */}
         <div className="p-3.5 sm:p-4 border-t border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-800/50 flex items-center justify-between gap-2.5 text-xs">
           <span className="text-slate-400 font-medium">
-            تعداد آیات: {story.versesRange}
+            سوره {story.surahName} • {story.versesRange}
           </span>
 
           <div className="flex items-center gap-2">
+            {onNavigateToSurah && (
+              <button
+                type="button"
+                onClick={() => {
+                  onNavigateToSurah(story.surahId);
+                  onClose();
+                }}
+                className="py-2 px-3.5 rounded-xl border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-teal-800 dark:text-teal-300 font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">تلاوت در سوره {story.surahName}</span>
+                <span className="sm:hidden">تلاوت</span>
+              </button>
+            )}
             <button
               onClick={() => onStartQuiz(story)}
               className="py-2 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-95"

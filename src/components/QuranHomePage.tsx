@@ -37,6 +37,17 @@ import { currentKhatmDay, localDateKey } from '../utils/date';
 import { QURAN_STORIES, QuranStory } from '../data/quranStories';
 import { RealisticQuizView, QuizQuestionItem } from './RealisticQuizView';
 import { QuranStoryDetailModal } from './QuranStoryDetailModal';
+import { DailyCompanionCard } from './DailyCompanionCard';
+import { DailyStreakModal } from './DailyStreakModal';
+import {
+  getStreakData,
+  getCurrentWeekStatus,
+  getDueReviewAyahs,
+  recordUserActivity,
+  StreakData,
+  WeekDayStatus,
+  ReviewAyahItem,
+} from '../services/activityTracker';
 
 interface QuranHomePageProps {
   surahs: Surah[];
@@ -51,6 +62,7 @@ interface QuranHomePageProps {
   onOpenSearch: (initialQuery?: string) => void;
   onOpenBookmarks: () => void;
   onOpenKhatm: () => void;
+  onOpenStories?: () => void;
   onOpenAI: (verse?: Verse) => void;
   onOpenMemorization: () => void;
   onOpenOfflineDownloads: () => void;
@@ -141,6 +153,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
   onOpenSearch,
   onOpenBookmarks,
   onOpenKhatm,
+  onOpenStories,
   onOpenAI,
   onOpenMemorization,
   onOpenOfflineDownloads,
@@ -333,8 +346,30 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
     };
     await QuranService.saveKhatmPlan(updatedPlan);
     setKhatmPlan(updatedPlan);
+    recordUserActivity('khatm');
     window.dispatchEvent(new CustomEvent('mobin-khatm-updated'));
   };
+
+  // پیگیری همراهی و زنجیره پیوستگی روزانه و آیات نیازمند مرور (لایتنر)
+  const [streakData, setStreakData] = useState<StreakData>(getStreakData());
+  const [weekStatus, setWeekStatus] = useState<WeekDayStatus[]>(getCurrentWeekStatus());
+  const [dueReviewAyahs, setDueReviewAyahs] = useState<ReviewAyahItem[]>(getDueReviewAyahs());
+  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
+
+  useEffect(() => {
+    const refreshActivity = () => {
+      setStreakData(getStreakData());
+      setWeekStatus(getCurrentWeekStatus());
+      setDueReviewAyahs(getDueReviewAyahs());
+    };
+    refreshActivity();
+    window.addEventListener('mobin-activity-updated', refreshActivity);
+    window.addEventListener('mobin-review-deck-updated', refreshActivity);
+    return () => {
+      window.removeEventListener('mobin-activity-updated', refreshActivity);
+      window.removeEventListener('mobin-review-deck-updated', refreshActivity);
+    };
+  }, []);
 
   // وضعیت و منطق جستجوی صوتی در صفحه نخست
   const [isVoiceListening, setIsVoiceListening] = useState(false);
@@ -504,35 +539,24 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* دکمه جستجوی صوتی */}
+            {/* دکمه اختصاصی جستجوی صوتی فقط با آیکون */}
             <button
               type="button"
               onClick={handleToggleVoiceSearch}
-              title={isVoiceListening ? 'توقف شنیدن صدا' : 'جستجوی صوتی قرآن (فارسی / عربی)'}
+              title={isVoiceListening ? 'توقف شنیدن صدا' : 'جستجوی صوتی قرآن'}
               aria-label="جستجوی صوتی"
-              className={`p-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer text-xs font-bold ${
+              className={`p-2.5 rounded-xl transition-all flex items-center justify-center cursor-pointer ${
                 isVoiceListening
                   ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30 animate-pulse ring-2 ring-rose-300'
                   : 'bg-stone-100 hover:bg-teal-50 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 border border-stone-200/60 dark:border-slate-700/60 active:scale-95'
               }`}
             >
               {isVoiceListening ? (
-                <>
-                  <MicOff className="w-4 h-4" />
-                  <span className="hidden xs:inline text-[11px]">پایان</span>
-                </>
+                <MicOff className="w-4 h-4" />
               ) : (
-                <>
-                  <Mic className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                  <span className="hidden xs:inline text-[11px] text-slate-600 dark:text-slate-300">صوتی</span>
-                </>
+                <Mic className="w-4 h-4 text-teal-600 dark:text-teal-400" />
               )}
             </button>
-
-            <div className="hidden xs:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800/80 border border-stone-200/60 dark:border-slate-700/60 text-[11px] font-semibold text-slate-500 dark:text-slate-400 shrink-0">
-              <span>جستجو</span>
-              <Search className="w-3 h-3 text-teal-600 dark:text-teal-400" />
-            </div>
           </div>
         </div>
 
@@ -554,6 +578,16 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           ))}
         </div>
       </section>
+
+      {/* ویجت همراهی و استمرار روزانه با قرآن (Daily Streak & Spaced Repetition) */}
+      <DailyCompanionCard
+        streakData={streakData}
+        weekStatus={weekStatus}
+        dueReviewAyahs={dueReviewAyahs}
+        onOpenStreakModal={() => setIsStreakModalOpen(true)}
+        onOpenReviewModal={() => setIsStreakModalOpen(true)}
+        darkMode={darkMode}
+      />
 
       {/* چهار کارت اصلی دسترسی سریع درست زیر نوار جستجو با طراحی برجسته، شکیل و فونت درشت */}
       <section id="home-main-shortcuts" className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
@@ -1020,10 +1054,16 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           </div>
 
           <button
-            onClick={onOpenMemorization}
-            className="text-xs text-amber-700 dark:text-amber-400 hover:underline font-bold flex items-center gap-1 p-2"
+            onClick={() => {
+              if (onOpenStories) {
+                onOpenStories();
+              } else {
+                onOpenMemorization();
+              }
+            }}
+            className="text-xs text-amber-700 dark:text-amber-400 hover:underline font-bold flex items-center gap-1 p-2 cursor-pointer"
           >
-            <span>همه داستان‌ها</span>
+            <span>همه داستان‌ها ({toPersianDigits(QURAN_STORIES.length)})</span>
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -1082,6 +1122,17 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           }}
         />
       )}
+
+      {/* مدال تقویم همراهی و استمرار قرآنی و لایتنر */}
+      <DailyStreakModal
+        isOpen={isStreakModalOpen}
+        onClose={() => setIsStreakModalOpen(false)}
+        streakData={streakData}
+        weekStatus={weekStatus}
+        dueReviewAyahs={dueReviewAyahs}
+        onNavigateToVerse={onNavigateToVerse}
+        darkMode={darkMode}
+      />
     </main>
   );
 };

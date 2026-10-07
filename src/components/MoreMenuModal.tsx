@@ -28,6 +28,7 @@ interface MoreMenuModalProps {
   onOpenAbout: () => void;
   onToggleDarkMode: () => void;
   onOpenMushafPage: () => void;
+  onOpenStories?: () => void;
   darkMode: boolean;
 }
 
@@ -43,6 +44,7 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
   onOpenAbout,
   onToggleDarkMode,
   onOpenMushafPage,
+  onOpenStories,
   darkMode,
 }) => {
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
@@ -87,6 +89,16 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
       action: () => {
         onClose();
         onOpenKhatm();
+      },
+    },
+    {
+      label: 'داستان‌ها و حکمت‌های قرآنی',
+      desc: '۴۲ سرگذشت قرآنی همراه با صوت آیات، عبرت‌ها و آزمون',
+      icon: Sparkles,
+      iconColor: 'text-purple-600 dark:text-purple-400 bg-purple-500/10',
+      action: () => {
+        onClose();
+        if (onOpenStories) onOpenStories();
       },
     },
     {

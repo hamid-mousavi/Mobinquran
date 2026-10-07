@@ -24,6 +24,8 @@ import {
   Play,
 } from 'lucide-react';
 import { toPersianDigits } from '../utils/textNormalization';
+import { addAyahToReview } from '../services/activityTracker';
+import { ALL_SURAHS } from '../data/surahs';
 
 export interface ShortsQuestion {
   id: string;
@@ -114,6 +116,28 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
   const [fontScale, setFontScale] = useState<number>(0); // 0 = standard, 1 = large, 2 = extra-large
   const [timeLeft, setTimeLeft] = useState<number>(timePerQuestion);
   const [isFullVerseModalOpen, setIsFullVerseModalOpen] = useState(false); // باکس پاپ‌آپ مشاهده کل سوال و آیه
+  const [addedToLeitnerQuestions, setAddedToLeitnerQuestions] = useState<Set<string>>(new Set());
+  const [allWrongAdded, setAllWrongAdded] = useState(false);
+
+  const handleAddToLeitner = (q: ShortsQuestion) => {
+    const match = ALL_SURAHS.find((s) => s.nameArabic === q.surahName || s.namePersian === q.surahName);
+    const sId = match ? match.id : 1;
+    addAyahToReview(sId, q.surahName, q.verseNumber, true);
+    setAddedToLeitnerQuestions((prev) => new Set(prev).add(q.id));
+  };
+
+  const handleAddAllWrongToLeitner = () => {
+    questions.forEach((q, idx) => {
+      const isCorrect = selectedAnswers[idx] === q.correctIndex;
+      if (!isCorrect) {
+        const match = ALL_SURAHS.find((s) => s.nameArabic === q.surahName || s.namePersian === q.surahName);
+        const sId = match ? match.id : 1;
+        addAyahToReview(sId, q.surahName, q.verseNumber, true);
+        setAddedToLeitnerQuestions((prev) => new Set(prev).add(q.id));
+      }
+    });
+    setAllWrongAdded(true);
+  };
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -704,6 +728,25 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
               </div>
             </div>
 
+            {score < questions.length && (
+              <button
+                type="button"
+                onClick={handleAddAllWrongToLeitner}
+                className={`w-full py-3 px-4 rounded-2xl border font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 shadow-lg ${
+                  allWrongAdded
+                    ? 'bg-emerald-600 text-white border-emerald-400'
+                    : 'bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-400'
+                }`}
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>
+                  {allWrongAdded
+                    ? `تمام ${toPersianDigits(questions.length - score)} اشتباه به جعبه لایتنر اضافه شدند ✓`
+                    : `افزودن ${toPersianDigits(questions.length - score)} اشتباه به جعبه لایتنر`}
+                </span>
+              </button>
+            )}
+
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
@@ -775,6 +818,19 @@ export const FullscreenShortsQuiz: React.FC<FullscreenShortsQuizProps> = ({
               <span className="text-[9px] font-black text-amber-300 -mt-0.5">
                 {fontScale === 0 ? 'A' : fontScale === 1 ? 'A+' : 'A++'}
               </span>
+            </button>
+
+            {/* کلید افزودن آیه به جعبه لایتنر */}
+            <button
+              onClick={() => handleAddToLeitner(currentQ)}
+              className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-all cursor-pointer active:scale-90 ${
+                addedToLeitnerQuestions.has(currentQ.id)
+                  ? 'bg-amber-500 border-amber-300 text-slate-950 font-bold shadow-md shadow-amber-500/30'
+                  : 'bg-black/40 border-white/20 text-white/80 hover:bg-white/20'
+              }`}
+              title={addedToLeitnerQuestions.has(currentQ.id) ? 'در جعبه لایتنر ثبت شد' : 'افزودن این آیه به جعبه لایتنر'}
+            >
+              <RotateCcw className={`w-5 h-5 ${addedToLeitnerQuestions.has(currentQ.id) ? 'text-slate-950' : 'text-amber-400'}`} />
             </button>
 
             {/* تغییر تم پس‌زمینه */}

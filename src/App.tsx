@@ -16,6 +16,8 @@ import { QuranHomePage } from './components/QuranHomePage';
 import { AIPage } from './components/AIPage';
 import { MemorizationPage } from './components/MemorizationPage';
 import { OfflinePage } from './components/OfflinePage';
+import { QuranStoriesExplorer } from './components/QuranStoriesExplorer';
+import { BookOpen, ChevronRight } from 'lucide-react';
 import { BottomNavigation } from './components/BottomNavigation';
 import { MoreMenuModal } from './components/MoreMenuModal';
 import { AboutModal } from './components/AboutModal';
@@ -27,6 +29,7 @@ import { Surah, Verse, AppSettings, ViewMode } from './types';
 import { MushafPageData } from './types/mushafLayout';
 import MushafPrototype from './components/MushafPrototype';
 import { requestQuranScrollToVerse } from './components/QuranReader';
+import { recordUserActivity } from './services/activityTracker';
 
 const getInitialSystemDarkMode = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -52,7 +55,7 @@ export default function App() {
   const [isCorePackageReady, setIsCorePackageReady] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('verse-by-verse');
   const [currentMushafPage, setCurrentMushafPage] = useState<number>(1);
-  const [activePage, setActivePage] = useState<'home' | 'reader' | 'ai' | 'memorization' | 'offline'>('home');
+  const [activePage, setActivePage] = useState<'home' | 'reader' | 'ai' | 'memorization' | 'offline' | 'stories'>('home');
   const [previousPage, setPreviousPage] = useState<'home' | 'reader'>('home');
   const [lastReadPosition, setLastReadPosition] = useState<{ surahId: number; verseNumber: number; pageNumber?: number } | null>(null);
 
@@ -258,6 +261,14 @@ export default function App() {
     setActivePage('memorization');
   };
 
+  const handleOpenStories = () => {
+    setIsAudioPlayerOpen(false);
+    setActivePlayingVerseNumber(null);
+    setPreviousPage(activePage === 'home' ? 'home' : 'reader');
+    setActivePage('stories');
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  };
+
   const handleOpenOffline = () => {
     setPreviousPage(activePage === 'home' ? 'home' : 'reader');
     setActivePage('offline');
@@ -428,6 +439,7 @@ export default function App() {
   const handlePlayVerseAudio = (verseNumber: number) => {
     setActivePlayingVerseNumber(verseNumber);
     setIsAudioPlayerOpen(true);
+    recordUserActivity('listen');
   };
 
   // پرش خودکار پلیر به سورهٔ بعد (بدون تغییر محل مطالعهٔ کاربر)
@@ -511,6 +523,7 @@ export default function App() {
           }}
           onOpenBookmarks={() => setIsBookmarksModalOpen(true)}
           onOpenKhatm={() => setIsKhatmModalOpen(true)}
+          onOpenStories={handleOpenStories}
           onOpenAI={(verse) => handleOpenAI(verse)}
           onOpenMemorization={handleOpenMemorization}
           onOpenOfflineDownloads={handleOpenOffline}
@@ -552,6 +565,46 @@ export default function App() {
           darkMode={settings.darkMode}
           onBack={handleBackToPrevious}
         />
+      ) : activePage === 'stories' ? (
+        <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-28 animate-fadeIn select-none" dir="rtl">
+          {/* سربرگ اختصاصی و فاخر صفحه داستان‌ها */}
+          <div className="flex items-center justify-between gap-3 mb-6 pb-3 border-b border-stone-200/80 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold shadow-xs">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-base sm:text-xl font-black text-slate-900 dark:text-slate-100">
+                  داستان‌ها و حکمت‌های قرآنی
+                </h1>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  گنجینه سرگذشت‌های آموزنده قرآن، تلاوت آیات و آزمون‌های تدبّر
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleBackToPrevious}
+              className="py-2 px-3.5 rounded-xl border border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+            >
+              <ChevronRight className="w-4 h-4" />
+              <span>بازگشت</span>
+            </button>
+          </div>
+
+          <QuranStoriesExplorer
+            darkMode={settings.darkMode}
+            onNavigateToSurah={(sId) => {
+              const target = surahs.find((s) => s.id === sId);
+              if (target) {
+                setCurrentSurah(target);
+                setCurrentMushafPage(target.startPage || 1);
+                setActivePage('reader');
+              }
+            }}
+          />
+        </div>
       ) : activePage === 'offline' ? (
         <OfflinePage
           darkMode={settings.darkMode}
@@ -791,6 +844,7 @@ export default function App() {
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenAbout={() => setIsAboutModalOpen(true)}
         onToggleDarkMode={handleToggleDarkMode}
+        onOpenStories={handleOpenStories}
         onOpenMushafPage={() => {
           setViewMode('mushaf-page');
           setActivePage('reader');

@@ -41,6 +41,7 @@ import {
   RecitationEvaluation,
 } from '../utils/quranRecitationEvaluator';
 import { quizAudio } from '../utils/quizAudio';
+import { addAyahToReview } from '../services/activityTracker';
 
 export type DiscussionMode =
   | 'verse_by_verse' // ۱. آیه به آیه
@@ -81,6 +82,8 @@ interface SmartRecitationFeedbackPanelProps {
   targetText?: string;
   surahName?: string;
   verseNumber?: number | string;
+  surahId?: number;
+  rawVerseNumber?: number;
 }
 
 const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanelProps> = ({
@@ -97,11 +100,14 @@ const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanelProps> 
   targetText,
   surahName,
   verseNumber,
+  surahId,
+  rawVerseNumber,
 }) => {
   const hasTranscribed = Boolean(transcribedText && transcribedText.trim());
   const [aiEvaluation, setAiEvaluation] = useState<AiRecitationResult | null>(null);
   const [isLoadingAi, setIsLoadingAi] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [isAddedToLeitner, setIsAddedToLeitner] = useState<boolean>(false);
 
   // ریست ارزیابی هوش مصنوعی با تغییر متن ورودی
   useEffect(() => {
@@ -424,6 +430,28 @@ const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanelProps> 
                 </button>
               )}
             </>
+          )}
+
+          {/* دکمه اختصاصی افزودن آیه مورد مباحثه به جعبه لایتنر */}
+          {Boolean(rawVerseNumber || (typeof verseNumber === 'number' && verseNumber > 0)) && (
+            <button
+              type="button"
+              onClick={() => {
+                const vNum = rawVerseNumber || (typeof verseNumber === 'number' ? verseNumber : 1);
+                addAyahToReview(surahId || 1, surahName || 'قرآن کریم', vNum, true);
+                setIsAddedToLeitner(true);
+                setTimeout(() => setIsAddedToLeitner(false), 2500);
+              }}
+              className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 ${
+                isAddedToLeitner
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-xs'
+                  : 'border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300'
+              }`}
+              title="افزودن این آیه به جعبه لایتنر برای مرور هوشمند"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 text-amber-500 ${isAddedToLeitner ? 'animate-spin' : ''}`} />
+              <span>{isAddedToLeitner ? 'در لایتنر ثبت شد ✓' : 'افزودن به جعبه لایتنر'}</span>
+            </button>
           )}
         </div>
       )}
@@ -2514,6 +2542,8 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                     targetText={activeVerseSplit.completionText}
                     surahName={currentSurah.nameArabic}
                     verseNumber={toPersianDigits(activeVerse?.verseNumber || 1)}
+                    surahId={currentSurah.id}
+                    rawVerseNumber={activeVerse?.verseNumber}
                   />
                 </div>
               </div>
@@ -2749,6 +2779,8 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                     targetText={currentTargetRecitationText}
                     surahName={currentSurah.nameArabic}
                     verseNumber={toPersianDigits(activeVerse?.verseNumber || 1)}
+                    surahId={currentSurah.id}
+                    rawVerseNumber={activeVerse?.verseNumber}
                   />
 
                   {/* دکمه‌های تایید نتیجه مسابقه */}
@@ -3323,6 +3355,8 @@ export const VoiceDiscussionStudio: React.FC<VoiceDiscussionStudioProps> = ({
                         targetText={activeVerse?.textArabic}
                         surahName={currentSurah.nameArabic}
                         verseNumber={toPersianDigits(activeVerse?.verseNumber || 1)}
+                        surahId={currentSurah.id}
+                        rawVerseNumber={activeVerse?.verseNumber}
                       />
                     </div>
                   </div>

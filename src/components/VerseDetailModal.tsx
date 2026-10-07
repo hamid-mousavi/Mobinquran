@@ -77,7 +77,7 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {/* دکمه انتقال مستقیم به هوش مصنوعی */}
             <button
               onClick={() => {
@@ -92,7 +92,7 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl hover:bg-white/10 transition-colors"
+              className="p-1.5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

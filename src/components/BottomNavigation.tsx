@@ -2,7 +2,7 @@ import React from 'react';
 import { Home, BookOpen, Sparkles, GraduationCap, LayoutGrid } from 'lucide-react';
 
 interface BottomNavigationProps {
-  activePage: 'home' | 'reader' | 'ai' | 'memorization' | 'offline';
+  activePage: 'home' | 'reader' | 'ai' | 'memorization' | 'offline' | 'stories';
   onNavigateHome: () => void;
   onNavigateReader: () => void;
   onNavigateAI: () => void;

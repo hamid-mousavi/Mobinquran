@@ -26,7 +26,6 @@ import { getArabicFontFamily } from '../utils/fontHelper';
 import { toPersianDigits } from '../utils/textNormalization';
 import { QuranicCard } from './QuranicOrnament';
 import { MemorizationQuizStudio } from './MemorizationQuizStudio';
-import { QuranStoriesExplorer } from './QuranStoriesExplorer';
 import { VoiceDiscussionStudio } from './VoiceDiscussionStudio';
 import { ReciterSelectorDropdown } from './ReciterSelectorDropdown';
 import { SurahSelectorModal } from './SurahSelectorModal';
@@ -38,6 +37,7 @@ import {
   MemorizationStatus,
   MemorizationProgress,
 } from '../services/memorizationStorage';
+import { recordUserActivity, addAyahToReview } from '../services/activityTracker';
 import {
   createMemoState,
   buildAyahNumbers,
@@ -60,7 +60,7 @@ interface MemorizationPageProps {
   onBack: () => void;
 }
 
-type MemorizationView = 'menu' | 'practice' | 'quiz' | 'discussion' | 'stories' | 'progress';
+type MemorizationView = 'menu' | 'practice' | 'quiz' | 'discussion' | 'progress';
 
 const MEMO_RECITERS: { id: ReciterId; name: string }[] = (
   Object.keys(RECITER_NAMES) as ReciterId[]
@@ -104,6 +104,12 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
 
   // فیلتر صفحه کارنامه
   const [progressFilter, setProgressFilter] = useState<'all' | 'memorized' | 'review_needed' | 'unstarted'>('all');
+  const [addedToLeitnerVerses, setAddedToLeitnerVerses] = useState<Set<number>>(new Set());
+
+  const handleAddVerseToLeitner = (verseNumber: number) => {
+    addAyahToReview(currentSurah.id, currentSurah.nameArabic, verseNumber, true);
+    setAddedToLeitnerVerses((prev) => new Set(prev).add(verseNumber));
+  };
 
   // تغییر صفحه بدون باقی ماندن وضعیت مودال انتخاب سوره
   const navigateToView = (view: MemorizationView) => {
@@ -158,6 +164,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
     const state = createMemoState(practiceMode, range, repeats, gapSec * 1000);
     setSession({ surahId: currentSurah.id, state: { ...state, phase: 'playing' as const }, ayahNumbers });
     setAudioError(false);
+    recordUserActivity('memorize');
   };
 
   const stopSession = useCallback(() => {
@@ -214,6 +221,10 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
 
   const handleToggleAyahStatus = (verseNumber: number, nextStatus: MemorizationStatus) => {
     setAyahMemorizationStatus(currentSurah.id, verseNumber, nextStatus);
+    if (nextStatus === 'review_needed') {
+      addAyahToReview(currentSurah.id, currentSurah.nameArabic, verseNumber);
+    }
+    recordUserActivity('memorize');
     refreshStats();
   };
 
@@ -335,28 +346,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             <ChevronLeft className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 group-hover:-translate-x-1 transition-transform" />
           </div>
 
-          {/* کارت ۴: داستان‌ها و حکمت‌های قرآنی */}
-          <div
-            onClick={() => navigateToView('stories')}
-            className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-white to-white dark:from-purple-950/20 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-purple-500 transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 group"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-600/20 group-hover:scale-105 transition-transform shrink-0">
-                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                  داستان‌ها و حکمت‌ها
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                  سرگذشت و آیات محوری پیامبران
-                </p>
-              </div>
-            </div>
-            <ChevronLeft className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0 group-hover:-translate-x-1 transition-transform" />
-          </div>
-
-          {/* کارت ۵: کارنامه و پایش وضعیت آیات */}
+          {/* کارت ۴: کارنامه و پایش وضعیت آیات */}
           <div
             onClick={() => navigateToView('progress')}
             className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-sky-500/30 bg-gradient-to-br from-sky-500/10 via-white to-white dark:from-sky-950/20 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-sky-500 transition-all cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3 group"
@@ -497,39 +487,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   }
 
   // -------------------------------------------------------------
-  // ۴. صفحه اختصاصی داستان‌ها و حکمت‌های قرآنی
-  // -------------------------------------------------------------
-  if (currentView === 'stories') {
-    return (
-      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
-        <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigateToView('menu')}
-              className="p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer active:scale-95"
-              title="بازگشت به منوی حفظ"
-            >
-              <ArrowRight className="w-5 h-5" />
-            </button>
-            <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
-              گنجینه داستان‌ها و حکمت‌های قرآنی
-            </h2>
-          </div>
-        </div>
-
-        <QuranStoriesExplorer
-          darkMode={darkMode}
-          onNavigateToSurah={(sId) => {
-            const target = surahs.find((s) => s.id === sId);
-            if (target) onSelectSurah(target);
-          }}
-        />
-      </div>
-    );
-  }
-
-  // -------------------------------------------------------------
-  // ۵. صفحه اختصاصی کارنامه و وضعیت آیات سوره
+  // ۴. صفحه اختصاصی کارنامه و وضعیت آیات سوره
   // -------------------------------------------------------------
   if (currentView === 'progress') {
     return (
@@ -623,24 +581,43 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
                   </div>
                 </div>
 
-                {/* دکمه وضعیت حفظ */}
-                <button
-                  onClick={() =>
-                    handleToggleAyahStatus(
-                      verse.verseNumber,
-                      isMemorized ? 'unstarted' : 'memorized'
-                    )
-                  }
-                  className={`px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95 ${
-                    isMemorized
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}
-                  title={isMemorized ? 'علامت‌گذاری به عنوان خوانده‌نشده' : 'ثبت به عنوان حفظ کامل'}
-                >
-                  <Check className="w-4 h-4" />
-                  <span>{isMemorized ? 'حفظ‌شده' : 'حفظ'}</span>
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* دکمه افزودن به جعبه لایتنر */}
+                  <button
+                    type="button"
+                    onClick={() => handleAddVerseToLeitner(verse.verseNumber)}
+                    className={`px-2.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                      addedToLeitnerVerses.has(verse.verseNumber)
+                        ? 'bg-amber-500 text-slate-950 font-black'
+                        : 'bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                    title="افزودن این آیه به جعبه لایتنر برای مرور هوشمند"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="hidden sm:inline">
+                      {addedToLeitnerVerses.has(verse.verseNumber) ? 'در لایتنر ✓' : 'لایتنر'}
+                    </span>
+                  </button>
+
+                  {/* دکمه وضعیت حفظ */}
+                  <button
+                    onClick={() =>
+                      handleToggleAyahStatus(
+                        verse.verseNumber,
+                        isMemorized ? 'unstarted' : 'memorized'
+                      )
+                    }
+                    className={`px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95 ${
+                      isMemorized
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                    title={isMemorized ? 'علامت‌گذاری به عنوان خوانده‌نشده' : 'ثبت به عنوان حفظ کامل'}
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isMemorized ? 'حفظ‌شده' : 'حفظ'}</span>
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -905,8 +882,27 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
           <QuranicCard darkMode={darkMode} className="p-6 sm:p-10 text-center space-y-5">
             {currentVerse ? (
               <>
-                <div className="text-xs sm:text-sm font-bold text-amber-600 dark:text-amber-400">
-                  سوره {currentSurah.nameArabic} • آیه {toPersianDigits(currentVerse.verseNumber)}
+                <div className="flex items-center justify-between text-xs sm:text-sm font-bold flex-wrap gap-2">
+                  <div className="text-amber-600 dark:text-amber-400">
+                    سوره {currentSurah.nameArabic} • آیه {toPersianDigits(currentVerse.verseNumber)}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAddVerseToLeitner(currentVerse.verseNumber)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                      addedToLeitnerVerses.has(currentVerse.verseNumber)
+                        ? 'bg-amber-500 text-slate-950 font-black'
+                        : 'bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-stone-200/80 dark:border-slate-700'
+                    }`}
+                    title="افزودن این آیه به جعبه لایتنر برای مرور هوشمند بعدی"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                    <span>
+                      {addedToLeitnerVerses.has(currentVerse.verseNumber)
+                        ? 'در جعبه لایتنر ✓'
+                        : 'افزودن به جعبه لایتنر'}
+                    </span>
+                  </button>
                 </div>
 
                 {/* متن عربی با قابلیت ماسک / پنهان‌سازی */}

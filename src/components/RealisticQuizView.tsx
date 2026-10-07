@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { toPersianDigits } from '../utils/textNormalization';
 import { quizAudio } from '../utils/quizAudio';
+import { addAyahToReview } from '../services/activityTracker';
+import { ALL_SURAHS } from '../data/surahs';
 
 export interface QuizQuestionItem {
   id: string;
@@ -33,6 +35,7 @@ export interface QuizQuestionItem {
   explanation: string;
   surahName: string;
   verseNumber: number;
+  surahId?: number;
   verseAudioUrl?: string | null;
   categoryBadge?: string;
   fullVerseText?: string;
@@ -131,6 +134,36 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
   >([]);
   const [isFinished, setIsFinished] = useState(false);
   const [isReviewMode, setIsReviewMode] = useState(false);
+  const [addedToLeitnerQuestions, setAddedToLeitnerQuestions] = useState<Set<string>>(new Set());
+  const [allWrongAdded, setAllWrongAdded] = useState(false);
+
+  // افزودن آیه سوال به جعبه لایتنر
+  const handleAddToLeitner = (q: QuizQuestionItem) => {
+    let sId = q.surahId;
+    if (!sId) {
+      const match = ALL_SURAHS.find((s) => s.nameArabic === q.surahName || s.namePersian === q.surahName);
+      sId = match ? match.id : 1;
+    }
+    addAyahToReview(sId, q.surahName, q.verseNumber, true);
+    setAddedToLeitnerQuestions((prev) => new Set(prev).add(q.id));
+  };
+
+  // افزودن تمام سوالات اشتباه آزمون به جعبه لایتنر با یک لمس
+  const handleAddAllWrongToLeitner = () => {
+    questions.forEach((q, idx) => {
+      const ans = userAnswers.find((u) => u.questionIndex === idx);
+      if (!ans || !ans.isCorrect) {
+        let sId = q.surahId;
+        if (!sId) {
+          const match = ALL_SURAHS.find((s) => s.nameArabic === q.surahName || s.namePersian === q.surahName);
+          sId = match ? match.id : 1;
+        }
+        addAyahToReview(sId, q.surahName, q.verseNumber, true);
+        setAddedToLeitnerQuestions((prev) => new Set(prev).add(q.id));
+      }
+    });
+    setAllWrongAdded(true);
+  };
 
   // وضعیت باز/بسته بودن متن طولانی آیه (فقط اگر آیه طولانی باشد)
   const [isQuestionExpanded, setIsQuestionExpanded] = useState(false);
@@ -760,6 +793,29 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
                 </div>
               </div>
             )}
+
+            {/* دکمه اختصاصی افزودن آیه به جعبه لایتنر هنگام آزمون */}
+            {isAnswered && (
+              <div className="pt-1 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleAddToLeitner(currentQ)}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 ${
+                    addedToLeitnerQuestions.has(currentQ.id)
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-xs'
+                      : 'border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300'
+                  }`}
+                  title="افزودن این آیه به جعبه لایتنر برای مرور هوشمند"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${addedToLeitnerQuestions.has(currentQ.id) ? '' : 'text-amber-500'}`} />
+                  <span>
+                    {addedToLeitnerQuestions.has(currentQ.id)
+                      ? 'آیه در لایتنر ثبت شد ✓'
+                      : 'افزودن این آیه به جعبه لایتنر'}
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         ) : isFinished ? (
           /* صفحه کارنامه و نتیجه نهایی آزمون / حالت Review */
@@ -801,19 +857,33 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
                           : 'border-rose-500/30 bg-rose-50/20 dark:bg-rose-950/20'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
                         <span className="text-xs font-bold text-slate-500">
                           سوال {toPersianDigits(idx + 1)} • سوره {q.surahName} (آیه {toPersianDigits(q.verseNumber)})
                         </span>
-                        <span
-                          className={`text-[11px] px-2 py-0.5 rounded-md font-bold flex items-center gap-1 ${
-                            isCorrect
-                              ? 'bg-emerald-600 text-white'
-                              : isUnanswered
-                              ? 'bg-amber-500 text-slate-950'
-                              : 'bg-rose-600 text-white'
-                          }`}
-                        >
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleAddToLeitner(q)}
+                            className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold transition-all cursor-pointer active:scale-95 flex items-center gap-1 ${
+                              addedToLeitnerQuestions.has(q.id)
+                                ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-xs'
+                                : 'border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300'
+                            }`}
+                            title="افزودن این آیه به جعبه لایتنر برای مرور"
+                          >
+                            <RotateCcw className="w-3 h-3 text-amber-500" />
+                            <span>{addedToLeitnerQuestions.has(q.id) ? 'در لایتنر ✓' : '+ لایتنر'}</span>
+                          </button>
+                          <span
+                            className={`text-[11px] px-2 py-0.5 rounded-md font-bold flex items-center gap-1 ${
+                              isCorrect
+                                ? 'bg-emerald-600 text-white'
+                                : isUnanswered
+                                ? 'bg-amber-500 text-slate-950'
+                                : 'bg-rose-600 text-white'
+                            }`}
+                          >
                           {isCorrect ? (
                             <>
                               <Check className="w-3 h-3" />
@@ -832,8 +902,9 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
                           )}
                         </span>
                       </div>
+                    </div>
 
-                      <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
+                    <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
                         {q.prompt}
                       </p>
 
@@ -931,6 +1002,26 @@ export const RealisticQuizView: React.FC<RealisticQuizViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* دکمه افزودن اشتباهات به جعبه لایتنر */}
+              {score < questions.length && (
+                <button
+                  type="button"
+                  onClick={handleAddAllWrongToLeitner}
+                  className={`w-full py-3 px-4 rounded-2xl border font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 shadow-2xs ${
+                    allWrongAdded
+                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                      : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-900 dark:text-amber-200'
+                  }`}
+                >
+                  <RotateCcw className={`w-4 h-4 text-amber-500 ${allWrongAdded ? 'text-white' : ''}`} />
+                  <span>
+                    {allWrongAdded
+                      ? `تمام ${toPersianDigits(questions.length - score)} آیه اشتباه به جعبه لایتنر افزوده شدند ✓`
+                      : `افزودن ${toPersianDigits(questions.length - score)} آیه اشتباه به جعبه لایتنر برای مرور`}
+                  </span>
+                </button>
+              )}
 
               {/* دکمه‌های اقدام: Review، تکرار، خروج */}
               <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
