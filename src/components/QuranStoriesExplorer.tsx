@@ -312,7 +312,7 @@ export const QuranStoriesExplorer: React.FC<QuranStoriesExplorerProps> = ({
               className="p-2.5 rounded-xl border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-teal-800 dark:text-teal-300 font-bold text-xs flex items-center justify-center transition-all cursor-pointer active:scale-95"
               title="آزمون این داستان"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
+              <HelpCircle className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -485,7 +485,7 @@ export const QuranStoriesExplorer: React.FC<QuranStoriesExplorerProps> = ({
                     title="آزمون این داستان"
                     aria-label="آزمون"
                   >
-                    <Play className="w-4 h-4 fill-current" />
+                    <HelpCircle className="w-4 h-4" />
                   </button>
                 </div>
               </QuranicCard>

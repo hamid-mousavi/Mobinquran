@@ -14,6 +14,8 @@ import {
   Flame,
   Award,
   ExternalLink,
+  GraduationCap,
+  HelpCircle,
   Bookmark,
   BookmarkCheck,
   Volume2,
@@ -43,7 +45,7 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<'narrative' | 'ayahs' | 'wisdoms'>('narrative');
   const [readingMode, setReadingMode] = useState<'interactive' | 'full'>('interactive');
   const [interactiveStep, setInteractiveStep] = useState(0);
-  const [playingVerse, setPlayingVerse] = useState<number | null>(null);
+  const [playingVerseKey, setPlayingVerseKey] = useState<string | null>(null);
   const [copiedToast, setCopiedToast] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -92,7 +94,7 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
         audioRef.current.pause();
         audioRef.current = null;
       }
-      setPlayingVerse(null);
+      setPlayingVerseKey(null);
     };
   }, [story?.id]);
 
@@ -128,41 +130,56 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
     } catch {}
   };
 
-  // پخش و توقف صوت فراز قرآنی
-  const handlePlayVerse = (verseNumber?: number) => {
+  // پخش و توقف صوت فراز قرآنی با پشتیبانی قطعی از سوره و شماره آیه اختصاصی
+  const handlePlayVerse = (verseNumber?: number, customSurahId?: number) => {
     if (!story || !verseNumber) return;
+    const effectiveSurahId = customSurahId || story.surahId;
+    const playKey = `${effectiveSurahId}:${verseNumber}`;
 
-    if (playingVerse === verseNumber) {
+    if (playingVerseKey === playKey) {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
       }
-      setPlayingVerse(null);
+      setPlayingVerseKey(null);
       return;
     }
 
-    const url =
-      getAudioSourceUrl('parhizgar', story.surahId, verseNumber, 0) ||
-      getAudioSourceUrl('afasy', story.surahId, verseNumber, 0) ||
-      getAudioSourceUrl('abdulbasit', story.surahId, verseNumber, 0);
+    const reciters = ['parhizgar', 'afasy', 'abdulbasit', 'minshawi'] as const;
+    const urls: string[] = [];
+    for (const r of reciters) {
+      const u = getAudioSourceUrl(r, effectiveSurahId, verseNumber, 0);
+      if (u && !urls.includes(u)) urls.push(u);
+    }
 
-    if (!url) return;
+    if (urls.length === 0) return;
 
     if (audioRef.current) {
       audioRef.current.pause();
     }
 
-    const audio = new Audio(url);
+    let urlIndex = 0;
+    const audio = new Audio(urls[urlIndex]);
     audioRef.current = audio;
-    setPlayingVerse(verseNumber);
+    setPlayingVerseKey(playKey);
+
+    const tryNext = () => {
+      urlIndex++;
+      if (urlIndex < urls.length) {
+        audio.src = urls[urlIndex];
+        audio.play().catch(() => tryNext());
+      } else {
+        setPlayingVerseKey(null);
+      }
+    };
 
     audio.onended = () => {
-      setPlayingVerse(null);
+      setPlayingVerseKey(null);
     };
     audio.onerror = () => {
-      setPlayingVerse(null);
+      tryNext();
     };
-    audio.play().catch(() => setPlayingVerse(null));
+    audio.play().catch(() => tryNext());
   };
 
   // کپی حکمت داستان در کلیپ‌بورد
@@ -176,6 +193,25 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
     });
   };
 
+  // استخراج قطعی شماره آیه از فیلد یا مرجع آیه جهت پخش صوت در تمام داستان‌ها
+  const getSectionVerseNumber = (sec: { keyAyahVerseNumber?: number; keyAyahRef?: string }): number | null => {
+    if (sec.keyAyahVerseNumber && sec.keyAyahVerseNumber > 0) {
+      return sec.keyAyahVerseNumber;
+    }
+    if (!sec.keyAyahRef) return null;
+    const persianToEnglish: Record<string, string> = {
+      '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+      '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+    };
+    const normalized = sec.keyAyahRef.replace(/[۰-۹]/g, (d) => persianToEnglish[d] || d);
+    const match = normalized.match(/آی[هات]*\s*(\d+)/i) || normalized.match(/(\d+)/);
+    if (match && match[1]) {
+      const num = parseInt(match[1], 10);
+      return isNaN(num) ? null : num;
+    }
+    return null;
+  };
+
   if (!story) return null;
 
   const currentSection = story.narrative[interactiveStep] || story.narrative[0];
@@ -184,10 +220,10 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-[85] flex items-center justify-center p-2 sm:p-4 pb-3 sm:pb-4 bg-black/85 backdrop-blur-md animate-fadeIn"
       dir="rtl"
     >
-      <div className="bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl relative">
+      <div className="bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl relative">
         {/* پیام کپی موفق */}
         {copiedToast && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-60 bg-teal-600 text-white text-xs font-bold py-2 px-4 rounded-xl shadow-lg flex items-center gap-1.5 animate-bounce">
@@ -258,14 +294,14 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
               <Share2 className="w-4 h-4" />
             </button>
 
-            {/* دکمه شروع آزمون شورتز */}
+            {/* دکمه شروع آزمون با آیکون سنجش و یادگیری */}
             <button
               onClick={() => onStartQuiz(story)}
               className="py-2 px-3 sm:px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
-              title="شروع آزمون"
-              aria-label="شروع آزمون"
+              title="آزمون داستان"
+              aria-label="آزمون داستان"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
+              <HelpCircle className="w-4 h-4" />
               <span className="hidden sm:inline">آزمون داستان</span>
             </button>
 
@@ -439,32 +475,39 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
                             «{currentSection.keyAyahText}»
                           </div>
 
-                          {/* دکمه گوش دادن به صوت تلاوت این آیه */}
-                          {currentSection.keyAyahVerseNumber && (
-                            <div className="mt-3 flex items-center justify-center">
-                              <button
-                                type="button"
-                                onClick={() => handlePlayVerse(currentSection.keyAyahVerseNumber)}
-                                className={`py-1.5 px-3.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-xs ${
-                                  playingVerse === currentSection.keyAyahVerseNumber
-                                    ? 'bg-amber-600 text-white animate-pulse'
-                                    : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-slate-700 border border-amber-300 dark:border-slate-700'
-                                }`}
-                              >
-                                {playingVerse === currentSection.keyAyahVerseNumber ? (
-                                  <>
-                                    <Square className="w-3.5 h-3.5 fill-current" />
-                                    <span>در حال پخش تلاوت... (توقف)</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Volume2 className="w-3.5 h-3.5" />
-                                    <span>شنیدن تلاوت آیه (صوت پرهیزگار)</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          )}
+                          {/* دکمه گوش دادن به صوت تلاوت این آیه با تضمین سوره و آیه */}
+                          {(() => {
+                            const vNum = currentSection.keyAyahVerseNumber || getSectionVerseNumber(currentSection) || 1;
+                            const sId = currentSection.surahId || story.surahId;
+                            const playKey = `${sId}:${vNum}`;
+                            const isPlaying = playingVerseKey === playKey;
+
+                            return (
+                              <div className="mt-3 flex items-center justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handlePlayVerse(vNum, sId)}
+                                  className={`py-1.5 px-3.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-xs ${
+                                    isPlaying
+                                      ? 'bg-amber-600 text-white animate-pulse'
+                                      : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-slate-700 border border-amber-300 dark:border-slate-700'
+                                  }`}
+                                >
+                                  {isPlaying ? (
+                                    <>
+                                      <Square className="w-3.5 h-3.5 fill-current" />
+                                      <span>در حال پخش تلاوت... (توقف)</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Volume2 className="w-3.5 h-3.5" />
+                                      <span>شنیدن تلاوت آیه (صوت پرهیزگار)</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}
@@ -567,22 +610,38 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
                             «{sec.keyAyahText}»
                           </div>
 
-                          {sec.keyAyahVerseNumber && (
-                            <div className="mt-2.5 flex items-center justify-center">
-                              <button
-                                type="button"
-                                onClick={() => handlePlayVerse(sec.keyAyahVerseNumber)}
-                                className={`py-1 px-3 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                                  playingVerse === sec.keyAyahVerseNumber
-                                    ? 'bg-amber-600 text-white'
-                                    : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100 border border-amber-300/60 dark:border-slate-700'
-                                }`}
-                              >
-                                <Volume2 className="w-3.5 h-3.5" />
-                                <span>شنیدن تلاوت آیه</span>
-                              </button>
-                            </div>
-                          )}
+                          {(() => {
+                            const vNum = sec.keyAyahVerseNumber || getSectionVerseNumber(sec) || 1;
+                            const sId = sec.surahId || story.surahId;
+                            const playKey = `${sId}:${vNum}`;
+                            const isPlaying = playingVerseKey === playKey;
+
+                            return (
+                              <div className="mt-2.5 flex items-center justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handlePlayVerse(vNum, sId)}
+                                  className={`py-1 px-3 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                                    isPlaying
+                                      ? 'bg-amber-600 text-white animate-pulse'
+                                      : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100 border border-amber-300/60 dark:border-slate-700'
+                                  }`}
+                                >
+                                  {isPlaying ? (
+                                    <>
+                                      <Square className="w-3.5 h-3.5 fill-current" />
+                                      <span>در حال پخش تلاوت... (توقف)</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Volume2 className="w-3.5 h-3.5" />
+                                      <span>شنیدن تلاوت آیه (صوت پرهیزگار)</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
@@ -622,22 +681,38 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
                       {sec.text}
                     </p>
 
-                    {sec.keyAyahVerseNumber && (
-                      <div className="flex items-center justify-end pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handlePlayVerse(sec.keyAyahVerseNumber)}
-                          className={`py-1.5 px-3 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                            playingVerse === sec.keyAyahVerseNumber
-                              ? 'bg-amber-600 text-white'
-                              : 'bg-amber-100/70 dark:bg-slate-800 text-amber-800 dark:text-amber-300 hover:bg-amber-200/70'
-                          }`}
-                        >
-                          <Volume2 className="w-3.5 h-3.5" />
-                          <span>شنیدن تلاوت آیه</span>
-                        </button>
-                      </div>
-                    )}
+                    {(() => {
+                      const vNum = sec.keyAyahVerseNumber || getSectionVerseNumber(sec) || 1;
+                      const sId = sec.surahId || story.surahId;
+                      const playKey = `${sId}:${vNum}`;
+                      const isPlaying = playingVerseKey === playKey;
+
+                      return (
+                        <div className="flex items-center justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handlePlayVerse(vNum, sId)}
+                            className={`py-1.5 px-3 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                              isPlaying
+                                ? 'bg-amber-600 text-white animate-pulse'
+                                : 'bg-amber-100/70 dark:bg-slate-800 text-amber-800 dark:text-amber-300 hover:bg-amber-200/70'
+                            }`}
+                          >
+                            {isPlaying ? (
+                              <>
+                                <Square className="w-3.5 h-3.5 fill-current" />
+                                <span>توقف پخش</span>
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="w-3.5 h-3.5" />
+                                <span>شنیدن تلاوت آیه (صوت پرهیزگار)</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
             </div>
@@ -676,9 +751,9 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
 
                 <button
                   onClick={() => onStartQuiz(story)}
-                  className="py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0"
+                  className="py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
                 >
-                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <HelpCircle className="w-4 h-4" />
                   <span>آزمون سریع این داستان</span>
                 </button>
               </div>
@@ -686,41 +761,31 @@ export const QuranStoryDetailModal: React.FC<QuranStoryDetailModalProps> = ({
           )}
         </div>
 
-        {/* پانوشت مودال */}
+        {/* پانوشت مودال: فقط دکمه تلاوت طبق درخواست کاربر */}
         <div className="p-3.5 sm:p-4 border-t border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-800/50 flex items-center justify-between gap-2.5 text-xs">
-          <span className="text-slate-400 font-medium">
-            سوره {story.surahName} • {story.versesRange}
-          </span>
-
-          <div className="flex items-center gap-2">
-            {onNavigateToSurah && (
-              <button
-                type="button"
-                onClick={() => {
-                  onNavigateToSurah(story.surahId);
-                  onClose();
-                }}
-                className="py-2 px-3.5 rounded-xl border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-teal-800 dark:text-teal-300 font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">تلاوت در سوره {story.surahName}</span>
-                <span className="sm:hidden">تلاوت</span>
-              </button>
-            )}
-            <button
-              onClick={() => onStartQuiz(story)}
-              className="py-2 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-95"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>شروع آزمون داستان</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="py-2 px-3.5 rounded-xl border border-stone-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-stone-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
-            >
-              بستن
-            </button>
+          <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-medium">
+            <Volume2 className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+            <span>سوره {story.surahName} • {story.versesRange}</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (onNavigateToSurah) {
+                onNavigateToSurah(story.surahId);
+                onClose();
+              } else {
+                const targetVerse = currentSection?.keyAyahVerseNumber || 1;
+                const targetSurahId = currentSection?.surahId || story.surahId;
+                handlePlayVerse(targetVerse, targetSurahId);
+              }
+            }}
+            className="py-2.5 px-4 sm:px-5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer active:scale-95"
+            title={`تلاوت در سوره ${story.surahName}`}
+          >
+            <Volume2 className="w-4 h-4" />
+            <span>تلاوت در سوره {story.surahName}</span>
+          </button>
         </div>
       </div>
     </div>

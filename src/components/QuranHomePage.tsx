@@ -21,6 +21,7 @@ import {
   Layers,
   Info,
   Trophy,
+  HelpCircle,
   X,
   ChevronRight,
   Mic,
@@ -1046,10 +1047,10 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             <button
               onClick={handleStartTodayStoryQuiz}
               className="p-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold transition-all cursor-pointer active:scale-95 shadow-xs shrink-0"
-              title="آزمون تمام‌صفحه"
-              aria-label="آزمون تمام‌صفحه"
+              title="آزمون داستان"
+              aria-label="آزمون داستان"
             >
-              <Trophy className="w-4 h-4 fill-current" />
+              <HelpCircle className="w-4 h-4" />
             </button>
           </div>
 
@@ -1119,6 +1120,12 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           onStartQuiz={(story) => {
             setSelectedStoryModal(null);
             handleStartTodayStoryQuiz();
+          }}
+          onNavigateToSurah={(surahId) => {
+            const targetSurah = surahs.find((s) => s.id === surahId);
+            if (targetSurah) {
+              onSelectSurah(targetSurah);
+            }
           }}
         />
       )}
