@@ -1,5 +1,5 @@
 import { db } from '../db/quranDb';
-import { ReciterId, getAudioSourceUrl } from './audioSources';
+import { ReciterId, getAudioSourceUrl, getSourcesForReciter } from './audioSources';
 import { AudioDownloadRecord } from '../types';
 
 /**
@@ -56,8 +56,25 @@ async function getAudioCache(): Promise<Cache | null> {
 }
 
 /**
+ * کمکی برای دریافت ایمن با تایم‌اوت
+ */
+async function fetchWithTimeout(url: string, timeoutMs = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { mode: 'cors', signal: controller.signal });
+    clearTimeout(timeoutId);
+    return res;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
  * دانلود صوت کل سوره برای قاری مشخص به کش (Cache Storage).
- * @returns تعداد آیات دانلودشده و منابع استفاده‌شده.
+ * با چرخش هوشمند بین منابع (everyayah -> Maqra -> Islamic Network) و تلاش مجدد خودکار.
+ * @returns تعداد آیات دانلودشده، آیات ناموفق و منابع استفاده‌شده.
  */
 export async function downloadSurahAudio(
   reciterId: ReciterId,
@@ -71,59 +88,111 @@ export async function downloadSurahAudio(
   if (!cache) throw new Error('Cache Storage در دسترس نیست');
 
   let downloaded = 0;
-  let failed: number[] = [];
-  const sourcesUsed: string[] = [];
-  const existing = await loadRecord(reciterId, surahId);
+  const failed: number[] = [];
+  const sourcesUsedSet = new Set<string>();
+  const sources = getSourcesForReciter(reciterId);
 
   for (let v = 1; v <= total; v++) {
     if (shouldCancel && shouldCancel()) break;
 
-    const url = getAudioSourceUrl(reciterId, surahId, v, 0);
-    const fallbackUrl = url === null ? getAudioSourceUrl(reciterId, surahId, v, 1) : null;
-    const chosenUrl = url ?? fallbackUrl ?? null;
-    if (chosenUrl === null) {
-      failed.push(v);
+    // ۱. بررسی اینکه آیا قبلاً این آیه از هر کدام از سورس‌های این قاری ذخیره شده است یا خیر
+    let alreadyCached = false;
+    for (const src of sources) {
+      const u = src.buildUrl(surahId, v);
+      if (!u) continue;
+      const matched = await cache.match(u);
+      if (matched) {
+        alreadyCached = true;
+        sourcesUsedSet.add(src.name);
+        break;
+      }
+    }
+
+    if (alreadyCached) {
+      downloaded++;
+      onProgress?.(downloaded, total, v);
       continue;
     }
 
-    try {
-      const existingRes = await cache.match(chosenUrl);
-      if (existingRes) {
-        sourcesUsed.push(chosenUrl.includes('everyayah.com') ? 'everyayah' : 'other');
-        downloaded++;
-        onProgress?.(downloaded, total, v);
-        continue;
-      }
+    // ۲. چرخش بین سورس‌های قاری (اولویت ۰ -> اولویت ۱ -> اولویت ۲)
+    let verseDownloaded = false;
+    for (const src of sources) {
+      if (shouldCancel && shouldCancel()) break;
+      const url = src.buildUrl(surahId, v);
+      if (!url) continue;
 
-      const res = await fetch(chosenUrl, { mode: 'cors' });
-      if (!res.ok && res.status !== 0) {
-        failed.push(v);
-        continue;
+      try {
+        const res = await fetchWithTimeout(url, 12000);
+        if (!res.ok && res.status !== 0) {
+          continue;
+        }
+
+        const buffer = await res.arrayBuffer();
+        if (!buffer || buffer.byteLength === 0) {
+          continue;
+        }
+
+        const response = new Response(buffer, {
+          status: 200,
+          statusText: 'OK',
+          headers: {
+            'Content-Type': 'audio/mpeg',
+            'Content-Length': String(buffer.byteLength),
+            'Accept-Ranges': 'bytes',
+          },
+        });
+
+        await cache.put(url, response);
+        sourcesUsedSet.add(src.name);
+        verseDownloaded = true;
+        break;
+      } catch {
+        // ادامه به سورس بعدی
       }
-      // buffer کامل ذخیره می‌شود تا SW بتواند Range را از کل فایل سرو کند (ADR-8)
-      const buffer = await res.arrayBuffer();
-      if (buffer.byteLength === 0) {
-        failed.push(v);
-        continue;
+    }
+
+    // اگر با هیچ‌کدام دانلود نشد، یک تلاش مجدد با سورس اول پس از مکث کوتاه
+    if (!verseDownloaded && !shouldCancel?.()) {
+      await new Promise((r) => setTimeout(r, 300));
+      for (const src of sources) {
+        const url = src.buildUrl(surahId, v);
+        if (!url) continue;
+        try {
+          const res = await fetchWithTimeout(url, 10000);
+          if (res.ok || res.status === 200) {
+            const buffer = await res.arrayBuffer();
+            if (buffer && buffer.byteLength > 0) {
+              const response = new Response(buffer, {
+                status: 200,
+                statusText: 'OK',
+                headers: {
+                  'Content-Type': 'audio/mpeg',
+                  'Content-Length': String(buffer.byteLength),
+                  'Accept-Ranges': 'bytes',
+                },
+              });
+              await cache.put(url, response);
+              sourcesUsedSet.add(src.name);
+              verseDownloaded = true;
+              break;
+            }
+          }
+        } catch {
+          // شکست نهایی این آیه
+        }
       }
-      const response = new Response(buffer, {
-        status: 200,
-        statusText: 'OK',
-        headers: {
-          'Content-Type': 'audio/mpeg',
-          'Content-Length': String(buffer.byteLength),
-          'Accept-Ranges': 'bytes',
-        },
-      });
-      await cache.put(chosenUrl, response);
-      sourcesUsed.push(chosenUrl.includes('everyayah.com') ? 'everyayah' : 'other');
+    }
+
+    if (verseDownloaded) {
       downloaded++;
-      onProgress?.(downloaded, total, v);
-    } catch (err) {
+    } else {
       failed.push(v);
     }
+
+    onProgress?.(downloaded, total, v);
   }
 
+  const sourcesUsed = Array.from(sourcesUsedSet);
   // ابرداده در Dexie به‌روزرسانی می‌شود (باینری در Cache Storage باقی می‌ماند — ADR-8)
   await upsertRecord(reciterId, surahId, total, downloaded, sourcesUsed);
   return { downloadedVerses: downloaded, failedVerses: failed, sourcesUsed };
@@ -233,4 +302,144 @@ export const formatBytes = (bytes: number): string => {
 export function estimateSurahAudioBytes(reciterId: ReciterId, surahId: number): number {
   // برآورد میانه: ~50KB در هر آیه (مشاهده‌شده از 38-101KB در Alafasy_64kbps)
   return estimateSurahVerses(surahId) * 55 * 1024;
+}
+
+/**
+ * بازیابی آدرس Blob فایل صوتی ذخیره‌شده در کش برای یک آیه و قاری خاص.
+ * تمام سورس‌های قاری را بررسی می‌کند (به‌ویژه سورس ۰ که در دانلود آفلاین استفاده می‌شود).
+ */
+export async function getCachedAudioBlobUrl(
+  reciterId: ReciterId,
+  surahId: number,
+  verseNumber: number
+): Promise<{ blobUrl: string; sourceIndex: number; reciterId: ReciterId } | null> {
+  if (!getAudioCacheServerAvailable()) return null;
+  try {
+    const cache = await getAudioCache();
+    if (!cache) return null;
+
+    // ۱. بررسی تمام سورس‌های این قاری به ترتیب اولویت (ابتدا سورس ۰)
+    const sources = getSourcesForReciter(reciterId);
+    for (let i = 0; i < sources.length; i++) {
+      const url = sources[i].buildUrl(surahId, verseNumber);
+      if (!url) continue;
+      const match = await cache.match(url);
+      if (match) {
+        const blob = await match.blob();
+        if (blob && blob.size > 0) {
+          return { blobUrl: URL.createObjectURL(blob), sourceIndex: i, reciterId };
+        }
+      }
+    }
+
+    // ۲. تطبیق بر اساس کلیدهای کش با پوشه یا شناسه قاری
+    const paddedKey = `${String(surahId).padStart(3, '0')}${String(verseNumber).padStart(3, '0')}.mp3`;
+    const reciterFolderMap: Record<ReciterId, string[]> = {
+      parhizgar: ['parhizgar', 'Parhizgar_48kbps'],
+      abdulbasit: ['abdulbasit', 'Abdul_Basit_Murattal_64kbps', 'abdul-basit'],
+      minshawi: ['minshawi', 'Menshawi_32kbps', 'al-minshawi'],
+      afasy: ['alafasy', 'Alafasy_64kbps', 'mishari-alafasy'],
+      husary: ['husary', 'Husary_64kbps'],
+      ghamadi: ['ghamadi', 'Ghamadi_40kbps'],
+      muaiqly: ['muaiqly', 'Maher_AlMuaiqly_64kbps'],
+      shatri: ['shaatree', 'shatri', 'Abu_Bakr_Ash-Shaatree_64kbps'],
+      hudhaify: ['hudhaify', 'Hudhaify_64kbps'],
+      sudais: ['sudais', 'Abdurrahmaan_As-Sudais_64kbps'],
+      shuraim: ['shuraym', 'shuraim', 'Saood_ash-Shuraym_64kbps'],
+      mustafa_ismail: ['mustafaismail', 'mustafa_ismail', 'Mustafa_Ismail_48kbps'],
+    };
+
+    const searchMarkers = reciterFolderMap[reciterId] || [reciterId];
+    const keys = await cache.keys();
+    for (const req of keys) {
+      const reqUrl = req.url.toLowerCase();
+      const matchesReciter = searchMarkers.some((m) => reqUrl.includes(m.toLowerCase()));
+      if (matchesReciter && reqUrl.endsWith(paddedKey.toLowerCase())) {
+        const match = await cache.match(req);
+        if (match) {
+          const blob = await match.blob();
+          if (blob && blob.size > 0) {
+            return { blobUrl: URL.createObjectURL(blob), sourceIndex: 0, reciterId };
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading from audio cache:', err);
+  }
+  return null;
+}
+
+/**
+ * بازیابی آدرس صوتی آفلاین از هر قاری دیگری که این سوره و آیه را ذخیره کرده است.
+ * در شرایطی که قاری فعال کاربر دانلود نشده، اما سوره با قاری دیگر دانلود شده به کار می‌رود.
+ */
+export async function getAnyCachedAudioBlobUrl(
+  surahId: number,
+  verseNumber: number
+): Promise<{ blobUrl: string; sourceIndex: number; reciterId: ReciterId } | null> {
+  if (!getAudioCacheServerAvailable()) return null;
+  try {
+    // ۱. بررسی اولویت‌دار رکوردهای دانلود در Dexie
+    const records = await db.audioDownloads.where('surahId').equals(surahId).toArray();
+    // مرتب‌سازی بر اساس سوره‌هایی که بیشترین آیات دانلودشده را دارند
+    records.sort((a, b) => (b.downloadedVerses || 0) - (a.downloadedVerses || 0));
+
+    for (const rec of records) {
+      const result = await getCachedAudioBlobUrl(rec.reciterId as ReciterId, surahId, verseNumber);
+      if (result) return result;
+    }
+
+    // ۲. بررسی عمومی در کلیدهای کش
+    const cache = await getAudioCache();
+    if (cache) {
+      const paddedKey = `${String(surahId).padStart(3, '0')}${String(verseNumber).padStart(3, '0')}.mp3`;
+      const keys = await cache.keys();
+      for (const req of keys) {
+        if (req.url.endsWith(paddedKey)) {
+          const match = await cache.match(req);
+          if (match) {
+            const blob = await match.blob();
+            if (blob && blob.size > 0) {
+              // تشخیص قاری از آدرس
+              const url = req.url.toLowerCase();
+              let detectedReciter: ReciterId = 'parhizgar';
+              if (url.includes('abdul')) detectedReciter = 'abdulbasit';
+              else if (url.includes('minshawi') || url.includes('menshawi')) detectedReciter = 'minshawi';
+              else if (url.includes('afasy')) detectedReciter = 'afasy';
+              else if (url.includes('husary')) detectedReciter = 'husary';
+              else if (url.includes('ghamadi')) detectedReciter = 'ghamadi';
+              else if (url.includes('muaiqly')) detectedReciter = 'muaiqly';
+              else if (url.includes('shaatree') || url.includes('shatri')) detectedReciter = 'shatri';
+              else if (url.includes('hudhaify')) detectedReciter = 'hudhaify';
+              else if (url.includes('sudais')) detectedReciter = 'sudais';
+              else if (url.includes('shuraym') || url.includes('shuraim')) detectedReciter = 'shuraim';
+              else if (url.includes('mustafa')) detectedReciter = 'mustafa_ismail';
+
+              return { blobUrl: URL.createObjectURL(blob), sourceIndex: 0, reciterId: detectedReciter };
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading any audio from cache:', err);
+  }
+  return null;
+}
+
+/**
+ * بررسی اینکه آیا سوره جاری با قاری مشخصی یا هر قاری دیگری به‌صورت کامل دانلود شده است یا خیر.
+ */
+export async function getDownloadedReciterForSurah(surahId: number): Promise<ReciterId | null> {
+  try {
+    const records = await db.audioDownloads.where('surahId').equals(surahId).toArray();
+    const expected = estimateSurahVerses(surahId);
+    const complete = records.find((r) => r.downloadedVerses === expected);
+    if (complete) return complete.reciterId as ReciterId;
+    if (records.length > 0 && records[0].downloadedVerses > 0) return records[0].reciterId as ReciterId;
+  } catch {
+    // ignore
+  }
+  return null;
 }

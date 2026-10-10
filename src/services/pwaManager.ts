@@ -29,8 +29,14 @@ export function initServiceWorker() {
     updateSWFunction = registerSW({
       immediate: true,
       onNeedRefresh() {
-        console.log('[PWA] New version available, waiting for user confirmation.');
+        console.log('[PWA] New version detected, updating automatically.');
         isUpdateAvailable = true;
+        // بروزرسانی خودکار بدون نیاز به تایید یا کلیک کاربر طبق درخواست
+        if (updateSWFunction) {
+          updateSWFunction(true).catch((e) => {
+            console.warn('[PWA] Auto update error:', e);
+          });
+        }
         refreshListeners.forEach((listener) => {
           try {
             listener();

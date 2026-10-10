@@ -49,7 +49,15 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
   });
 
   // ——— کش صوتی (P5-T2) ———
-  const [audioReciterId, setAudioReciterId] = useState<ReciterId>('parhizgar');
+  const [audioReciterId, setAudioReciterId] = useState<ReciterId>(() => {
+    try {
+      const s = localStorage.getItem('mobin_selected_reciter') || localStorage.getItem('quran_reciter');
+      if (s && RECITER_NAMES[s as ReciterId]) return s as ReciterId;
+    } catch {
+      // ignore
+    }
+    return 'parhizgar';
+  });
   const [audioStatus, setAudioStatus] = useState<AudioCacheStatus | null>(null);
   const [isAudioDownloading, setIsAudioDownloading] = useState(false);
   const [audioDownloadingSurah, setAudioDownloadingSurah] = useState<string>('');
@@ -181,6 +189,7 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
     }
 
     let done = 0;
+    let totalFailedVersesCount = 0;
     for (const id of surahIds) {
       if (cancelAudioDownloadRef.current) break;
       const already = await isSurahAudioCached(reciterId, id);
@@ -193,11 +202,15 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
       const surah = ALL_SURAHS.find((s) => s.id === id);
       setAudioDownloadingSurah(`${surah?.nameArabic ?? `سوره ${id}`}`);
       try {
-        await downloadSurahAudio(reciterId, id, (cur, total) => {
+        const res = await downloadSurahAudio(reciterId, id, (cur, total) => {
           setAudioProgress({ current: done + (cur / total), total: surahIds.length });
         }, () => cancelAudioDownloadRef.current);
+        if (res.failedVerses.length > 0) {
+          totalFailedVersesCount += res.failedVerses.length;
+        }
       } catch (err) {
         console.error(`Audio download failed for surah ${id}:`, err);
+        totalFailedVersesCount += 1;
       }
       done++;
       setAudioProgress({ current: done, total: surahIds.length });
@@ -208,8 +221,11 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
     setIsAudioDownloading(false);
     if (cancelAudioDownloadRef.current) {
       setAudioNotice('دانلود صوت متوقف شد. سورهٔ ناقص دوباره دانلود می‌شود.');
+    } else if (totalFailedVersesCount > 0) {
+      setAudioNotice(`${label} دانلود شد، اما ${toPersianDigits(totalFailedVersesCount)} آیه با خطا مواجه شد. لطفاً مجدداً دانلود را بزنید.`);
     } else {
-      setAudioNotice(`${label} با قاری انتخابی برای پخش آفلاین آماده شد.`);
+      const reciterName = RECITER_NAMES[reciterId]?.name || '';
+      setAudioNotice(`${label} با صدای «${reciterName}» با موفقیت برای پخش بدون اینترنت ذخیره شد.`);
     }
   };
 
@@ -385,7 +401,14 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
                 return (
                   <button
                     key={rid}
-                    onClick={() => setAudioReciterId(rid)}
+                    onClick={() => {
+                      setAudioReciterId(rid);
+                      try {
+                        localStorage.setItem('mobin_selected_reciter', rid);
+                      } catch {
+                        // ignore
+                      }
+                    }}
                     className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all ${
                       isActive
                         ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs'

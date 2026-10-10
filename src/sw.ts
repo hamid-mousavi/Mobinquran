@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import { clientsClaim } from 'workbox-core';
 import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst, NetworkOnly } from 'workbox-strategies';
@@ -7,6 +8,10 @@ import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { RangeRequestsPlugin } from 'workbox-range-requests';
 
 declare let self: ServiceWorkerGlobalScope & typeof globalThis;
+
+// فعال‌سازی خودکار و بی‌درنگ نسخه جدید بدون نیاز به تایید دستی کاربر
+self.skipWaiting();
+clientsClaim();
 
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
@@ -67,10 +72,10 @@ registerRoute(
  * صوت ترتیل (P5-T2) — معماری ADR-8:
  * باینری mp3 در Cache Storage نگهداری می‌شود و این Route نقش Range را برای Safari
  * با RangeRequestsPlugin مدیریت می‌کند (Safari بدون پاسخ 206 نمی‌تواند seek/پخش کند).
- * Hostهای مجاز برای کش: everyayah.com (ACAO *) و آینهٔ Maqra روی Hugging Face.
+ * Hostهای مجاز برای کش: everyayah.com (ACAO *)، آینهٔ Maqra روی Hugging Face و CDN Islamic Network.
  */
 const audioHostPattern =
-  /^(https:\/\/everyayah\.com\/data\/|https:\/\/huggingface\.co\/datasets\/maqra-project\/)/i;
+  /^(https:\/\/everyayah\.com\/data\/|https:\/\/huggingface\.co\/datasets\/maqra-project\/|https:\/\/cdn\.islamic\.network\/quran\/audio\/)/i;
 registerRoute(
   ({ url }) => audioHostPattern.test(url.href) && url.pathname.endsWith('.mp3'),
   new CacheFirst({

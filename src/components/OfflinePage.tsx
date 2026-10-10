@@ -96,7 +96,15 @@ export const AUDIO_BUNDLES: AudioBundle[] = [
 ];
 
 export const OfflinePage: React.FC<OfflinePageProps> = ({ darkMode, onBack }) => {
-  const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>('parhizgar');
+  const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>(() => {
+    try {
+      const s = localStorage.getItem('mobin_selected_reciter') || localStorage.getItem('quran_reciter');
+      if (s && RECITER_NAMES[s as ReciterId]) return s as ReciterId;
+    } catch {
+      // ignore
+    }
+    return 'parhizgar';
+  });
   const [audioStatus, setAudioStatus] = useState<AudioCacheStatus | null>(null);
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -121,6 +129,12 @@ export const OfflinePage: React.FC<OfflinePageProps> = ({ darkMode, onBack }) =>
   };
 
   useEffect(() => {
+    try {
+      localStorage.setItem('mobin_selected_reciter', selectedReciterId);
+      localStorage.setItem('quran_reciter', selectedReciterId);
+    } catch {
+      // ignore
+    }
     refreshStatus();
   }, [selectedReciterId]);
 
@@ -185,6 +199,7 @@ export const OfflinePage: React.FC<OfflinePageProps> = ({ darkMode, onBack }) =>
     setNoticeMessage(null);
 
     let completedSurahs = 0;
+    let failedVersesCount = 0;
     for (const sid of unCached) {
       if (cancelDownloadRef.current) break;
       const surahMeta = ALL_SURAHS.find((s) => s.id === sid);
@@ -192,12 +207,15 @@ export const OfflinePage: React.FC<OfflinePageProps> = ({ darkMode, onBack }) =>
       setDownloadingSurahName(`${bundle.title} • ${surahName} (${toPersianDigits(completedSurahs + 1)} از ${toPersianDigits(unCached.length)})`);
       setDownloadProgress({ current: 0, total: surahMeta?.versesCount || 1 });
 
-      await downloadSurahAudio(
+      const res = await downloadSurahAudio(
         selectedReciterId,
         sid,
         (current: number, total: number) => setDownloadProgress({ current, total }),
         () => cancelDownloadRef.current
       );
+      if (res.failedVerses.length > 0) {
+        failedVersesCount += res.failedVerses.length;
+      }
       completedSurahs++;
     }
 
@@ -207,6 +225,8 @@ export const OfflinePage: React.FC<OfflinePageProps> = ({ darkMode, onBack }) =>
 
     if (cancelDownloadRef.current) {
       setNoticeMessage(`دانلود ${bundle.title} متوقف شد.`);
+    } else if (failedVersesCount > 0) {
+      setNoticeMessage(`دانلود ${bundle.title} انجام شد، اما ${toPersianDigits(failedVersesCount)} آیه ناموفق بود. لطفاً دوباره تلاش کنید.`);
     } else {
       setNoticeMessage(`دانلود کامل ${bundle.title} با موفقیت انجام شد.`);
     }

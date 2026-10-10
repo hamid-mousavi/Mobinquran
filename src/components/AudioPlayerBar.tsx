@@ -27,8 +27,13 @@ import {
   resolveAudioSource,
   getWorkingSourceIndex,
   setWorkingSourceIndex,
-  getProxiedAudioUrl,
+  RECITER_NAMES,
 } from '../services/audioSources';
+import {
+  getCachedAudioBlobUrl,
+  getAnyCachedAudioBlobUrl,
+  getDownloadedReciterForSurah,
+} from '../services/audioCacheService';
 import {
   saveAudioResumePosition,
   loadAudioResumePosition,
@@ -339,63 +344,90 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     }
   }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, playbackRate]);
 
-  // تبدیل آدرس صوتی به URL قابل پخش (بررسی کش آفلاین، پخش مستقیم بدون پروکسی)
-  const resolvePlayableUrl = async (rawUrl: string): Promise<string> => {
-    try {
-      if (typeof window !== 'undefined' && 'caches' in window) {
-        const cache = await caches.open('quran-audio-v1');
-        const match = await cache.match(rawUrl);
-        if (match) {
-          const blob = await match.blob();
-          return URL.createObjectURL(blob);
-        }
-      }
-    } catch {
-      // کش در دسترس نیست
+  // تبدیل آدرس صوتی به URL قابل پخش با اولویت قطعی کش آفلاین
+  const resolvePlayableUrl = async (
+    reciterId: ReciterId,
+    surahId: number,
+    verseNumber: number,
+    targetSourceIndex: number
+  ): Promise<{ url: string; isOffline: boolean; sourceIndex: number; reciterId: ReciterId }> => {
+    // ۱. بررسی فوری کش آفلاین برای قاری انتخابی (تمام سورس‌ها)
+    const cached = await getCachedAudioBlobUrl(reciterId, surahId, verseNumber);
+    if (cached) {
+      return { url: cached.blobUrl, isOffline: true, sourceIndex: cached.sourceIndex, reciterId: cached.reciterId };
     }
-    return rawUrl;
+
+    // ۲. بررسی کش آفلاین برای هر قاری دیگری که این سوره را دارد (چه آنلاین و چه آفلاین!)
+    const anyCached = await getAnyCachedAudioBlobUrl(surahId, verseNumber);
+    if (anyCached) {
+      if (anyCached.reciterId !== reciterId) {
+        setSelectedReciterId(anyCached.reciterId);
+      }
+      return { url: anyCached.blobUrl, isOffline: true, sourceIndex: anyCached.sourceIndex, reciterId: anyCached.reciterId };
+    }
+
+    // ۳. در صورت قطع ارتباط شبکه، اعلام عدم وجود فایل آفلاین
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (!isOnline) {
+      return { url: '', isOffline: true, sourceIndex: targetSourceIndex, reciterId };
+    }
+
+    // ۴. در صورت آنلاین بودن، استفاده از آدرس مستقیم سرور
+    const resolved = resolveAudioSource(reciterId, surahId, verseNumber, targetSourceIndex);
+    return {
+      url: resolved?.url || '',
+      isOffline: false,
+      sourceIndex: resolved?.sourceIndex ?? targetSourceIndex,
+      reciterId,
+    };
   };
 
-  // بارگذاری فایل صوتی هنگام تغییر آیه، قاری یا سورس
+  // بارگذاری فایل صوتی هنگام تغییر آیه، قاری یا سوره
   useEffect(() => {
     let isCancelled = false;
     setPlaybackError(null);
     setIsLoadingAudio(true);
 
-    const resolved = resolveAudioSource(
+    resolvePlayableUrl(
       selectedReciterId,
       currentSurah.id,
       currentPlayingVerseNumber,
       sourceIndex
-    );
-
-    if (!resolved) {
-      setIsPlaying(false);
-      setIsLoadingAudio(false);
-      setPlaybackError(`فایل صوتی آیه ${toPersianDigits(currentPlayingVerseNumber)} برای این قاری یافت نشد.`);
-      return;
-    }
-
-    currentRawUrlRef.current = resolved.url;
-
-    if (resolved.sourceIndex !== sourceIndex) {
-      setSourceIndex(resolved.sourceIndex);
-      setWorkingSourceIndex(selectedReciterId, resolved.sourceIndex);
-    }
-
-    resolvePlayableUrl(resolved.url).then((playableUrl) => {
+    ).then(({ url: playableUrl, sourceIndex: matchedIndex }) => {
       if (isCancelled || !audioRef.current) return;
 
-      if (activeBlobUrlRef.current) {
-        URL.revokeObjectURL(activeBlobUrlRef.current);
-        activeBlobUrlRef.current = null;
+      if (!playableUrl) {
+        setIsPlaying(false);
+        setIsLoadingAudio(false);
+        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+        if (!isOnline) {
+          setPlaybackError(`صوت آیه ${toPersianDigits(currentPlayingVerseNumber)} در حافظه آفلاین موجود نیست؛ لطفاً سوره را از بخش دانلودها دریافت کنید.`);
+        } else {
+          setPlaybackError(`فایل صوتی آیه ${toPersianDigits(currentPlayingVerseNumber)} برای این قاری یافت نشد.`);
+        }
+        return;
       }
+
+      currentRawUrlRef.current = playableUrl;
+
+      if (matchedIndex !== sourceIndex) {
+        setWorkingSourceIndex(selectedReciterId, matchedIndex);
+      }
+
+      const oldBlob = activeBlobUrlRef.current;
       if (playableUrl.startsWith('blob:')) {
         activeBlobUrlRef.current = playableUrl;
+      } else {
+        activeBlobUrlRef.current = null;
       }
 
       audioRef.current.src = playableUrl;
       audioRef.current.playbackRate = playbackRate;
+
+      // رهاسازی با تاخیر آدرس قبلی جهت جلوگیری از خطای ناگهانی پخش
+      if (oldBlob && oldBlob !== playableUrl) {
+        setTimeout(() => URL.revokeObjectURL(oldBlob), 2500);
+      }
 
       if (isPlayingRef.current) {
         const p = audioRef.current.play();
@@ -423,26 +455,23 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     const nextVerseNum = currentPlayingVerseNumber + 1;
     const hasNext = verses.some((v) => v.verseNumber === nextVerseNum) || nextVerseNum <= currentSurah.versesCount;
     if (hasNext && preloadAudioRef.current) {
-      const nextResolved = resolveAudioSource(
+      resolvePlayableUrl(
         selectedReciterId,
         currentSurah.id,
         nextVerseNum,
         sourceIndex
-      );
-      if (nextResolved) {
-        resolvePlayableUrl(nextResolved.url).then((nextUrl) => {
-          if (preloadAudioRef.current && !isCancelled) {
-            preloadAudioRef.current.src = nextUrl;
-            preloadAudioRef.current.load();
-          }
-        });
-      }
+      ).then(({ url: nextUrl }) => {
+        if (preloadAudioRef.current && !isCancelled && nextUrl && !nextUrl.startsWith('blob:')) {
+          preloadAudioRef.current.src = nextUrl;
+          preloadAudioRef.current.load();
+        }
+      });
     }
 
     return () => {
       isCancelled = true;
     };
-  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, sourceIndex]);
+  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId]);
 
   // اعمال سرعت پخش
   useEffect(() => {
@@ -562,17 +591,58 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     }
   };
 
-  // مدیریت خطای پخش با چرخش خودکار بین سرورهای CDN بدون واسطه
-  const handleAudioError = () => {
+  // مدیریت خطای پخش با اولویت قطعی کش آفلاین و چرخش بین سرورها
+  const handleAudioError = async () => {
     setIsLoadingAudio(false);
-    const sources = getSourcesForReciter(selectedReciterId);
 
-    // چرخش خودکار به منبع CDN بعدی در صورت عدم دسترسی
+    // ۱. بررسی فوری مجدد کش آفلاین برای قاری جاری
+    const cached = await getCachedAudioBlobUrl(selectedReciterId, currentSurah.id, currentPlayingVerseNumber);
+    if (cached && audioRef.current) {
+      const oldBlob = activeBlobUrlRef.current;
+      activeBlobUrlRef.current = cached.blobUrl;
+      audioRef.current.src = cached.blobUrl;
+      if (oldBlob && oldBlob !== cached.blobUrl) {
+        setTimeout(() => URL.revokeObjectURL(oldBlob), 2500);
+      }
+      setWorkingSourceIndex(selectedReciterId, cached.sourceIndex);
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+        setPlaybackError(null);
+      }).catch(() => {});
+      return;
+    }
+
+    // ۲. بررسی کش آفلاین برای هر قاری دیگری که این سوره را دارد (چه آنلاین و چه آفلاین!)
+    const anyCached = await getAnyCachedAudioBlobUrl(currentSurah.id, currentPlayingVerseNumber);
+    if (anyCached && audioRef.current) {
+      setSelectedReciterId(anyCached.reciterId);
+      const oldBlob = activeBlobUrlRef.current;
+      activeBlobUrlRef.current = anyCached.blobUrl;
+      audioRef.current.src = anyCached.blobUrl;
+      if (oldBlob && oldBlob !== anyCached.blobUrl) {
+        setTimeout(() => URL.revokeObjectURL(oldBlob), 2500);
+      }
+      setWorkingSourceIndex(anyCached.reciterId, anyCached.sourceIndex);
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+        setPlaybackError(null);
+      }).catch(() => {});
+      return;
+    }
+
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (!isOnline) {
+      setIsPlaying(false);
+      setPlaybackError(`ارتباط اینترنت قطع است و فایل آفلاین آیه ${toPersianDigits(currentPlayingVerseNumber)} یافت نشد. لطفاً سوره را از بخش دانلودها دریافت کنید.`);
+      return;
+    }
+
+    const sources = getSourcesForReciter(selectedReciterId);
     if (sourceIndex < sources.length - 1) {
       const nextSourceIdx = sourceIndex + 1;
       setSourceIndex(nextSourceIdx);
       setWorkingSourceIndex(selectedReciterId, nextSourceIdx);
-      setPlaybackError(`خطا در منبع فعلی؛ در حال تلاش با سرور جایگزین (${sources[nextSourceIdx].name})...`);
+      setPlaybackError(`خطا در منبع فعلی؛ در حال امتحان سرور جایگزین (${sources[nextSourceIdx].name})...`);
       return;
     }
 
@@ -598,12 +668,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     });
 
     setIsPlaying(false);
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    if (!isOnline) {
-      setPlaybackError('اتصال اینترنت قطع است و صوت این آیه به‌صورت آفلاین ذخیره نشده است.');
-    } else {
-      setPlaybackError(`خطا در پخش صوت آیه ${toPersianDigits(currentPlayingVerseNumber)}؛ لطفاً اتصال اینترنت را بررسی یا تلاش مجدد را بزنید.`);
-    }
+    setPlaybackError(`خطا در پخش صوت آیه ${toPersianDigits(currentPlayingVerseNumber)}؛ لطفاً اتصال اینترنت را بررسی یا تلاش مجدد را بزنید.`);
   };
 
   // فیلتر کردن لیست سوره‌ها در صف پخش
