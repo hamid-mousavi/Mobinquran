@@ -16,6 +16,8 @@ import {
   ListMusic,
   SlidersHorizontal,
   Search,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { Verse, Surah } from '../types';
 import {
@@ -229,7 +231,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       // ignore
     }
   }, [selectedReciterId]);
-  const [useProxyFallback, setUseProxyFallback] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
 
   // مودال‌ها و کشوهای دسته‌بندی‌شده
   const [showReciterModal, setShowReciterModal] = useState(false);
@@ -337,11 +339,8 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     }
   }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, playbackRate]);
 
-  // تبدیل آدرس صوتی به URL قابل پخش (با کش آفلاین و پروکسی ضد فیلترینگ)
-  const resolvePlayableUrl = async (rawUrl: string, useProxy: boolean): Promise<string> => {
-    if (useProxy) {
-      return getProxiedAudioUrl(rawUrl);
-    }
+  // تبدیل آدرس صوتی به URL قابل پخش (بررسی کش آفلاین، پخش مستقیم بدون پروکسی)
+  const resolvePlayableUrl = async (rawUrl: string): Promise<string> => {
     try {
       if (typeof window !== 'undefined' && 'caches' in window) {
         const cache = await caches.open('quran-audio-v1');
@@ -361,6 +360,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   useEffect(() => {
     let isCancelled = false;
     setPlaybackError(null);
+    setIsLoadingAudio(true);
 
     const resolved = resolveAudioSource(
       selectedReciterId,
@@ -371,7 +371,8 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
     if (!resolved) {
       setIsPlaying(false);
-      setPlaybackError('فایل صوتی برای این آیه یافت نشد.');
+      setIsLoadingAudio(false);
+      setPlaybackError(`فایل صوتی آیه ${toPersianDigits(currentPlayingVerseNumber)} برای این قاری یافت نشد.`);
       return;
     }
 
@@ -382,7 +383,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       setWorkingSourceIndex(selectedReciterId, resolved.sourceIndex);
     }
 
-    resolvePlayableUrl(resolved.url, useProxyFallback).then((playableUrl) => {
+    resolvePlayableUrl(resolved.url).then((playableUrl) => {
       if (isCancelled || !audioRef.current) return;
 
       if (activeBlobUrlRef.current) {
@@ -399,18 +400,28 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       if (isPlayingRef.current) {
         const p = audioRef.current.play();
         if (p !== undefined) {
-          p.catch((err) => {
+          p.then(() => {
+            if (isCancelled) return;
+            setIsPlaying(true);
+            setIsLoadingAudio(false);
+            setPlaybackError(null);
+          }).catch((err) => {
             if (err?.name === 'AbortError') return;
             console.warn('Audio playback error:', err);
-            setIsPlaying(false);
+            setIsLoadingAudio(false);
+            if (audioRef.current?.error) {
+              handleAudioError();
+            }
           });
         }
+      } else {
+        setIsLoadingAudio(false);
       }
     });
 
     // پیش‌بارگذاری هوشمند آیه بعدی جهت پخش پیوسته
     const nextVerseNum = currentPlayingVerseNumber + 1;
-    const hasNext = verses.some((v) => v.verseNumber === nextVerseNum);
+    const hasNext = verses.some((v) => v.verseNumber === nextVerseNum) || nextVerseNum <= currentSurah.versesCount;
     if (hasNext && preloadAudioRef.current) {
       const nextResolved = resolveAudioSource(
         selectedReciterId,
@@ -419,7 +430,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
         sourceIndex
       );
       if (nextResolved) {
-        resolvePlayableUrl(nextResolved.url, useProxyFallback).then((nextUrl) => {
+        resolvePlayableUrl(nextResolved.url).then((nextUrl) => {
           if (preloadAudioRef.current && !isCancelled) {
             preloadAudioRef.current.src = nextUrl;
             preloadAudioRef.current.load();
@@ -431,7 +442,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, sourceIndex, useProxyFallback]);
+  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, sourceIndex]);
 
   // اعمال سرعت پخش
   useEffect(() => {
@@ -445,18 +456,25 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
+      setIsLoadingAudio(false);
     } else {
+      setPlaybackError(null);
+      setIsLoadingAudio(true);
       const p = audioRef.current.play();
       if (p !== undefined) {
         p.then(() => {
           setIsPlaying(true);
+          setIsLoadingAudio(false);
         }).catch((err) => {
           if (err?.name === 'AbortError') return;
           console.warn('Audio playback error:', err);
           setIsPlaying(false);
+          setIsLoadingAudio(false);
+          handleAudioError();
         });
       } else {
         setIsPlaying(true);
+        setIsLoadingAudio(false);
       }
     }
   };
@@ -466,15 +484,32 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     if (currentIndex !== -1 && currentIndex < verses.length - 1) {
       setCurrentRepeatIndex(1);
       setPlaybackError(null);
+      setIsLoadingAudio(true);
       onSelectVerseToPlay(verses[currentIndex + 1].verseNumber);
     } else if (currentIndex !== -1 && currentIndex === verses.length - 1) {
       if (onAutoAdvanceToNextSurah) {
         setCurrentRepeatIndex(1);
         setPlaybackError(null);
+        setIsLoadingAudio(true);
         onAutoAdvanceToNextSurah();
       } else {
         setCurrentRepeatIndex(1);
+        setIsLoadingAudio(false);
         setPlaybackError('پایان آیات این سوره.');
+      }
+    } else {
+      // پشتیبانی در صورت عدم تطابق موقت آرایه verses با سوره جاری
+      const nextNum = currentPlayingVerseNumber + 1;
+      if (nextNum <= currentSurah.versesCount) {
+        setCurrentRepeatIndex(1);
+        setPlaybackError(null);
+        setIsLoadingAudio(true);
+        onSelectVerseToPlay(nextNum);
+      } else if (onAutoAdvanceToNextSurah) {
+        setCurrentRepeatIndex(1);
+        setPlaybackError(null);
+        setIsLoadingAudio(true);
+        onAutoAdvanceToNextSurah();
       }
     }
   };
@@ -484,6 +519,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     if (currentIndex > 0) {
       setCurrentRepeatIndex(1);
       setPlaybackError(null);
+      setIsLoadingAudio(true);
       onSelectVerseToPlay(verses[currentIndex - 1].verseNumber);
     }
   };
@@ -494,6 +530,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
         setCurrentRepeatIndex((prev) => prev + 1);
         if (audioRef.current) {
           audioRef.current.currentTime = 0;
+          setIsLoadingAudio(true);
           audioRef.current.play().catch(() => {});
         }
         return;
@@ -505,6 +542,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       if (next.value <= 0) {
         if (audioRef.current) audioRef.current.pause();
         setIsPlaying(false);
+        setIsLoadingAudio(false);
         setSleepTimer(null);
         setSleepShowNotice(true);
         return;
@@ -524,19 +562,17 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     }
   };
 
-  // مدیریت خطای پخش و فال‌بک خودکار به پروکسی سرور برای دور زدن فیلترینگ
+  // مدیریت خطای پخش با چرخش خودکار بین سرورهای CDN بدون واسطه
   const handleAudioError = () => {
-    if (!useProxyFallback && currentRawUrlRef.current) {
-      // تلاش مجدد با پروکسی داخلی سرور برای کاربران ایران
-      setUseProxyFallback(true);
-      return;
-    }
-
+    setIsLoadingAudio(false);
     const sources = getSourcesForReciter(selectedReciterId);
+
+    // چرخش خودکار به منبع CDN بعدی در صورت عدم دسترسی
     if (sourceIndex < sources.length - 1) {
-      setSourceIndex((prev) => prev + 1);
-      setWorkingSourceIndex(selectedReciterId, sourceIndex + 1);
-      setUseProxyFallback(false);
+      const nextSourceIdx = sourceIndex + 1;
+      setSourceIndex(nextSourceIdx);
+      setWorkingSourceIndex(selectedReciterId, nextSourceIdx);
+      setPlaybackError(`خطا در منبع فعلی؛ در حال تلاش با سرور جایگزین (${sources[nextSourceIdx].name})...`);
       return;
     }
 
@@ -562,7 +598,12 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     });
 
     setIsPlaying(false);
-    setPlaybackError('خطا در پخش صوت؛ در حال تلاش با پروکسی سرور...');
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (!isOnline) {
+      setPlaybackError('اتصال اینترنت قطع است و صوت این آیه به‌صورت آفلاین ذخیره نشده است.');
+    } else {
+      setPlaybackError(`خطا در پخش صوت آیه ${toPersianDigits(currentPlayingVerseNumber)}؛ لطفاً اتصال اینترنت را بررسی یا تلاش مجدد را بزنید.`);
+    }
   };
 
   // فیلتر کردن لیست سوره‌ها در صف پخش
@@ -609,20 +650,48 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
           />
         </div>
 
-        {/* پیام خطای پخش در صورت بروز */}
+        {/* پیام خطای پخش در صورت بروز با راهنمای شفاف و دکمه‌های کنشی */}
         {playbackError && (
-          <div className="px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs flex items-center justify-between gap-2 bg-amber-500/15 border-b border-amber-500/30 text-amber-700 dark:text-amber-300">
-            <span className="truncate">{playbackError}</span>
-            <button
-              onClick={() => {
-                setPlaybackError(null);
-                setUseProxyFallback(true);
-                if (audioRef.current) audioRef.current.load();
-              }}
-              className="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold shrink-0 transition-colors"
-            >
-              تلاش با پروکسی
-            </button>
+          <div className="px-3 sm:px-4 py-2 text-[11px] sm:text-xs flex items-center justify-between gap-2 bg-rose-500/15 border-b border-rose-500/30 text-rose-700 dark:text-rose-300 animate-fadeIn">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+              <span className="truncate font-medium">{playbackError}</span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => {
+                  setPlaybackError(null);
+                  setSourceIndex(0);
+                  setIsLoadingAudio(true);
+                  if (audioRef.current) {
+                    audioRef.current.load();
+                    audioRef.current.play().then(() => {
+                      setIsPlaying(true);
+                      setIsLoadingAudio(false);
+                    }).catch(() => {
+                      setIsLoadingAudio(false);
+                    });
+                  }
+                }}
+                className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold transition-colors cursor-pointer"
+              >
+                تلاش مجدد
+              </button>
+              <button
+                onClick={handleNextVerse}
+                className="px-2 py-1 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 text-slate-700 dark:text-slate-200 text-[10px] font-bold transition-colors cursor-pointer"
+                title="رفتن به آیه بعدی"
+              >
+                آیه بعد
+              </button>
+              <button
+                onClick={() => setPlaybackError(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                title="بستن پیام"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
 
@@ -688,10 +757,12 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
             <button
               onClick={togglePlay}
-              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg hover:shadow-teal-500/20 transition-all active:scale-95"
-              title={isPlaying ? 'توقف' : 'پخش ترتیل'}
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg hover:shadow-teal-500/20 transition-all active:scale-95 cursor-pointer"
+              title={isLoadingAudio ? 'در حال بارگذاری صوت...' : isPlaying ? 'توقف' : 'پخش ترتیل'}
             >
-              {isPlaying ? (
+              {isLoadingAudio ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : isPlaying ? (
                 <Pause className="w-4 h-4 sm:w-5 sm:h-5" />
               ) : (
                 <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current mr-0.5" />
@@ -771,6 +842,13 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
           onEnded={handleAudioEnded}
           onTimeUpdate={handleTimeUpdate}
           onError={handleAudioError}
+          onWaiting={() => setIsLoadingAudio(true)}
+          onLoadStart={() => setIsLoadingAudio(true)}
+          onCanPlay={() => setIsLoadingAudio(false)}
+          onPlaying={() => {
+            setIsLoadingAudio(false);
+            setIsPlaying(true);
+          }}
           className="hidden"
         />
         <audio ref={preloadAudioRef} preload="auto" className="hidden" />
