@@ -245,6 +245,30 @@ export const PRE_AZAN_DUAS_LIST: PreAzanDua[] = [
       'https://archive.org/download/SalavatKhaseEmamReza/Salavat%20Khase%20Emam%20Reza.mp3',
     ],
   },
+  {
+    id: 'asmaul_husna',
+    name: 'تواشیح اسماء الحسنی (نام‌های نیکوی خداوند)',
+    title: 'نَسْأَلُكَ يَا مَنْ هُوَ اللَّهُ الَّذِي لَا إِلَهَ إِلَّا هُوَ الرَّحْمَنُ الرَّحِيمُ',
+    description: 'همخوانی جاودانه و ملکوتی نام‌های اعظم پروردگار در پیشگاه اذان',
+    duration: '۳:۱۵',
+    approxSizeMb: 1.8,
+    audioUrls: [
+      '/audio/duas/asmaul_husna.mp3',
+      'https://archive.org/download/AsmaAllahAlHusna/Asma%20Allah%20Al%20Husna.mp3',
+    ],
+  },
+  {
+    id: 'monajat_masjed_kufa',
+    name: 'مناجات منظوم امیرالمؤمنین علی (ع) در مسجد کوفه',
+    title: 'مَوْلايَ يَا مَوْلايَ أَنْتَ الْمَوْلَى وَ أَنَا الْعَبْدُ',
+    description: 'فرازهای عرفانی و پرسوز مناجات حضرت علی (ع) با نوای حاج مهدی سماواتی',
+    duration: '۴:۵۰',
+    approxSizeMb: 2.4,
+    audioUrls: [
+      '/audio/duas/monajat_masjed_kufa.mp3',
+      'https://archive.org/download/MonajatKufaSamavati/Monajat%20Kufa%20Samavati.mp3',
+    ],
+  },
 ];
 
 const SETTINGS_KEY = 'mobin_azan_settings';
@@ -638,33 +662,30 @@ export async function requestAzanNotificationPermission(): Promise<boolean> {
 }
 
 /**
- * اجرای آزمایش کامل هشدار اذان (صوت + اعلان تصویری درون‌برنامه و مرورگر)
+ * اجرای آزمایش کامل هشدار اذان (صوت + اعلان تصویری درون‌برنامه و مرورگر + لرزش در حالت سایلنت)
  */
 export async function testAzanAlertNow(): Promise<void> {
   const settings = getAzanSettings();
   const muezzin = MUEZZINS_LIST.find((m) => m.id === settings.selectedMuezzinId) || MUEZZINS_LIST[0];
 
-  // ۱. پخش صوت اذان انتخاب‌شده
+  // ۱. لرزش پرقدرت دستگاه (حتی در حالت سایلنت و لرزش)
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate([600, 250, 600, 250, 1200, 300, 1200]);
+    } catch {}
+  }
+
+  // ۲. پخش صوت اذان انتخاب‌شده
   if (settings.inAppSoundEnabled) {
     playAzanPreview(muezzin.id);
   } else {
     playHarmonicAzanChime();
   }
 
-  // ۲. نمایش اعلان مرورگر (در صورت وجود مجوز)
-  if (getNotificationPermissionStatus() === 'granted' && settings.systemNotificationEnabled) {
-    try {
-      new Notification('هنگام اذان شرعی (تست هشدار)', {
-        body: `نوای ملکوتی اذان شیعه با صدای ${muezzin.name} - حیّ علی الصلاة`,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
-        dir: 'rtl',
-        lang: 'fa',
-      });
-    } catch {}
-  }
+  // ۳. نمایش اعلان مرورگر / سرویس‌ورکر با قابلیت لرزش در سایلنت
+  await showAzanSystemNotification('اذان (تست هشدار)', muezzin.name, 'test');
 
-  // ۳. ارسال رویداد درون‌برنامه‌ای برای نمایش بنر معنوی
+  // ۴. ارسال رویداد درون‌برنامه‌ای برای نمایش بنر معنوی
   window.dispatchEvent(
     new CustomEvent('mobin-azan-alert', {
       detail: {
@@ -674,4 +695,167 @@ export async function testAzanAlertNow(): Promise<void> {
       },
     })
   );
+}
+
+/**
+ * نمایش اعلان سیستم عامل از طریق Service Worker (کارکرد در پس‌زمینه و حالت سایلنت)
+ */
+export async function showAzanSystemNotification(
+  prayerName: string,
+  muezzinName: string,
+  prayerKey: string
+): Promise<void> {
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  const title = `هنگام ${prayerName} - قرآن مبین`;
+  const options: any = {
+    body: `نوای ملکوتی اذان شیعه با صدای ${muezzinName} - حیّ علی الصلاة و الفلاح`,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    vibrate: [600, 250, 600, 250, 1200, 300, 1200], // الگوی ارتعاش قدرتمند در حالت سایلنت
+    tag: `mobin-azan-${prayerKey}`,
+    renotify: true,
+    requireInteraction: true,
+    silent: false,
+    data: { prayerKey, url: `/?action=azan&prayer=${prayerKey}` },
+  };
+
+  try {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, options);
+      return;
+    }
+  } catch {}
+
+  try {
+    new Notification(title, options);
+  } catch {}
+}
+
+/**
+ * زمان‌بند خودکار اذان و هشدارهای شرعی (کارکرد پیوسته، حتی هنگام بازگشت از خواب یا پس‌زمینه)
+ */
+let azanSchedulerTimer: any = null;
+let lastScheduledDate: string = '';
+
+export function initAzanScheduler(): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  // دریافت پیام از سرویس‌ورکر هنگام کلیک روی اعلان اذان
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'PLAY_AZAN_FROM_NOTIFICATION') {
+        const settings = getAzanSettings();
+        const muezzin = MUEZZINS_LIST.find((m) => m.id === settings.selectedMuezzinId) || MUEZZINS_LIST[0];
+        playAzanPreview(muezzin.id);
+        window.dispatchEvent(
+          new CustomEvent('mobin-azan-alert', {
+            detail: {
+              prayerName: 'اذان شرعی',
+              muezzinName: muezzin.name,
+              timestamp: new Date().toISOString(),
+            },
+          })
+        );
+      }
+    });
+  }
+
+  // بررسی وضعیت اجرای اذان بر مبنای اوقات جاری
+  const checkPrayerTimesNow = async () => {
+    try {
+      const { calculatePrayerTimes, getSavedCity, getSavedCustomCoords } = await import('./prayerTimesService');
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+      
+      const city = getSavedCity();
+      const customCoords = getSavedCustomCoords();
+      const coords = customCoords || {
+        latitude: city.latitude,
+        longitude: city.longitude,
+        elevation: city.elevation,
+      };
+
+      const settings = getAzanSettings();
+      const times = calculatePrayerTimes(
+        coords,
+        now,
+        coords.timezone,
+        settings.calculationMethod,
+        settings.safetyMarginMinutes
+      );
+
+      const prayersToCheck: Array<{ key: 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha'; name: string; alertEnabled: boolean }> = [
+        { key: 'fajr', name: 'اذان صبح', alertEnabled: settings.fajrAlert },
+        { key: 'dhuhr', name: 'اذان ظهر', alertEnabled: settings.dhuhrAlert },
+        { key: 'asr', name: 'اذان عصر', alertEnabled: settings.asrAlert },
+        { key: 'maghrib', name: 'اذان مغرب', alertEnabled: settings.maghribAlert },
+        { key: 'isha', name: 'اذان عشاء', alertEnabled: settings.ishaAlert },
+      ];
+
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const firedKey = `mobin_azan_fired_${todayStr}`;
+      const firedPrayers: string[] = JSON.parse(localStorage.getItem(firedKey) || '[]');
+
+      for (const p of prayersToCheck) {
+        if (!p.alertEnabled) continue;
+        if (firedPrayers.includes(p.key)) continue;
+
+        // زمان محاسبه‌شده برای این وقت
+        const rawDate = times.rawTimes[p.key === 'asr' ? 'dhuhr' : p.key === 'isha' ? 'maghrib' : p.key];
+        if (!rawDate) continue;
+
+        const prayerMinutes = rawDate.getHours() * 60 + rawDate.getMinutes();
+        const diffMinutes = Math.abs(currentMinutes - prayerMinutes);
+
+        // اگر کمتر از ۱ دقیقه فاصله باشد، اذان را اجرا می‌کنیم
+        if (diffMinutes === 0 && now.getSeconds() < 45) {
+          firedPrayers.push(p.key);
+          localStorage.setItem(firedKey, JSON.stringify(firedPrayers));
+
+          const muezzin = MUEZZINS_LIST.find((m) => m.id === settings.selectedMuezzinId) || MUEZZINS_LIST[0];
+
+          // ۱. لرزش سایلنت
+          if (navigator.vibrate) {
+            try {
+              navigator.vibrate([600, 250, 600, 250, 1200, 300, 1200]);
+            } catch {}
+          }
+
+          // ۲. پخش صوت
+          if (settings.inAppSoundEnabled) {
+            playAzanPreview(muezzin.id);
+          } else {
+            playHarmonicAzanChime();
+          }
+
+          // ۳. اعلان پس‌زمینه
+          if (settings.systemNotificationEnabled) {
+            showAzanSystemNotification(p.name, muezzin.name, p.key);
+          }
+
+          // ۴. بنر معنوی درون‌برنامه
+          window.dispatchEvent(
+            new CustomEvent('mobin-azan-alert', {
+              detail: {
+                prayerName: p.name,
+                muezzinName: muezzin.name,
+                timestamp: new Date().toISOString(),
+              },
+            })
+          );
+        }
+      }
+    } catch {}
+  };
+
+  // بررسی منظم هر ۳۰ ثانیه برای اطمینان از عملکرد دقیق
+  azanSchedulerTimer = setInterval(checkPrayerTimesNow, 25000);
+  checkPrayerTimesNow();
+
+  return () => {
+    if (azanSchedulerTimer) clearInterval(azanSchedulerTimer);
+  };
 }

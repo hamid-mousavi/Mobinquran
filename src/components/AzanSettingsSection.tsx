@@ -432,6 +432,17 @@ export const AzanSettingsSection: React.FC<AzanSettingsSectionProps> = ({}) => {
             )}
           </div>
 
+          {/* توضیح اختصاصی حالت سایلنت و کارکرد در پس‌زمینه */}
+          <div className="p-2 rounded-xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-500/20 text-[11px] text-teal-900 dark:text-teal-200 leading-relaxed">
+            <p className="font-bold flex items-center gap-1 mb-0.5 text-teal-700 dark:text-teal-300">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span>کارکرد در حالت سایلنت و بستن برنامه:</span>
+            </p>
+            <p className="text-[10.5px] opacity-90">
+              هشدار اذان مجهز به الگوی ارتعاش پرقدرت است که هنگام سایلنت بودن گوشی نیز شما را باخبر می‌کند. با لمس اعلان، برنامه فوراً باز شده و نوای ملکوتی اذان به صورت کامل پخش می‌شود.
+            </p>
+          </div>
+
           {permissionStatus === 'denied' && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 w-full min-w-0">
               <span className="leading-relaxed min-w-0 break-words">مرورگر اعلان را مسدود کرده است. کلیک کنید تا مجدداً درخواست شود:</span>

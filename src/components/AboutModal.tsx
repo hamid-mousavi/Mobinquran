@@ -116,6 +116,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({
         }`}>
           <div className="flex items-center gap-3">
             <QuranLogo size="md" darkMode={darkMode} />
+            <img
+              src="/mokeb-logo.jpg"
+              alt="موکب فاطمه الزهرا (س)"
+              className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-2xl shadow-md border border-amber-400/40"
+            />
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-slate-100">
@@ -126,7 +131,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                قرائت، ۳ ترجمه فارسی، ترتیل صوتی و تدبّر هوشمند
+                با عنایت موکب حضرت فاطمه‌الزهرا (سلام‌الله‌علیها)
               </p>
             </div>
           </div>
@@ -204,6 +209,31 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                   <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
                   <span>بدون هیچ‌گونه تبلیغات، وقف فرهنگی جهت خدمت به جامعه قرآنی</span>
                 </div>
+              </div>
+
+              {/* کارت اختصاصی معرفی موکب حضرت فاطمه‌الزهرا (سلام‌الله‌علیها) */}
+              <div className="relative overflow-hidden p-4 rounded-2xl border-2 border-amber-400/50 bg-gradient-to-br from-amber-500/10 via-emerald-500/10 to-teal-500/10 dark:from-amber-950/30 dark:via-emerald-950/20 dark:to-teal-950/30 space-y-3 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <img
+                    src="/mokeb-logo.jpg"
+                    alt="موکب حضرت فاطمه‌الزهرا (س)"
+                    className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-2xl shadow-lg border-2 border-amber-400 shrink-0"
+                  />
+                  <div>
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                      نذر فرهنگی و ترویج کلام وحی
+                    </span>
+                    <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100">
+                      موکب حضرت فاطمه‌الزهرا (سلام‌الله‌علیها)
+                    </h3>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                      خدمت‌گزاران عاشقان اهل‌بیت (ع) و کلام وحی
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+                  این اپلیکیشن قرآنی با عنایت و نیت نذر فرهنگی موکب حضرت فاطمه‌الزهرا (سلام‌الله‌علیها) و به عشق ترویج تلاوت و انس با قرآن کریم در بین آحاد مؤمنان و ارادتمندان خاندان عصمت و طهارت آماده‌سازی شده است. ثواب تلاوت‌ها هدیه به پیشگاه مقدس حضرت زهرای مرضیه (س) و شهدای والامقام.
+                </p>
               </div>
 
               {/* امکانات کلیدی */}

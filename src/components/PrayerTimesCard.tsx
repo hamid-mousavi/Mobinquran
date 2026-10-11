@@ -116,19 +116,19 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       className="group rounded-2xl border border-stone-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 px-3.5 py-3 sm:px-4 sm:py-3.5 shadow-xs hover:shadow-sm backdrop-blur-md transition-all hover:border-teal-500/40 cursor-pointer"
       dir="rtl"
     >
-      <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-100 dark:border-slate-800/60">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
-            <Clock className="w-4 h-4" />
+      <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-stone-100 dark:border-slate-800/60">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+            <Clock className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-slate-100">
                 اوقات شرعی
               </span>
               <span className="text-stone-300 dark:text-slate-700">•</span>
-              <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
-                <MapPin className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300 truncate">
+                <MapPin className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
                 {customCoords ? 'موقعیت شما' : city.name}
               </span>
             </div>
@@ -143,33 +143,33 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
               e.stopPropagation();
               onOpenModal('azan');
             }}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-[11px] font-bold transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-xs font-bold transition-all cursor-pointer border border-teal-500/20"
             title="تنظیمات اذان و دانلود مؤذن"
           >
             <Volume2 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">اذان: {currentMuezzin.name.split(' ')[0]}</span>
           </button>
 
-          <div className="flex items-center gap-0.5 text-[11px] font-bold text-teal-600 dark:text-teal-400 group-hover:translate-x-[-2px] transition-transform">
-            <span>قبله</span>
-            <ChevronLeft className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-1 text-xs font-extrabold text-teal-700 dark:text-teal-300 group-hover:translate-x-[-2px] transition-transform">
+            <span>قبله‌نما</span>
+            <ChevronLeft className="w-4 h-4" />
           </div>
         </div>
       </div>
 
       {/* بخش زمان‌بندی و هایلایت اذان بعدی */}
-      <div className="mt-2.5 flex items-center justify-between gap-3">
+      <div className="mt-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
-            <Sparkles className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/15 px-2.5 py-1 rounded-full border border-amber-500/20">
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             <span>وقت بعدی: {nextPrayer.name}</span>
           </span>
-          <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100">
+          <span className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100 font-mono">
             {toPersianDigits(nextPrayer.time)}
           </span>
         </div>
 
-        <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+        <div className="text-xs font-bold text-slate-600 dark:text-slate-300">
           {nextPrayer.remainingMinutes > 0 ? (
             <span>
               {toPersianDigits(nextPrayer.formattedRemaining)} مانده
@@ -183,20 +183,20 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       </div>
 
       {/* نوار فشرده ۶ وقت شرعی روز */}
-      <div className="mt-2.5 grid grid-cols-6 gap-1 sm:gap-1.5 pt-1">
+      <div className="mt-3 grid grid-cols-6 gap-1.5 sm:gap-2 pt-1">
         {prayersList.map((item) => {
           const isNext = nextPrayer.key === item.key;
           return (
             <div
               key={item.key}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
                 isNext
-                  ? 'bg-teal-500/15 dark:bg-teal-500/25 border border-teal-500/40 font-bold text-teal-900 dark:text-teal-100 shadow-2xs'
-                  : 'bg-stone-50/80 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400'
+                  ? 'bg-teal-500/15 dark:bg-teal-500/25 border border-teal-500/50 font-black text-teal-900 dark:text-teal-100 shadow-2xs'
+                  : 'bg-stone-50/80 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 border border-stone-200/50 dark:border-slate-800'
               }`}
             >
-              <span className="text-[10px] truncate">{item.name}</span>
-              <span className={`text-[11px] sm:text-xs mt-0.5 font-bold ${isNext ? 'text-teal-700 dark:text-teal-300' : 'text-slate-700 dark:text-slate-300'}`}>
+              <span className="text-[11px] sm:text-xs font-bold truncate">{item.name}</span>
+              <span className={`text-xs sm:text-sm mt-0.5 font-black ${isNext ? 'text-teal-700 dark:text-teal-300' : 'text-slate-800 dark:text-slate-200'}`}>
                 {toPersianDigits(item.time)}
               </span>
             </div>

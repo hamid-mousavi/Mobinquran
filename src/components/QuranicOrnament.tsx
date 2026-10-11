@@ -177,23 +177,32 @@ export const QuranicSurahBanner: React.FC<{
 };
 
 /**
- * نشان و لوگوی قرآنی اختصاصی قرآن مبین
- * نمایش منحصربه‌فرد لوگو با ابعاد استاندارد و بدون متن متنی اضافی در کنار آن
+ * نشان و لوگوی قرآنی اختصاصی قرآن مبین (نسخه بدون حاشیه سفید و با وضوح بالا)
  */
 export const QuranLogo: React.FC<{
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   darkMode?: boolean;
 }> = ({ size = 'md', darkMode = false }) => {
-  const heightClass = size === 'sm' ? 'h-9 sm:h-10' : size === 'lg' ? 'h-14 sm:h-16' : 'h-11 sm:h-12';
+  const dimensions =
+    size === 'sm'
+      ? 'w-10 h-10'
+      : size === 'lg'
+      ? 'w-16 h-16 sm:w-20 sm:h-20'
+      : size === 'xl'
+      ? 'w-24 h-24 sm:w-28 sm:h-28'
+      : 'w-12 h-12 sm:w-14 sm:h-14';
 
   return (
     <div className="inline-flex items-center justify-center select-none" dir="rtl">
-      <img
-        src="/quran-logo.png"
-        alt="قرآن مبین"
-        className={`${heightClass} w-auto max-w-[130px] sm:max-w-[150px] object-contain rounded-xl shadow-xs transition-transform hover:scale-105 active:scale-95`}
-        referrerPolicy="no-referrer"
-      />
+      <div className="relative group">
+        <div className="absolute -inset-1 rounded-2xl bg-teal-500/20 dark:bg-teal-400/20 blur-xs opacity-75 group-hover:opacity-100 transition-opacity" />
+        <img
+          src="/quran-logo-cropped.png"
+          alt="قرآن مبین"
+          className={`relative ${dimensions} object-contain rounded-2xl shadow-md border border-teal-500/30 dark:border-teal-400/30 transition-transform group-hover:scale-105 active:scale-95`}
+          referrerPolicy="no-referrer"
+        />
+      </div>
     </div>
   );
 };

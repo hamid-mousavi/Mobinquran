@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Navigation,
+  RefreshCw,
 } from 'lucide-react';
 import {
   CityInfo,
@@ -27,6 +28,7 @@ import {
   getSavedCity,
   saveSelectedCity,
   getSavedCustomCoords,
+  saveCustomCoords,
   detectUserLocation,
   Coordinates,
   CITIES_LIST,
@@ -75,9 +77,15 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
   const [activeTab, setActiveTab] = useState<PrayerModalTab>(initialTab);
   const [now, setNow] = useState<Date>(new Date());
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
+  const [unwrappedHeading, setUnwrappedHeading] = useState<number | null>(null);
+  const continuousHeadingRef = React.useRef<number | null>(null);
+  const smoothedHeadingRef = React.useRef<number | null>(null);
+  const lastFacingVibrateRef = React.useRef<number>(0);
+  const [compassCalibrated, setCompassCalibrated] = useState<boolean>(true);
   const [liveCompassMode, setLiveCompassMode] = useState<boolean>(true);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsMessage, setGpsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [sensorCalibratedNotice, setSensorCalibratedNotice] = useState<boolean>(false);
 
   // هماهنگ‌سازی تب با initialTab هنگام باز شدن
   useEffect(() => {
@@ -94,36 +102,91 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
     return () => clearInterval(interval);
   }, [isOpen]);
 
-  // سنسور قطب‌نما و جهت‌یابی گوشی
+  // سنسور قطب‌نما با اولویت‌دهی سنسور مطلق، تصحیح شیب گوشی (Tilt Compensation) و پیوستگی زاویه‌ای (Unwrapped EMA)
   useEffect(() => {
     if (!isOpen || activeTab !== 'qibla') return;
 
-    const handleOrientation = (e: any) => {
+    let hasAbsoluteReceived = false;
+
+    const processOrientation = (e: any, isAbsoluteEvent: boolean) => {
+      // در صورتی که ایونت مطلق قبلاً ثبت شده باشد، ایونت‌های معمولی را نادیده می‌گیریم تا جهت حقیقی بازنویسی نشود
+      if (!isAbsoluteEvent && hasAbsoluteReceived) return;
+
+      let rawHeading: number | null = null;
+
       if (typeof e.webkitCompassHeading === 'number') {
-        // iOS Safari: webkitCompassHeading جهت مغناطیسی مستقیم قطب‌نما است
-        setDeviceHeading(Math.round(e.webkitCompassHeading));
-      } else if (e.absolute === true && typeof e.alpha === 'number') {
-        // Android Chrome Absolute
-        const heading = (360 - e.alpha) % 360;
-        setDeviceHeading(Math.round(heading));
+        // iOS Safari: جهت مغناطیسی دقیق قطب‌نما (۰ تا ۳۶۰ درجه مستقیم نسبت به شمال)
+        rawHeading = e.webkitCompassHeading;
       } else if (typeof e.alpha === 'number') {
-        const heading = (360 - e.alpha) % 360;
-        setDeviceHeading(Math.round(heading));
+        if (isAbsoluteEvent || e.absolute === true) {
+          hasAbsoluteReceived = true;
+        }
+
+        // فرمول استاندارد W3C برای تبدیل دوران سه‌بعدی و تصحیح زاویه شیب گوشی در دست (Tilt Compensation)
+        const degToRad = Math.PI / 180;
+        const _x = (e.beta || 0) * degToRad;
+        const _y = (e.gamma || 0) * degToRad;
+        const _z = (e.alpha || 0) * degToRad;
+
+        // بردار محور Y دستگاه روی صفحه افقی زمین
+        const y_east  = -Math.cos(_z) * Math.sin(_x) * Math.sin(_y) - Math.sin(_z) * Math.cos(_x);
+        const y_north = -Math.sin(_z) * Math.sin(_x) * Math.sin(_y) + Math.cos(_z) * Math.cos(_x);
+
+        let heading = Math.atan2(y_east, y_north) * (180 / Math.PI);
+        heading = (heading + 360) % 360;
+
+        // اعمال زاویه چرخش صفحه در صورت چرخیدن گوشی به حالت افقی
+        const screenAngle = (typeof window !== 'undefined' && window.screen?.orientation?.angle) || 0;
+        rawHeading = (heading + screenAngle) % 360;
+      }
+
+      if (rawHeading === null || isNaN(rawHeading)) return;
+
+      // محاسبه زاویه پیوسته (Unwrapped) برای حذف پرش ناگهانی ۳۶۰ درجه در مرز شمال
+      if (continuousHeadingRef.current === null) {
+        continuousHeadingRef.current = rawHeading;
+        smoothedHeadingRef.current = rawHeading;
+        setDeviceHeading(Math.round(rawHeading));
+        setUnwrappedHeading(rawHeading);
+      } else {
+        const currentContinuous = continuousHeadingRef.current;
+        const currentNorm = ((currentContinuous % 360) + 360) % 360;
+        const shortestDiff = ((rawHeading - currentNorm + 540) % 360) - 180;
+
+        // فیلتر نویز لرزش دست (Deadband کمتر از ۰.۲۵ درجه)
+        if (Math.abs(shortestDiff) < 0.25) return;
+
+        // ضریب میرایی فیلتر پایین‌گذر برای حرکت فوق‌العاده نرم عقربه
+        const targetContinuous = currentContinuous + shortestDiff;
+        const smoothedContinuous = currentContinuous + shortestDiff * 0.18;
+
+        continuousHeadingRef.current = smoothedContinuous;
+        setUnwrappedHeading(smoothedContinuous);
+
+        const normalizedHeading = Math.round(((smoothedContinuous % 360) + 360) % 360);
+        setDeviceHeading(normalizedHeading);
       }
     };
 
-    if (window.DeviceOrientationEvent) {
-      window.addEventListener('deviceorientationabsolute' as any, handleOrientation, true);
-      window.addEventListener('deviceorientation', handleOrientation, true);
+    const handleAbsolute = (e: any) => processOrientation(e, true);
+    const handleStandard = (e: any) => processOrientation(e, false);
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('deviceorientationabsolute' as any, handleAbsolute, true);
+      window.addEventListener('deviceorientation', handleStandard, true);
     }
 
     return () => {
-      window.removeEventListener('deviceorientationabsolute' as any, handleOrientation, true);
-      window.removeEventListener('deviceorientation', handleOrientation, true);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('deviceorientationabsolute' as any, handleAbsolute, true);
+        window.removeEventListener('deviceorientation', handleStandard, true);
+      }
     };
   }, [isOpen, activeTab]);
 
   const requestCompassSensorPermission = async () => {
+    continuousHeadingRef.current = null;
+    smoothedHeadingRef.current = null;
     if (
       typeof DeviceOrientationEvent !== 'undefined' &&
       typeof (DeviceOrientationEvent as any).requestPermission === 'function'
@@ -137,6 +200,16 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
     } else {
       setLiveCompassMode(true);
     }
+  };
+
+  const handleRecalibrate = () => {
+    continuousHeadingRef.current = null;
+    smoothedHeadingRef.current = null;
+    setDeviceHeading(null);
+    setUnwrappedHeading(null);
+    setSensorCalibratedNotice(true);
+    requestCompassSensorPermission();
+    setTimeout(() => setSensorCalibratedNotice(false), 4000);
   };
 
   // محاسبه اوقات شرعی بر مبنای شهر یا مختصات دستی
@@ -173,21 +246,28 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
     return Math.round(dev * 10) / 10;
   }, [qiblaAngle]);
 
-  // انحراف مطلق گوشی از قبله
-  const deltaDegrees = useMemo(() => {
+  // انحراف جهت گوشی از قبله با علامت (+: چرخش به چپ نیاز است، -: چرخش به راست نیاز است)
+  const turnAngleDiff = useMemo(() => {
     if (deviceHeading === null) return null;
-    const diff = Math.abs(((deviceHeading - qiblaAngle + 540) % 360) - 180);
-    return Math.round(diff);
+    const diff = ((deviceHeading - qiblaAngle + 540) % 360) - 180;
+    return Math.round(diff * 10) / 10;
   }, [deviceHeading, qiblaAngle]);
 
-  // رو به قبله بودن (خطای کمتر از ۴ درجه)
-  const isFacingQibla = deltaDegrees !== null && deltaDegrees <= 4;
+  const deltaDegrees = turnAngleDiff !== null ? Math.abs(turnAngleDiff) : null;
+
+  // رو به قبله بودن (خطای کمتر از ۵ درجه)
+  const isFacingQibla = deltaDegrees !== null && deltaDegrees <= 5;
 
   useEffect(() => {
     if (isFacingQibla && typeof navigator !== 'undefined' && navigator.vibrate) {
-      try {
-        navigator.vibrate([40, 50, 40]);
-      } catch {}
+      const nowMs = Date.now();
+      // جلوگیری از لرزش مکرر آزاردهنده: حداکثر هر ۴ ثانیه یکبار
+      if (nowMs - lastFacingVibrateRef.current > 4000) {
+        lastFacingVibrateRef.current = nowMs;
+        try {
+          navigator.vibrate([60, 50, 60]);
+        } catch {}
+      }
     }
   }, [isFacingQibla]);
 
@@ -196,16 +276,21 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
     setGpsMessage(null);
     try {
       const result = await detectUserLocation();
+      // ذخیره دائمی شهر و مختصات تا دیگر نیازی به انتخاب مجدد توسط کاربر نباشد
+      saveSelectedCity(result.matchedCity.id);
+      saveCustomCoords(result.coords);
       setCustomCoords(result.coords);
       setCity(result.matchedCity);
+      // تغییر مستقیم به تب اوقات شرعی
+      setActiveTab('times');
       setGpsMessage({
         type: 'success',
-        text: result.message || `موقعیت مکانی شما با موفقیت به عنوان «${result.matchedCity.name}» شناسایی شد.`,
+        text: `موقعیت مکانی شما به عنوان «${result.matchedCity.name}» (استان ${result.matchedCity.province}) شناسایی و به عنوان شهر پیش‌فرض تنظیم شد.`,
       });
     } catch {
       setGpsMessage({
         type: 'error',
-        text: 'مکان‌یاب (GPS) دستگاه خاموش است یا اجازه دسترسی داده نشده است. لطفاً GPS را روشن و تأیید کنید یا نام شهر خود را از کادر زیر جستجو نمایید.',
+        text: 'مکان‌یاب (GPS) دستگاه خاموش است یا دسترسی داده نشد. لطفاً GPS را روشن و تأیید کنید یا نام شهر خود را از فهرست انتخاب فرمایید.',
       });
     } finally {
       setGpsLoading(false);
@@ -226,12 +311,13 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
   if (!isOpen) return null;
 
   // محاسبات زاویه چرخش دایره قطب‌نما و عقربه قبله در حالت‌های مختلف
-  // در حالت زنده: صفحه با -deviceHeading می‌چرخد تا شمال واقعی رو به بالا بماند
-  // عقربه قبله رو به (qiblaAngle - deviceHeading) می‌چرخد؛ وقتی رو به قبله باشید عقربه دقیقاً رو به جلو (۰ درجه) قرار می‌گیرد
-  const dialRotation = liveCompassMode && deviceHeading !== null ? -deviceHeading : 0;
+  // در حالت زنده: از زاویه پیوسته (Unwrapped) استفاده می‌شود تا در عبور از ۳۶۰ درجه هیچ‌گونه چرخش ناگهانی رخ ندهد
+  const headingForRotation = unwrappedHeading !== null ? unwrappedHeading : deviceHeading;
+  const dialRotation =
+    liveCompassMode && headingForRotation !== null ? -headingForRotation : 0;
   const needleRotation =
-    liveCompassMode && deviceHeading !== null
-      ? (qiblaAngle - deviceHeading + 360) % 360
+    liveCompassMode && headingForRotation !== null
+      ? qiblaAngle - headingForRotation
       : qiblaAngle;
 
   return (
@@ -542,8 +628,8 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
             {/* ۳. تب قبله‌نما با قبله‌نمای دقیق ریاضی SVG و سنسور */}
             {activeTab === 'qibla' && (
               <div className="space-y-3.5 flex flex-col items-center">
-                {/* دکمه‌های سوئیچ حالت قطب‌نما */}
-                <div className="w-full flex items-center justify-between p-1 rounded-xl bg-stone-100 dark:bg-slate-800 text-xs">
+                {/* دکمه‌های سوئیچ حالت قطب‌نما و کالیبراسیون */}
+                <div className="w-full flex items-center justify-between gap-1 p-1 rounded-xl bg-stone-100 dark:bg-slate-800 text-xs">
                   <button
                     onClick={() => {
                       setLiveCompassMode(true);
@@ -556,7 +642,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                     }`}
                   >
                     <Navigation className="w-3.5 h-3.5" />
-                    <span>قطب‌نمای چرخان زنده</span>
+                    <span>قطب‌نمای زنده گوشی</span>
                   </button>
                   <button
                     onClick={() => setLiveCompassMode(false)}
@@ -567,14 +653,45 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                     }`}
                   >
                     <Compass className="w-3.5 h-3.5" />
-                    <span>نمای ثابت (شمال بالا)</span>
+                    <span>نمای نقشه (شمال بالا)</span>
                   </button>
+                  {liveCompassMode && (
+                    <button
+                      onClick={handleRecalibrate}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-stone-200 dark:hover:bg-slate-700 transition-all cursor-pointer"
+                      title="کالیبراسیون و تنظیم مجدد سنسور"
+                      aria-label="کالیبراسیون قطب‌نما"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
-                {/* بنر تطبیق دقیق با قبله */}
-                {isFacingQibla && (
-                  <div className="px-4 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-2 shadow-lg animate-bounce">
-                    <span>🕋 شما هم‌اکنون دقیقاً رو به قبله هستید!</span>
+                {/* پیام کالیبراسیون سنسور */}
+                {sensorCalibratedNotice && (
+                  <div className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-bold text-xs flex items-center gap-2 animate-fadeIn">
+                    <span>🔄 سنسور ریست شد؛ گوشی را یک‌بار در هوا به شکل ۸ انگلیسی حرکت دهید.</span>
+                  </div>
+                )}
+
+                {/* بنر راهنمای زنده جهت‌گیری */}
+                {liveCompassMode && deviceHeading !== null && (
+                  <div className="w-full max-w-sm">
+                    {isFacingQibla ? (
+                      <div className="px-4 py-2 rounded-2xl bg-emerald-600 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg animate-pulse text-center">
+                        <span>🕋 الله‌اکبر! شما هم‌اکنون دقیقاً رو به قبله هستید</span>
+                      </div>
+                    ) : turnAngleDiff !== null ? (
+                      <div className="px-3.5 py-1.5 rounded-2xl bg-amber-500/15 border border-amber-400/40 text-amber-800 dark:text-amber-300 font-bold text-xs flex items-center justify-center gap-2 text-center">
+                        {turnAngleDiff > 5 ? (
+                          <span>↪️ به اندازه {toPersianDigits(Math.round(turnAngleDiff))} درجه به سمت چپ بچرخید</span>
+                        ) : turnAngleDiff < -5 ? (
+                          <span>↩️ به اندازه {toPersianDigits(Math.round(Math.abs(turnAngleDiff)))} درجه به سمت راست بچرخید</span>
+                        ) : (
+                          <span>🕋 تقریباً رو به قبله (تنظیم دقیق‌تر)</span>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 )}
 
@@ -588,7 +705,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                       {/* گرادیان پس‌زمینه قطب‌نما */}
                       <radialGradient id="dialBg" cx="50%" cy="50%" r="50%">
                         <stop offset="0%" stopColor={darkMode ? '#1e293b' : '#ffffff'} />
-                        <stop offset="85%" stopColor={darkMode ? '#0f172a' : '#f1f5f9'} />
+                        <stop offset="85%" stopColor={darkMode ? '#0f172a' : '#f8fafc'} />
                         <stop offset="100%" stopColor={darkMode ? '#020617' : '#e2e8f0'} />
                       </radialGradient>
                       {/* گرادیان عقربه قبله */}
@@ -604,20 +721,26 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                       </linearGradient>
                     </defs>
 
-                    {/* حلقه بیرونی طلایی / نقره‌ای */}
+                    {/* حلقه بیرونی طلایی / نقره‌ای با واکنش به تطبیق قبله */}
                     <circle
                       cx="130"
                       cy="130"
                       r="126"
                       fill="url(#dialBg)"
                       stroke={isFacingQibla ? '#10b981' : '#14b8a6'}
-                      strokeWidth={isFacingQibla ? '4' : '2.5'}
+                      strokeWidth={isFacingQibla ? '4.5' : '2.5'}
                       className="transition-colors duration-300"
                     />
 
-                    {/* دایره مدرج مدرج ۳۶۰ درجه که در حالت زنده می‌چرخد */}
-                    <g transform={`rotate(${dialRotation} 130 130)`} className="transition-transform duration-300 ease-out">
-                      {/* خطوط درجه‌بندی هر ۳۰ درجه */}
+                    {/* دایره مدرج ۳۶۰ درجه که در حالت زنده همگام با شمال واقعی می‌چرخد */}
+                    <g
+                      style={{
+                        transform: `rotate(${dialRotation}deg)`,
+                        transformOrigin: '130px 130px',
+                        transition: 'transform 0.08s linear',
+                      }}
+                    >
+                      {/* خطوط درجه‌بندی هر ۱۰ و ۳۰ درجه */}
                       {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg) => (
                         <g key={deg} transform={`rotate(${deg} 130 130)`}>
                           <line
@@ -643,6 +766,9 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                       >
                         N شمال ۰°
                       </text>
+
+                      {/* پیکان قرمز کوچک شمال روی صفحه مدرج */}
+                      <polygon points="130,38 133,52 127,52" fill="#ef4444" />
 
                       {/* شرق ۹۰° (سمت راست دایره) */}
                       <text
@@ -680,39 +806,37 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                         W ۲۷۰°
                       </text>
 
-                      {/* موقعیت کعبه روی لبه مدرج دایره */}
+                      {/* نشان باریک طلایی موقعیت قبله روی لبه مدرج صفحه */}
                       <g transform={`rotate(${qiblaAngle} 130 130)`}>
-                        <circle cx="130" cy="18" r="9" fill="#0d9488" stroke="#f59e0b" strokeWidth="2" />
-                        <text x="130" y="22" textAnchor="middle" fontSize="10">
-                          🕋
-                        </text>
+                        <circle cx="130" cy="14" r="5" fill="#f59e0b" stroke="#ffffff" strokeWidth="1" />
                       </g>
                     </g>
 
-                    {/* عقربه شمال (در حالت زنده رو به شمال می‌چرخد) */}
-                    <g transform={`rotate(${dialRotation} 130 130)`} opacity={liveCompassMode ? 0.8 : 0.4}>
-                      <polygon points="130,48 134,130 126,130" fill="url(#northNeedleGrad)" />
-                    </g>
-
                     {/* عقربه اصلی قبله‌نما (رو به کعبه) */}
-                    <g transform={`rotate(${needleRotation} 130 130)`} className="transition-transform duration-300 ease-out">
+                    <g
+                      style={{
+                        transform: `rotate(${needleRotation}deg)`,
+                        transformOrigin: '130px 130px',
+                        transition: 'transform 0.08s linear',
+                      }}
+                    >
                       {/* نوک پیکان قبله */}
                       <polygon
-                        points="130,36 142,122 130,114 118,122"
+                        points="130,30 143,122 130,114 117,122"
                         fill="url(#qiblaNeedleGrad)"
                         stroke="#f59e0b"
                         strokeWidth="1.5"
                       />
-                      {/* ته پیکان قبله (پشت) */}
+                      {/* انتهای عقربه قبله */}
                       <polygon
-                        points="130,130 136,160 130,175 124,160"
+                        points="130,130 136,164 130,178 124,164"
                         fill="#64748b"
                         opacity="0.8"
                       />
 
                       {/* نشان کعبه در نوک عقربه */}
-                      <circle cx="130" cy="46" r="11" fill="#0d9488" stroke="#fbbf24" strokeWidth="2" />
-                      <text x="130" y="50" textAnchor="middle" fontSize="11">
+                      <circle cx="130" cy="42" r="12" fill="#0d9488" stroke="#fbbf24" strokeWidth="2.5" />
+                      <text x="130" y="46" textAnchor="middle" fontSize="12">
                         🕋
                       </text>
                     </g>
@@ -727,7 +851,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                   {liveCompassMode && (
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 flex flex-col items-center pointer-events-none z-10">
                       <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[10px] border-t-rose-500 drop-shadow" />
-                      <span className="text-[9px] font-bold text-rose-500 bg-white/80 dark:bg-slate-900/80 px-1 rounded -mt-0.5">
+                      <span className="text-[9px] font-bold text-rose-500 bg-white/90 dark:bg-slate-900/90 px-1 rounded -mt-0.5 shadow-2xs">
                         بالای گوشی
                       </span>
                     </div>
@@ -759,12 +883,12 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                 {/* راهنمای کاربردی نحوه ایستادن */}
                 <div className="p-3 rounded-xl bg-stone-50 dark:bg-slate-800/50 border border-stone-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 text-center max-w-sm space-y-1">
                   {liveCompassMode && deviceHeading !== null ? (
-                    <p className="text-[11px]">
-                      دستگاه را بچرخانید تا نشانگر <b>🕋</b> دقیقاً به سمت <b>بالای گوشی</b> (روبروی شما) قرار گیرد.
+                    <p className="text-[11px] leading-relaxed">
+                      گوشی را افقی در دست نگه دارید و بچرخید تا نشانگر <b>🕋</b> دقیقاً به سمت <b>بالای گوشی</b> قرار گیرد.
                     </p>
                   ) : (
                     <p className="text-[11px] leading-relaxed">
-                      رو به جنوب بایستید؛ سپس به اندازه <b>{toPersianDigits(qiblaSouthDeviation)} درجه به سمت راست (غرب)</b> متمایل شوید تا دقیقاً رو به قبله قرار گیرید.
+                      در نمای نقشه شمال در بالا است؛ رو به جنوب بایستید و به اندازه <b>{toPersianDigits(qiblaSouthDeviation)} درجه به سمت راست (غرب)</b> بچرخید.
                     </p>
                   )}
                 </div>

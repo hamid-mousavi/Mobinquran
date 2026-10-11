@@ -217,6 +217,32 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
           </div>
         </div>
 
+        {/* کارت معرفی موکب حضرت فاطمه‌الزهرا (س) */}
+        <div
+          onClick={() => {
+            onClose();
+            onOpenAbout();
+          }}
+          className="mb-4 p-3.5 rounded-2xl border border-amber-400/40 bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-teal-500/10 dark:from-amber-950/30 dark:via-emerald-950/20 dark:to-teal-950/30 flex items-center gap-3 cursor-pointer hover:border-amber-400 transition-all active:scale-[0.99] group shadow-2xs"
+        >
+          <img
+            src="/mokeb-logo.jpg"
+            alt="موکب فاطمه الزهرا (س)"
+            className="w-11 h-11 object-cover rounded-xl border border-amber-400/60 group-hover:scale-105 transition-transform shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 block">
+              نذر فرهنگی و ترویج کلام وحی
+            </span>
+            <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 truncate">
+              موکب حضرت فاطمه‌الزهرا (سلام‌الله‌علیها)
+            </h3>
+            <p className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
+              خدمت‌گزاران جامعه قرآنی و ارادتمندان اهل‌بیت (ع)
+            </p>
+          </div>
+        </div>
+
         {/* لیست گزینه‌ها */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {menuItems.map((item, idx) => {

@@ -18,6 +18,8 @@ import { MemorizationPage } from './components/MemorizationPage';
 import { OfflinePage } from './components/OfflinePage';
 import { QuranStoriesExplorer } from './components/QuranStoriesExplorer';
 import { AzanAlertBanner } from './components/AzanAlertBanner';
+import { SplashScreen } from './components/SplashScreen';
+import { initAzanScheduler, playAzanPreview } from './services/azanService';
 import { BookOpen, ChevronRight } from 'lucide-react';
 import { BottomNavigation } from './components/BottomNavigation';
 import { MoreMenuModal } from './components/MoreMenuModal';
@@ -118,6 +120,37 @@ export default function App() {
 
   // آیهٔ از سرگیری قرائت (P3-T1): عددی که پس از بارگذاری آیات سوره، QuranReader به آن اسکرول می‌کند
   const [resumeScrollVerse, setResumeScrollVerse] = useState<number | null>(null);
+
+  // وضعیت نمایش اسپلش اسکرین معنوی
+  const [showSplash, setShowSplash] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('action') !== 'azan';
+  });
+
+  // راه‌اندازی زمان‌بند پس‌زمینه اذان و هشدارهای شرعی
+  useEffect(() => {
+    const cleanup = initAzanScheduler();
+    return cleanup;
+  }, []);
+
+  // بررسی درخواست اجرای فوری اذان از طریق اعلان یا شورتکات
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'azan') {
+      setShowSplash(false);
+      window.dispatchEvent(
+        new CustomEvent('mobin-azan-alert', {
+          detail: {
+            prayerName: 'اذان شرعی',
+            muezzinName: 'مؤذن منتخب',
+            timestamp: new Date().toISOString(),
+          },
+        })
+      );
+    }
+  }, []);
 
   // بارگذاری لیست سوره‌ها و وضعیت از IndexedDB
   useEffect(() => {
@@ -477,6 +510,14 @@ export default function App() {
       }`}
       dir="rtl"
     >
+      {/* اسپلش اسکرین اختصاصی و معنوی قرآن مبین و موکب حضرت فاطمه‌الزهرا (س) */}
+      {showSplash && (
+        <SplashScreen
+          onFinish={() => setShowSplash(false)}
+          darkMode={settings.darkMode}
+        />
+      )}
+
       {/* هدر بالایی با ابزارهای ناوبری، حالت مصحف، ختم قرآن، جستجو و هوش مصنوعی (تنها در صفحه قرائت) */}
       {activePage === 'reader' && (
         <Header

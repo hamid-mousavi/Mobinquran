@@ -84,4 +84,30 @@ registerRoute(
   })
 );
 
+// مدیریت کلیک روی اعلان اذان و اوقات شرعی برای باز کردن و پخش مستقیم در برنامه
+self.addEventListener('notificationclick', (event: any) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const targetUrl = data.url || '/?action=azan';
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList: any) => {
+        for (const client of clientList) {
+          if (client.url && 'focus' in client) {
+            client.postMessage({
+              type: 'PLAY_AZAN_FROM_NOTIFICATION',
+              prayerKey: data.prayerKey,
+            });
+            return client.focus();
+          }
+        }
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(targetUrl);
+        }
+      })
+  );
+});
+
 export {};

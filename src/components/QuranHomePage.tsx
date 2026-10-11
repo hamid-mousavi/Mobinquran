@@ -471,12 +471,12 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
       {/* سربرگ تمیز بالای صفحه اصلی */}
       <header
         id="home-top-header"
-        className="flex items-center justify-between gap-3 pb-3 border-b border-stone-200/80 dark:border-slate-800/80"
+        className="flex items-center justify-between gap-2.5 pb-3 border-b border-stone-200/80 dark:border-slate-800/80"
       >
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={onOpenSettings}
-            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-stone-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs"
+            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-stone-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs cursor-pointer"
             title="تنظیمات قلم و ترجمه"
             aria-label="تنظیمات"
           >
@@ -485,7 +485,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
 
           <button
             onClick={onToggleDarkMode}
-            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-stone-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs"
+            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-stone-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs cursor-pointer"
             title={darkMode ? 'حالت روز' : 'حالت شب'}
             aria-label="تغییر تم"
           >
@@ -493,16 +493,34 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           </button>
         </div>
 
-        {/* وسط: لوگوی قرآن مبین */}
-        <div className="flex items-center justify-center min-w-0">
+        {/* وسط: لوگوی قرآن مبین و نشان متبرک موکب حضرت فاطمه‌الزهرا (سلام‌الله‌علیها) */}
+        <div className="flex items-center justify-center gap-2.5 min-w-0">
           <QuranLogo size="md" darkMode={darkMode} />
+          {onOpenAbout && (
+            <button
+              onClick={onOpenAbout}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-amber-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-amber-500/20 border border-amber-400/40 transition-all cursor-pointer group active:scale-95 shadow-2xs"
+              title="موکب حضرت فاطمه‌الزهرا (سلام‌الله‌علیها)"
+            >
+              <img
+                src="/mokeb-logo.jpg"
+                alt="موکب فاطمه الزهرا (س)"
+                className="w-7 h-7 sm:w-8 sm:h-8 object-cover rounded-xl border border-amber-400/60 group-hover:scale-105 transition-transform"
+              />
+              <div className="text-right hidden xs:block">
+                <span className="block text-xs font-black text-slate-800 dark:text-slate-100 leading-tight">
+                  موکب فاطمه‌الزهرا (س)
+                </span>
+              </div>
+            </button>
+          )}
         </div>
 
         {/* سمت چپ: نشان‌شده‌ها */}
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={onOpenBookmarks}
-            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-stone-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs"
+            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-stone-50 dark:hover:bg-slate-800 transition-all active:scale-95 shadow-xs cursor-pointer"
             title="نشان‌شده‌ها و یادداشت‌ها"
             aria-label="نشان‌شده‌ها"
           >
@@ -523,32 +541,32 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             }
             onOpenSearch();
           }}
-          className={`group relative flex items-center justify-between rounded-2xl border transition-all cursor-pointer backdrop-blur-md p-2.5 sm:p-3 shadow-sm ${
+          className={`group relative flex items-center justify-between rounded-2xl border transition-all cursor-pointer backdrop-blur-md p-3 sm:p-3.5 shadow-sm ${
             isVoiceListening
               ? 'border-teal-500 bg-teal-500/10 dark:bg-teal-950/30 ring-2 ring-teal-500/30 shadow-md shadow-teal-500/10'
               : 'border-stone-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 hover:border-teal-500/80 hover:shadow-md hover:shadow-teal-600/10'
           }`}
         >
-          <div className="flex items-center gap-2.5 sm:gap-3 text-slate-400 dark:text-slate-400 min-w-0 flex-1 px-1">
+          <div className="flex items-center gap-3 text-slate-400 dark:text-slate-400 min-w-0 flex-1 px-1">
             <div
-              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
+              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
                 isVoiceListening
                   ? 'bg-rose-500 text-white animate-pulse'
                   : 'bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 group-hover:scale-110'
               }`}
             >
-              <Search className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+              <Search className="w-4.5 h-4.5" />
             </div>
             {isVoiceListening ? (
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="text-xs sm:text-sm font-bold text-teal-700 dark:text-teal-300 animate-pulse truncate">
+                <span className="text-sm font-bold text-teal-700 dark:text-teal-300 animate-pulse truncate">
                   {voiceTranscript
                     ? `در حال شنیدن: "${voiceTranscript}"`
                     : 'در حال شنیدن صدای شما... (مثلاً بگویید: سوره یس)'}
                 </span>
               </div>
             ) : (
-              <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 truncate">
+              <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-700 dark:text-slate-200 truncate">
                 جستجو در متن آیات، ترجمه‌ها، سوره‌ها و موضوعات قرآن…
               </span>
             )}
@@ -561,16 +579,16 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
               onClick={handleToggleVoiceSearch}
               title={isVoiceListening ? 'توقف شنیدن صدا' : 'جستجوی صوتی قرآن'}
               aria-label="جستجوی صوتی"
-              className={`p-2.5 rounded-xl transition-all flex items-center justify-center cursor-pointer ${
+              className={`p-2.5 sm:p-3 rounded-xl transition-all flex items-center justify-center cursor-pointer ${
                 isVoiceListening
                   ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30 animate-pulse ring-2 ring-rose-300'
                   : 'bg-stone-100 hover:bg-teal-50 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 border border-stone-200/60 dark:border-slate-700/60 active:scale-95'
               }`}
             >
               {isVoiceListening ? (
-                <MicOff className="w-4 h-4" />
+                <MicOff className="w-4 h-4 sm:w-5 sm:h-5" />
               ) : (
-                <Mic className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                <Mic className="w-4 h-4 sm:w-5 sm:h-5 text-teal-600 dark:text-teal-400" />
               )}
             </button>
           </div>
@@ -604,15 +622,15 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-teal-500/35 bg-gradient-to-br from-teal-500/15 via-white to-white dark:from-teal-950/40 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-teal-500 transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group"
         >
           <div className="flex items-center justify-between mb-3">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-md shadow-teal-600/25 group-hover:scale-105 transition-transform">
-              <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-md shadow-teal-600/25 group-hover:scale-105 transition-transform">
+              <BookOpen className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
           </div>
           <div>
-            <h3 className="text-base sm:text-xl font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+            <h3 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
               قرآن کریم
             </h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
+            <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-300 mt-1 font-semibold">
               قرائت، ترتیل و ترجمه
             </p>
           </div>
@@ -624,15 +642,15 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-amber-500/35 bg-gradient-to-br from-amber-500/15 via-white to-white dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-amber-500 transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group"
         >
           <div className="flex items-center justify-between mb-3">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/25 group-hover:scale-105 transition-transform">
-              <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/25 group-hover:scale-105 transition-transform">
+              <GraduationCap className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
           </div>
           <div>
-            <h3 className="text-base sm:text-xl font-bold text-slate-900 dark:text-slate-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+            <h3 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
               حفظ قرآن
             </h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
+            <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-300 mt-1 font-semibold">
               تمرین، آزمون و کارنامه
             </p>
           </div>
@@ -644,15 +662,15 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-indigo-500/35 bg-gradient-to-br from-indigo-500/15 via-white to-white dark:from-indigo-950/40 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-indigo-500 transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group"
         >
           <div className="flex items-center justify-between mb-3">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/25 group-hover:scale-105 transition-transform">
-              <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/25 group-hover:scale-105 transition-transform">
+              <Calendar className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
           </div>
           <div>
-            <h3 className="text-base sm:text-xl font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+            <h3 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
               ختم قرآن
             </h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
+            <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-300 mt-1 font-semibold">
               برنامه روزانه و پایش
             </p>
           </div>
@@ -664,15 +682,15 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-purple-500/35 bg-gradient-to-br from-purple-500/15 via-white to-white dark:from-purple-950/40 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-purple-500 transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group"
         >
           <div className="flex items-center justify-between mb-3">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-600/25 group-hover:scale-105 transition-transform">
-              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-600/25 group-hover:scale-105 transition-transform">
+              <Sparkles className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
           </div>
           <div>
-            <h3 className="text-base sm:text-xl font-bold text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+            <h3 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
               دستیار هوشمند
             </h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
+            <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-300 mt-1 font-semibold">
               تدبّر، مفاهیم و پاسخ
             </p>
           </div>
@@ -691,60 +709,60 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             onContinueReading();
           }
         }}
-        className="group relative rounded-3xl p-5 sm:p-6 border border-teal-600/30 dark:border-teal-500/25 bg-white dark:bg-slate-900 shadow-xs hover:border-teal-500 hover:shadow-md hover:shadow-teal-600/10 transition-all cursor-pointer space-y-3.5 overflow-hidden active:scale-[0.99]"
+        className="group relative rounded-3xl p-5 sm:p-7 border border-teal-600/35 dark:border-teal-500/30 bg-white dark:bg-slate-900 shadow-xs hover:border-teal-500 hover:shadow-md hover:shadow-teal-600/10 transition-all cursor-pointer space-y-4 overflow-hidden active:scale-[0.99]"
       >
         {/* هدر کارت: نام سوره و مشخصات آیه */}
-        <div className="flex items-center justify-between border-b border-stone-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-teal-600/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0">
-              <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
+        <div className="flex items-center justify-between border-b border-stone-100 dark:border-slate-800 pb-3.5">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-2xl bg-teal-600/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0">
+              <BookOpen className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
             <div className="min-w-0">
-              <div className="text-xs font-bold text-teal-600 dark:text-teal-400">
+              <div className="text-xs sm:text-sm font-extrabold text-teal-700 dark:text-teal-400">
                 ادامه آخرین موقعیت مطالعه
               </div>
-              <h2 className="text-base sm:text-xl font-bold text-slate-900 dark:text-slate-100 truncate">
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-50 truncate mt-0.5">
                 سوره {lastReadSurah.nameArabic} ({lastReadSurah.namePersian})
               </h2>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs sm:text-sm px-3 py-1.5 rounded-xl bg-teal-500/10 dark:bg-teal-500/20 text-teal-700 dark:text-teal-300 font-bold">
+            <span className="text-xs sm:text-base px-3.5 py-1.5 rounded-xl bg-teal-500/15 dark:bg-teal-500/25 text-teal-800 dark:text-teal-200 font-black">
               آیه {toPersianDigits(lastRead ? lastRead.verseNumber : 1)}
             </span>
-            <div className="w-8 h-8 rounded-full bg-teal-600/10 text-teal-600 dark:text-teal-400 flex items-center justify-center transition-transform group-hover:-translate-x-1">
-              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+            <div className="w-9 h-9 rounded-full bg-teal-600/10 text-teal-600 dark:text-teal-400 flex items-center justify-center transition-transform group-hover:-translate-x-1">
+              <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
           </div>
         </div>
 
-        {/* بدنه کارت: متن آیه و ترجمه با فونت درشت، خوانا و باوقار */}
-        <div className="space-y-3 text-right">
+        {/* بدنه کارت: متن آیه و ترجمه با فونت بسیار درشت، خوانا و باوقار */}
+        <div className="space-y-3.5 text-right">
           <p
-            className="text-2xl sm:text-3xl md:text-4xl font-normal text-slate-900 dark:text-slate-50 leading-[2.4] line-clamp-2"
+            className="text-2xl sm:text-4xl md:text-5xl font-normal text-slate-900 dark:text-slate-50 leading-[2.4] line-clamp-2"
             style={{ fontFamily: "'Uthman Taha', 'Amiri Quran', serif" }}
             dir="rtl"
           >
             {lastReadVerse ? lastReadVerse.textArabic : 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'}
           </p>
-          <p className="text-sm sm:text-base font-normal text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-2">
+          <p className="text-sm sm:text-lg font-medium text-slate-700 dark:text-slate-200 leading-relaxed line-clamp-2">
             {lastReadVerse?.translationMakarem || lastReadVerse?.translationAnsarian || lastReadVerse?.translationFooladvand || 'برای ادامه قرائت از این آیه، روی این کارت کلیک کنید.'}
           </p>
         </div>
       </div>
 
       {/* بخش تب‌های روزانه: آیه روز / ختم قرآن / حفظ قرآن */}
-      <div className="rounded-2xl border border-stone-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-xs space-y-4">
+      <div className="rounded-2xl sm:rounded-3xl border border-stone-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-xs space-y-4">
         {/* هدر دسته‌بندی با طراحی مینیمال */}
         <div className="flex items-center justify-between border-b border-stone-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
             <button
               onClick={() => setActiveFocusTab('verse')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                 activeFocusTab === 'verse'
                   ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800'
               }`}
             >
               آیهٔ منتخب امروز
@@ -752,15 +770,15 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
 
             <button
               onClick={() => setActiveFocusTab('khatm')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1 cursor-pointer ${
                 activeFocusTab === 'khatm'
                   ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800'
               }`}
             >
               <span>برنامه ختم</span>
               {khatmProgressPercent > 0 && (
-                <span className="text-[10px] opacity-90 font-mono font-normal">
+                <span className="text-[11px] opacity-90 font-mono font-bold">
                   ({toPersianDigits(khatmProgressPercent)}٪)
                 </span>
               )}
@@ -768,10 +786,10 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
 
             <button
               onClick={() => setActiveFocusTab('memorization')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                 activeFocusTab === 'memorization'
                   ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800'
               }`}
             >
               پیشرفت حفظ

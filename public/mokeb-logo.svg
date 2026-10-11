@@ -1,0 +1,61 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- پس‌زمینه یکدست مشکی -->
+  <rect width="1024" height="1024" fill="#000000"/>
+
+  <g transform="translate(512, 512)">
+    <!-- پرچم سرخ ملکوتی بر فراز گنبد -->
+    <path d="M-20,-70 
+             C60,-90 120,-150 170,-190 
+             C190,-155 175,-125 210,-95 
+             C225,-60 170,-45 200,-15 
+             C145,-18 100,-48 30,-20 
+             C-5,10 -35,50 -60,95
+             C-45,60 -25,-10 -20,-70 Z" 
+          fill="#e11d48"/>
+    <path d="M-20,-70 
+             C30,-75 80,-115 140,-165 
+             C160,-135 150,-110 180,-85 
+             C190,-55 150,-40 170,-18 
+             C120,-22 80,-45 25,-25 
+             C-5,5 -30,45 -55,90
+             C-40,55 -22,-15 -20,-70 Z" 
+          fill="#ef4444"/>
+
+    <!-- گنبد و طاق نورانی حرم مطهر -->
+    <!-- طاق منحنی اصلی حرم -->
+    <path d="M-245,130 
+             C-240,40 -120,-25 -30,-50 
+             C-5,-58 10,-60 30,-50 
+             C120,-25 240,40 245,130 
+             C210,50 110,-5 20,-28 
+             C-10,-32 -25,-32 -45,-25 
+             C-130,-5 -215,50 -245,130 Z" 
+          fill="#ffffff"/>
+
+    <!-- مناره نورانی در سمت چپ با جزئیات معماری حرم -->
+    <g transform="translate(-240, -40)">
+      <!-- نوک گلدسته / کلاهک -->
+      <path d="M10,-120 C10,-128 5,-135 0,-140 C-5,-135 -10,-128 -10,-120 Z" fill="#ffffff"/>
+      <!-- تاج گلدسته -->
+      <path d="M-18,-115 C-18,-122 18,-122 18,-115 L22,-95 C12,-92 -12,-92 -22,-95 Z" fill="#ffffff"/>
+      <!-- ایوان مؤذن -->
+      <path d="M-26,-95 L26,-95 L22,-82 L-22,-82 Z" fill="#ffffff"/>
+      <circle cx="0" cy="-105" r="5" fill="#000000"/>
+      
+      <!-- بدنه اصلی مناره -->
+      <path d="M-18,-80 L18,-80 L16,130 L-16,130 Z" fill="#ffffff"/>
+      
+      <!-- خط کوفی و ثلث داخل مناره: انالله وانا للحسین عاشقون -->
+      <text x="0" y="-50" text-anchor="middle" fill="#000000" font-family="'Vazirmatn', 'Amiri', 'Arial'" font-weight="900" font-size="14">انالله</text>
+      <text x="0" y="-15" text-anchor="middle" fill="#000000" font-family="'Vazirmatn', 'Amiri', 'Arial'" font-weight="900" font-size="14">وانا</text>
+      <text x="0" y="25" text-anchor="middle" fill="#000000" font-family="'Vazirmatn', 'Amiri', 'Arial'" font-weight="900" font-size="13">للحسین</text>
+      <text x="0" y="65" text-anchor="middle" fill="#000000" font-family="'Vazirmatn', 'Amiri', 'Arial'" font-weight="900" font-size="13">عاشقون</text>
+    </g>
+
+    <!-- کتیبه خوشنویسی ملکوتی ثلث: مَوْکِبُ فاطِمَةِ الزَّهْرَاءِ -->
+    <text x="0" y="185" text-anchor="middle" fill="#ffffff" font-family="'Amiri Quran', 'Amiri', 'KFGQPC-Hafs', 'Vazirmatn', serif" font-weight="bold" font-size="92" letter-spacing="2">
+      مَوْکِبُ فَاطِمَةِ الزَّهْرَاءِ
+    </text>
+  </g>
+</svg>
