@@ -40,6 +40,8 @@ import { RealisticQuizView, QuizQuestionItem } from './RealisticQuizView';
 import { QuranStoryDetailModal } from './QuranStoryDetailModal';
 import { DailyCompanionCard } from './DailyCompanionCard';
 import { DailyStreakModal } from './DailyStreakModal';
+import { PrayerTimesCard } from './PrayerTimesCard';
+import { PrayerTimesModal } from './PrayerTimesModal';
 import {
   getStreakData,
   getCurrentWeekStatus,
@@ -356,6 +358,19 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
   const [weekStatus, setWeekStatus] = useState<WeekDayStatus[]>(getCurrentWeekStatus());
   const [dueReviewAyahs, setDueReviewAyahs] = useState<ReviewAyahItem[]>(getDueReviewAyahs());
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
+  const [isPrayerModalOpen, setIsPrayerModalOpen] = useState(false);
+  const [prayerModalTab, setPrayerModalTab] = useState<'times' | 'azan' | 'qibla' | 'cities'>('times');
+
+  useEffect(() => {
+    const handleOpenPrayer = (e: any) => {
+      if (e?.detail?.tab) {
+        setPrayerModalTab(e.detail.tab);
+      }
+      setIsPrayerModalOpen(true);
+    };
+    window.addEventListener('mobin-open-prayer-times', handleOpenPrayer);
+    return () => window.removeEventListener('mobin-open-prayer-times', handleOpenPrayer);
+  }, []);
 
   useEffect(() => {
     const refreshActivity = () => {
@@ -560,24 +575,6 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             </button>
           </div>
         </div>
-
-        {/* لیست افقی آخرین جستجوها */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs select-none no-scrollbar">
-          <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 dark:text-slate-500 shrink-0 pl-1">
-            <Clock className="w-3 h-3 text-teal-600 dark:text-teal-400" />
-            <span>آخرین جستجوها:</span>
-          </div>
-
-          {Array.from(new Set([...recentSearches, 'آیة الکرسی', 'سوره یس', 'سوره واقعه', 'سوره ملک', 'صبر و آرامش', 'نور و هدایت', 'توکل'])).slice(0, 10).map((term) => (
-            <button
-              key={term}
-              onClick={() => onOpenSearch(term)}
-              className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border border-stone-200/80 dark:border-slate-800 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/40 text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 text-[11px] font-medium transition-all shrink-0 active:scale-95 shadow-2xs"
-            >
-              {term}
-            </button>
-          ))}
-        </div>
       </section>
 
       {/* ویجت همراهی و استمرار روزانه با قرآن (Daily Streak & Spaced Repetition) */}
@@ -587,6 +584,15 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
         dueReviewAyahs={dueReviewAyahs}
         onOpenStreakModal={() => setIsStreakModalOpen(true)}
         onOpenReviewModal={() => setIsStreakModalOpen(true)}
+        darkMode={darkMode}
+      />
+
+      {/* ویجت اوقات شرعی و قبله‌نما */}
+      <PrayerTimesCard
+        onOpenModal={(tab = 'times') => {
+          setPrayerModalTab(tab);
+          setIsPrayerModalOpen(true);
+        }}
         darkMode={darkMode}
       />
 
@@ -1138,6 +1144,14 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
         weekStatus={weekStatus}
         dueReviewAyahs={dueReviewAyahs}
         onNavigateToVerse={onNavigateToVerse}
+        darkMode={darkMode}
+      />
+
+      {/* مدال جامع اوقات شرعی، قبله‌نما و انتخاب شهر */}
+      <PrayerTimesModal
+        isOpen={isPrayerModalOpen}
+        onClose={() => setIsPrayerModalOpen(false)}
+        initialTab={prayerModalTab}
         darkMode={darkMode}
       />
     </main>

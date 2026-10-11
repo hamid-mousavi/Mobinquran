@@ -351,35 +351,28 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     verseNumber: number,
     targetSourceIndex: number
   ): Promise<{ url: string; isOffline: boolean; sourceIndex: number; reciterId: ReciterId }> => {
-    // ۱. بررسی فوری کش آفلاین برای قاری انتخابی (تمام سورس‌ها)
+    // ۱. بررسی فوری کش آفلاین برای قاری انتخابی کاربر
     const cached = await getCachedAudioBlobUrl(reciterId, surahId, verseNumber);
     if (cached) {
       return { url: cached.blobUrl, isOffline: true, sourceIndex: cached.sourceIndex, reciterId: cached.reciterId };
     }
 
-    // ۲. بررسی کش آفلاین برای هر قاری دیگری که این سوره را دارد (چه آنلاین و چه آفلاین!)
-    const anyCached = await getAnyCachedAudioBlobUrl(surahId, verseNumber);
-    if (anyCached) {
-      if (anyCached.reciterId !== reciterId) {
-        setSelectedReciterId(anyCached.reciterId);
-      }
-      return { url: anyCached.blobUrl, isOffline: true, sourceIndex: anyCached.sourceIndex, reciterId: anyCached.reciterId };
-    }
-
-    // ۳. در صورت قطع ارتباط شبکه، اعلام عدم وجود فایل آفلاین
+    // بررسی اتصال اینترنت
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    if (!isOnline) {
-      return { url: '', isOffline: true, sourceIndex: targetSourceIndex, reciterId };
+
+    // ۲. در صورت آنلاین بودن، پخش آنلاین مستقیم قاری انتخابی کاربر (بدون پرش یا بازگشت به قاری دانلودشده قبلی)
+    if (isOnline) {
+      const resolved = resolveAudioSource(reciterId, surahId, verseNumber, targetSourceIndex);
+      return {
+        url: resolved?.url || '',
+        isOffline: false,
+        sourceIndex: resolved?.sourceIndex ?? targetSourceIndex,
+        reciterId,
+      };
     }
 
-    // ۴. در صورت آنلاین بودن، استفاده از آدرس مستقیم سرور
-    const resolved = resolveAudioSource(reciterId, surahId, verseNumber, targetSourceIndex);
-    return {
-      url: resolved?.url || '',
-      isOffline: false,
-      sourceIndex: resolved?.sourceIndex ?? targetSourceIndex,
-      reciterId,
-    };
+    // ۳. در صورت قطع ارتباط شبکه، فایل آفلاین برای این قاری انتخابی یافت نشده است
+    return { url: '', isOffline: true, sourceIndex: targetSourceIndex, reciterId };
   };
 
   // بارگذاری فایل صوتی هنگام تغییر آیه، قاری یا سوره
@@ -612,37 +605,29 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       return;
     }
 
-    // ۲. بررسی کش آفلاین برای هر قاری دیگری که این سوره را دارد (چه آنلاین و چه آفلاین!)
-    const anyCached = await getAnyCachedAudioBlobUrl(currentSurah.id, currentPlayingVerseNumber);
-    if (anyCached && audioRef.current) {
-      setSelectedReciterId(anyCached.reciterId);
-      const oldBlob = activeBlobUrlRef.current;
-      activeBlobUrlRef.current = anyCached.blobUrl;
-      audioRef.current.src = anyCached.blobUrl;
-      if (oldBlob && oldBlob !== anyCached.blobUrl) {
-        setTimeout(() => URL.revokeObjectURL(oldBlob), 2500);
-      }
-      setWorkingSourceIndex(anyCached.reciterId, anyCached.sourceIndex);
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-        setPlaybackError(null);
-      }).catch(() => {});
-      return;
-    }
-
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    if (!isOnline) {
-      setIsPlaying(false);
-      setPlaybackError(`ارتباط اینترنت قطع است و فایل آفلاین آیه ${toPersianDigits(currentPlayingVerseNumber)} یافت نشد. لطفاً سوره را از بخش دانلودها دریافت کنید.`);
-      return;
-    }
-
     const sources = getSourcesForReciter(selectedReciterId);
-    if (sourceIndex < sources.length - 1) {
+    const reciterName = RECITER_NAMES[selectedReciterId] || selectedReciterId;
+
+    // ۲. در صورت آنلاین بودن، امتحان سرور جایگزین برای همین قاری
+    if (isOnline && sourceIndex < sources.length - 1) {
       const nextSourceIdx = sourceIndex + 1;
       setSourceIndex(nextSourceIdx);
       setWorkingSourceIndex(selectedReciterId, nextSourceIdx);
-      setPlaybackError(`خطا در منبع فعلی؛ در حال امتحان سرور جایگزین (${sources[nextSourceIdx].name})...`);
+      setPlaybackError(`خطا در سرور فعلی؛ در حال امتحان سرور جایگزین (${sources[nextSourceIdx].name})...`);
+      return;
+    }
+
+    // ۳. در صورت قطع اینترنت
+    if (!isOnline) {
+      setIsPlaying(false);
+      const anyCached = await getAnyCachedAudioBlobUrl(currentSurah.id, currentPlayingVerseNumber);
+      if (anyCached) {
+        const altReciterName = RECITER_NAMES[anyCached.reciterId] || anyCached.reciterId;
+        setPlaybackError(`ارتباط اینترنت قطع است و صوت «${reciterName}» برای این سوره دانلود نشده است. (صوت «${altReciterName}» به‌صورت آفلاین موجود است و می‌توانید آن را از لیست قاری‌ها انتخاب کنید).`);
+      } else {
+        setPlaybackError(`ارتباط اینترنت قطع است و فایل آفلاین آیه ${toPersianDigits(currentPlayingVerseNumber)} با صوت «${reciterName}» یافت نشد. لطفاً سوره را از بخش دانلودها دریافت کنید.`);
+      }
       return;
     }
 

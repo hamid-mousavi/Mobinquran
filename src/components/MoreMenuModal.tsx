@@ -13,6 +13,9 @@ import {
   Sparkles,
   Smartphone,
   Info,
+  Clock,
+  Compass,
+  Volume2,
 } from 'lucide-react';
 import { PWAInstallModal } from './PWAInstallModal';
 
@@ -99,6 +102,26 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
       action: () => {
         onClose();
         if (onOpenStories) onOpenStories();
+      },
+    },
+    {
+      label: 'اوقات شرعی و قبله‌نما',
+      desc: 'محاسبه دقیق اوقات ۶گانه، اذان و قبله‌نمای هوشمند',
+      icon: Clock,
+      iconColor: 'text-teal-600 dark:text-teal-400 bg-teal-500/10',
+      action: () => {
+        onClose();
+        window.dispatchEvent(new CustomEvent('mobin-open-prayer-times', { detail: { tab: 'times' } }));
+      },
+    },
+    {
+      label: 'تنظیمات اذان و دانلود مؤذن',
+      desc: 'انتخاب نوای مؤذن، دانلود صوت آفلاین و یادآور نماز',
+      icon: Volume2,
+      iconColor: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
+      action: () => {
+        onClose();
+        window.dispatchEvent(new CustomEvent('mobin-open-prayer-times', { detail: { tab: 'azan' } }));
       },
     },
     {

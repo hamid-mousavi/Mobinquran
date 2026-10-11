@@ -138,6 +138,12 @@ export function createApp() {
       'verses.quran.com',
       'quranicaudio.com',
       'download.quranicaudio.com',
+      'archive.org',
+      'ia801503.us.archive.org',
+      'ia601503.us.archive.org',
+      'upload.wikimedia.org',
+      'ahlolbait.com',
+      'static.ahlolbait.com',
     ];
 
     try {

@@ -17,6 +17,7 @@ import { AIPage } from './components/AIPage';
 import { MemorizationPage } from './components/MemorizationPage';
 import { OfflinePage } from './components/OfflinePage';
 import { QuranStoriesExplorer } from './components/QuranStoriesExplorer';
+import { AzanAlertBanner } from './components/AzanAlertBanner';
 import { BookOpen, ChevronRight } from 'lucide-react';
 import { BottomNavigation } from './components/BottomNavigation';
 import { MoreMenuModal } from './components/MoreMenuModal';
@@ -808,6 +809,9 @@ export default function App() {
         onOpenAbout={() => setIsAboutModalOpen(true)}
         darkMode={settings.darkMode}
       />
+
+      {/* بنر اعلان اذان و پخش صوتی اوقات شرعی */}
+      <AzanAlertBanner />
 
       {/* بنر به‌روزرسانی نسخه جدید با تأیید کاربر (P2-T2) */}
       <PWAUpdateBanner isAudioPlaying={isAudioPlayerOpen && activePlayingVerseNumber !== null} />
