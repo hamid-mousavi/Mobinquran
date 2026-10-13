@@ -140,15 +140,20 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'azan') {
       setShowSplash(false);
-      window.dispatchEvent(
-        new CustomEvent('mobin-azan-alert', {
-          detail: {
-            prayerName: 'اذان شرعی',
-            muezzinName: 'مؤذن منتخب',
-            timestamp: new Date().toISOString(),
-          },
-        })
-      );
+      import('./services/azanService').then(({ getAzanSettings, playAzanPreview, MUEZZINS_LIST }) => {
+        const azanSettings = getAzanSettings();
+        const muezzin = MUEZZINS_LIST.find((m) => m.id === azanSettings.selectedMuezzinId) || MUEZZINS_LIST[0];
+        playAzanPreview(muezzin.id);
+        window.dispatchEvent(
+          new CustomEvent('mobin-azan-alert', {
+            detail: {
+              prayerName: 'اذان شرعی',
+              muezzinName: muezzin.name,
+              timestamp: new Date().toISOString(),
+            },
+          })
+        );
+      });
     }
   }, []);
 

@@ -100,7 +100,7 @@ describe('Prayer Times & Qibla Calculation', () => {
   });
 
   it('contains Pre-Azan Duas (Salawat Imam Reza, Dua Faraj, etc.)', () => {
-    expect(PRE_AZAN_DUAS_LIST.length).toBeGreaterThanOrEqual(4);
+    expect(PRE_AZAN_DUAS_LIST.length).toBeGreaterThanOrEqual(2);
     const salawatReza = PRE_AZAN_DUAS_LIST.find((d) => d.id === 'salawat_reza');
     expect(salawatReza).toBeDefined();
     expect(salawatReza?.name).toContain('امام رضا');
@@ -108,6 +108,11 @@ describe('Prayer Times & Qibla Calculation', () => {
     const duaFaraj = PRE_AZAN_DUAS_LIST.find((d) => d.id === 'dua_faraj');
     expect(duaFaraj).toBeDefined();
     expect(duaFaraj?.name).toContain('فرج');
+
+    // تایید حذف دعای ربنا، تواشیح و مناجات منظومه بنا به درخواست کاربر
+    expect(PRE_AZAN_DUAS_LIST.some((d) => d.id === 'rabbana')).toBe(false);
+    expect(PRE_AZAN_DUAS_LIST.some((d) => d.id === 'asmaul_husna')).toBe(false);
+    expect(PRE_AZAN_DUAS_LIST.some((d) => d.id === 'monajat_masjed_kufa')).toBe(false);
   });
 
   it('provides default Shia Azan settings with in-app sound enabled', () => {
