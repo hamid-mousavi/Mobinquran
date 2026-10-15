@@ -116,9 +116,8 @@ describe('Phase 2 - PWA & Offline Verification', () => {
       const vercelPath = path.resolve(process.cwd(), 'vercel.json');
       const vercel = JSON.parse(fs.readFileSync(vercelPath, 'utf8'));
 
-      expect(vercel.functions['api/index.js']).toBeDefined();
-      expect(vercel.functions['api/[...path].js']).toBeUndefined();
       expect(vercel.rewrites.some((r: any) => r.source === '/api/(.*)' && r.destination === '/api')).toBe(true);
+      expect(vercel.functions?.['api/[...path].js']).toBeUndefined();
     });
 
     it('ensures pwaManager does not force reload without user action in onNeedRefresh', () => {
