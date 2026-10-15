@@ -4,6 +4,7 @@ import { Surah, SearchResultItem } from '../types';
 import { QuranService } from '../services/quranService';
 import { toPersianDigits, parseJuzQuery, parsePageQuery } from '../utils/textNormalization';
 import { getJuzStartInfo } from '../data/surahs';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   darkMode,
   initialQuery,
 }) => {
+  const modalRef = useModalA11y<HTMLDivElement>({ isOpen, onClose });
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<'all' | 'arabic' | 'translation'>('all');
   const [selectedSurahFilter, setSelectedSurahFilter] = useState<number | 0>(0);
@@ -319,6 +321,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       onClick={onClose}
     >
       <div
+        ref={modalRef}
         id="search-modal-container"
         className={`w-full sm:max-w-2xl h-[92vh] sm:h-[86vh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl border transition-all duration-200 overflow-hidden ${
           darkMode

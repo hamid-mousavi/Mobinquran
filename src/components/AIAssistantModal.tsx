@@ -4,6 +4,8 @@ import { Verse, Surah } from '../types';
 import { aiResponseSchema, AiResponse } from '../services/aiContract';
 import { AiCandidateForRequest, retrieveAiCandidates } from '../services/aiRetrieval';
 import { toPersianDigits } from '../utils/textNormalization';
+import { getOrCreateDeviceId } from '../utils/deviceId';
+import { apiFetch } from '../services/apiClient';
 
 interface AIAssistantModalProps {
   isOpen: boolean;
@@ -119,7 +121,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    fetch('/api/ai/status')
+    apiFetch('/api/ai/status')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         setIsServerAiEnabled(data?.enabled === true);
@@ -152,17 +154,12 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         if (nextCandidates.length === 0) {
           throw new Error('no_local_candidates');
         }
-        const deviceStorageKey = 'quran_ai_device_id';
-        let deviceId = localStorage.getItem(deviceStorageKey);
-        if (!deviceId) {
-          deviceId = crypto.randomUUID();
-          localStorage.setItem(deviceStorageKey, deviceId);
-        }
+        const deviceId = getOrCreateDeviceId();
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
         let response: Response;
         try {
-          response = await fetch('/api/ai/ask', {
+          response = await apiFetch('/api/ai/ask', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Device-ID': deviceId },
           signal: controller.signal,

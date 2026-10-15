@@ -37,6 +37,8 @@ import {
 } from '../services/aiHistoryStorage';
 import { toPersianDigits } from '../utils/textNormalization';
 import { getVerseReflection, saveVerseReflection } from '../services/aiReflectionStorage';
+import { getOrCreateDeviceId } from '../utils/deviceId';
+import { apiFetch } from '../services/apiClient';
 
 interface AIPageProps {
   currentVerse?: Verse | null;
@@ -81,9 +83,9 @@ export const AIPage: React.FC<AIPageProps> = ({
 
   const fetchAiQuota = async () => {
     try {
-      const deviceId = localStorage.getItem('quran_ai_device_id') || '';
-      const res = await fetch(`/api/ai/status?deviceId=${encodeURIComponent(deviceId)}`, {
-        headers: deviceId ? { 'X-Device-ID': deviceId } : {},
+      const deviceId = getOrCreateDeviceId();
+      const res = await apiFetch(`/api/ai/status?deviceId=${encodeURIComponent(deviceId)}`, {
+        headers: { 'X-Device-ID': deviceId },
       });
       if (res.ok) {
         const data = await res.json();
@@ -199,16 +201,9 @@ export const AIPage: React.FC<AIPageProps> = ({
     setIsLoading(true);
 
     try {
-      const deviceStorageKey = 'quran_ai_device_id';
-      let deviceId = localStorage.getItem(deviceStorageKey);
-      if (!deviceId) {
-        deviceId = typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `dev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        localStorage.setItem(deviceStorageKey, deviceId);
-      }
+      const deviceId = getOrCreateDeviceId();
 
-      const response = await fetch('/api/ai/ask', {
+      const response = await apiFetch('/api/ai/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -114,6 +114,7 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
         window.dispatchEvent(new CustomEvent('mobin-open-prayer-times', { detail: { tab: 'times' } }));
       },
     },
+    /* تب تنظیمات اذان موقتاً طبق درخواست کامنت شد:
     {
       label: 'تنظیمات اذان و دانلود مؤذن',
       desc: 'انتخاب نوای مؤذن، دانلود صوت آفلاین و یادآور نماز',
@@ -124,6 +125,7 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
         window.dispatchEvent(new CustomEvent('mobin-open-prayer-times', { detail: { tab: 'azan' } }));
       },
     },
+    */
     {
       label: 'نشان‌شده‌ها و یادداشت‌ها',
       desc: 'آیات ذخیره‌شده و حاشیه‌نویسی‌ها',

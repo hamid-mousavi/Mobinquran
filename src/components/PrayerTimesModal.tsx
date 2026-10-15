@@ -74,7 +74,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
   const [customCoords, setCustomCoords] = useState(getSavedCustomCoords());
   const [citySearch, setCitySearch] = useState('');
   const [selectedProvince, setSelectedProvince] = useState<string>('همه');
-  const [activeTab, setActiveTab] = useState<PrayerModalTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<PrayerModalTab>(initialTab === 'azan' ? 'times' : initialTab);
   const [now, setNow] = useState<Date>(new Date());
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
   const [unwrappedHeading, setUnwrappedHeading] = useState<number | null>(null);
@@ -90,7 +90,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
   // هماهنگ‌سازی تب با initialTab هنگام باز شدن
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(initialTab);
+      setActiveTab(initialTab === 'azan' ? 'times' : initialTab);
       setGpsMessage(null);
     }
   }, [isOpen, initialTab]);
@@ -354,8 +354,8 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
           </button>
         </div>
 
-        {/* ۲. چهار زبانه اصلی (Tabs) */}
-        <div className="grid grid-cols-4 border-b border-stone-100 dark:border-slate-800 bg-stone-50/70 dark:bg-slate-800/40 p-1 gap-1 text-center shrink-0 w-full min-w-0">
+        {/* ۲. زبانه‌های اصلی (Tabs) - تب تنظیمات اذان موقتاً طبق درخواست کامنت شده است */}
+        <div className="grid grid-cols-3 border-b border-stone-100 dark:border-slate-800 bg-stone-50/70 dark:bg-slate-800/40 p-1 gap-1 text-center shrink-0 w-full min-w-0">
           <button
             onClick={() => setActiveTab('times')}
             className={`py-2 px-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer min-w-0 truncate ${
@@ -367,6 +367,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
             <Clock className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">اوقات</span>
           </button>
+          {/* تب تنظیمات اذان فعلاً کامنت شد:
           <button
             onClick={() => setActiveTab('azan')}
             className={`py-2 px-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer min-w-0 truncate ${
@@ -378,6 +379,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
             <Volume2 className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">تنظیمات اذان</span>
           </button>
+          */}
           <button
             onClick={() => setActiveTab('qibla')}
             className={`py-2 px-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer min-w-0 truncate ${
@@ -622,8 +624,8 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
               </div>
             )}
 
-            {/* ۲. تب تنظیمات اذان (فشرده و بدون کارت‌های حجیم) */}
-            {activeTab === 'azan' && <AzanSettingsSection darkMode={darkMode} />}
+            {/* ۲. تب تنظیمات اذان (فعلاً طبق درخواست کامنت شده است) */}
+            {/* {activeTab === 'azan' && <AzanSettingsSection darkMode={darkMode} />} */}
 
             {/* ۳. تب قبله‌نما با قبله‌نمای دقیق ریاضی SVG و سنسور */}
             {activeTab === 'qibla' && (

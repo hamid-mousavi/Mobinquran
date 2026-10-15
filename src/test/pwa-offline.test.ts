@@ -90,4 +90,43 @@ describe('Phase 2 - PWA & Offline Verification', () => {
     expect(css).toContain('font-display: swap');
     expect(css).not.toContain('jsdelivr.net');
   });
+
+  describe('Phase 5 — PWA & Deployment Standards', () => {
+    it('ensures legacy public/sw.js is removed and only src/sw.ts is the active worker source', () => {
+      const publicSwPath = path.resolve(process.cwd(), 'public/sw.js');
+      const srcSwPath = path.resolve(process.cwd(), 'src/sw.ts');
+      expect(fs.existsSync(publicSwPath)).toBe(false);
+      expect(fs.existsSync(srcSwPath)).toBe(true);
+    });
+
+    it('verifies all 3 standard manifest shortcuts are defined with proper URLs', () => {
+      const manifestPath = path.resolve(process.cwd(), 'public/manifest.json');
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+
+      const shortcuts = manifest.shortcuts as Array<{ url: string; name: string }>;
+      expect(shortcuts).toBeDefined();
+
+      const urls = shortcuts.map((s) => s.url);
+      expect(urls).toContain('/?view=surahs');
+      expect(urls).toContain('/?action=last-read');
+      expect(urls).toContain('/?action=search');
+    });
+
+    it('validates vercel.json configuration has unified serverless function', () => {
+      const vercelPath = path.resolve(process.cwd(), 'vercel.json');
+      const vercel = JSON.parse(fs.readFileSync(vercelPath, 'utf8'));
+
+      expect(vercel.functions['api/index.js']).toBeDefined();
+      expect(vercel.functions['api/[...path].js']).toBeUndefined();
+      expect(vercel.rewrites.some((r: any) => r.source === '/api/(.*)' && r.destination === '/api')).toBe(true);
+    });
+
+    it('ensures pwaManager does not force reload without user action in onNeedRefresh', () => {
+      const pwaManagerContent = fs.readFileSync(path.resolve(process.cwd(), 'src/services/pwaManager.ts'), 'utf8');
+      const onNeedRefreshMatch = pwaManagerContent.match(/onNeedRefresh\s*\(\)\s*\{([\s\S]*?)\}/);
+      expect(onNeedRefreshMatch).toBeDefined();
+      expect(onNeedRefreshMatch![1]).not.toContain('updateSWFunction(true)');
+    });
+  });
 });
+

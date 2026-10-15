@@ -3,6 +3,7 @@ import { X, Search, MapPin, Layers, Sparkles, SlidersHorizontal, BookOpen } from
 import { Surah } from '../types';
 import { toPersianDigits } from '../utils/textNormalization';
 import { JUZ_STARTS, getJuzStartInfo } from '../data/surahs';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface SurahSelectorModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
   onOpenAdvancedSearch,
   darkMode,
 }) => {
+  const modalRef = useModalA11y<HTMLDivElement>({ isOpen, onClose });
   const [activeTab, setActiveTab] = useState<'surahs' | 'juz'>('surahs');
   const [searchQuery, setSearchQuery] = useState('');
   const [surahTypeFilter, setSurahTypeFilter] = useState<'all' | 'meccan' | 'medinan'>('all');
@@ -71,6 +73,7 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
       onClick={onClose}
     >
       <div
+        ref={modalRef}
         id="modal-surah-selector-content"
         className={`w-full sm:max-w-2xl h-[88vh] sm:h-[84vh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden transition-all border ${
           darkMode

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { QuranLogo } from './QuranicOrnament';
 import { toPersianDigits } from '../utils/textNormalization';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
   onClose,
   darkMode,
 }) => {
+  const modalRef = useModalA11y<HTMLDivElement>({ isOpen, onClose });
   const [activeTab, setActiveTab] = useState<'about' | 'contact' | 'privacy' | 'sources'>('about');
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
@@ -100,6 +102,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
       dir="rtl"
     >
       <div
+        ref={modalRef}
         id="modal-about-content"
         className={`w-full max-w-xl rounded-t-3xl sm:rounded-3xl border border-stone-200 dark:border-slate-800 shadow-2xl transition-all flex flex-col ${
           darkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-800'

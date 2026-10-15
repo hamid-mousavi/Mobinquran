@@ -9,8 +9,7 @@ import { RangeRequestsPlugin } from 'workbox-range-requests';
 
 declare let self: ServiceWorkerGlobalScope & typeof globalThis;
 
-// فعال‌سازی خودکار و بی‌درنگ نسخه جدید بدون نیاز به تایید دستی کاربر
-self.skipWaiting();
+// کنترل فعال‌سازی نسخه جدید با پیام SKIP_WAITING جهت جلوگیری از وقفه در صوت و قرائت
 clientsClaim();
 
 self.addEventListener('message', (event) => {
@@ -58,7 +57,7 @@ registerRoute(
 
 // تصاویر → CacheFirst
 registerRoute(
-  /\.(?:png|jpg|jpeg|svg|ico)$/i,
+  /\.(?:png|jpg|jpeg|svg|ico|webp)$/i,
   new CacheFirst({
     cacheName: 'quran-images-cache',
     plugins: [
@@ -138,38 +137,9 @@ function setupAlarmsInServiceWorker(
     const fireTime = alarm.timestamp;
     const diff = fireTime - now;
 
-    // ۱. سیستم TimestampTrigger در کروم اندروید برای بیدار کردن آفلاین سیستم در زمان دقیق
-    if (
-      typeof Notification !== 'undefined' &&
-      'showTrigger' in (Notification as any).prototype &&
-      typeof (self as any).TimestampTrigger !== 'undefined'
-    ) {
-      if (diff > 0) {
-        try {
-          self.registration
-            .showNotification(`هنگام ${alarm.prayerName} - قرآن مبین`, {
-              body: `نوای ملکوتی اذان شیعه با صدای ${muezzinName || 'مؤذن منتخب'} - برای پخش کامل اذان لمس کنید`,
-              icon: '/icon-192.png',
-              badge: '/icon-192.png',
-              vibrate: [600, 250, 600, 250, 1200, 300, 1200],
-              tag: `mobin-azan-${alarm.prayerKey}`,
-              renotify: true,
-              requireInteraction: true,
-              silent: false,
-              showTrigger: new (self as any).TimestampTrigger(fireTime),
-              data: {
-                prayerKey: alarm.prayerKey,
-                prayerName: alarm.prayerName,
-                muezzinName: muezzinName,
-                url: `/?action=azan&prayer=${alarm.prayerKey}`,
-              },
-            } as any)
-            .catch(() => {});
-        } catch {}
-      }
-    }
-
-    // ۲. تایمر داخلی ورکر برای دستگاه‌های فعال
+    // تایمر داخلی Service Worker برای تب‌های فعال (رویکرد Best-Effort در محیط وب)
+    // توجه: در مرورگرهای مدرن پس از مدتی بیکاری Service Worker به حالت تعلیق درمی‌آید؛
+    // برای اجرای تضمینی در پس‌زمینه در فاز ۴-ب از آلارم دقیق بومی Capacitor استفاده خواهد شد.
     if (diff > 0 && diff < 24 * 3600 * 1000) {
       const tid = setTimeout(() => {
         triggerPrayerNotification(alarm, muezzinName);

@@ -3,6 +3,7 @@ import { X, Bookmark, Trash2, BookOpen, Clock } from 'lucide-react';
 import { UserBookmark, Surah } from '../types';
 import { QuranService } from '../services/quranService';
 import { toPersianDigits } from '../utils/textNormalization';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface BookmarksModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export const BookmarksModal: React.FC<BookmarksModalProps> = ({
   onSelectBookmark,
   darkMode,
 }) => {
+  const modalRef = useModalA11y<HTMLDivElement>({ isOpen, onClose });
   const [bookmarks, setBookmarks] = useState<UserBookmark[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,13 +48,16 @@ export const BookmarksModal: React.FC<BookmarksModalProps> = ({
   return (
     <div
       id="modal-bookmarks-backdrop"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-fadeIn"
+      onClick={onClose}
     >
       <div
+        ref={modalRef}
         id="modal-bookmarks-content"
         className={`w-full sm:max-w-lg h-[75vh] sm:h-[70vh] flex flex-col rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden transition-all ${
           darkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-800'
         }`}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* سربرگ */}
         <div className={`p-4 border-b flex items-center justify-between ${

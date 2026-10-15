@@ -1,0 +1,18 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'app.vercel.mobinquran.twa',
+  appName: 'قرآن مبین',
+  webDir: 'dist',
+  server: {
+    androidScheme: 'https',
+  },
+  plugins: {
+    LocalNotifications: {
+      smallIcon: 'ic_stat_name',
+      iconColor: '#059669',
+    },
+  },
+};
+
+export default config;

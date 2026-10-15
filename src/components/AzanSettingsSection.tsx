@@ -18,7 +18,15 @@ import {
   Clock,
   ShieldCheck,
   Search,
+  Smartphone,
+  BatteryCharging,
+  AlertTriangle,
+  Calendar,
+  ListTodo,
+  Info,
+  ExternalLink,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import {
   MUEZZINS_LIST,
   PRE_AZAN_DUAS_LIST,
@@ -39,6 +47,18 @@ import {
   requestAzanNotificationPermission,
   NotificationPermissionState,
 } from '../services/azanService';
+import {
+  getAlarmScheduler,
+  rescheduleAllAlarms,
+  testNativeAlarmIn1Minute,
+  getUnifiedSettings,
+  saveUnifiedSettings,
+  AlarmItem,
+  KhatmReminderSettings,
+  DailyWirdSettings,
+  DEFAULT_KHATM_REMINDER,
+  DEFAULT_DAILY_WIRD,
+} from '../services/notifications';
 import { toPersianDigits } from '../utils/textNormalization';
 
 interface AzanSettingsSectionProps {
@@ -90,6 +110,16 @@ export const AzanSettingsSection: React.FC<AzanSettingsSectionProps> = ({}) => {
   const [isMuezzinListExpanded, setIsMuezzinListExpanded] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // بخش زمان‌بندی بومی اندروید و یادآورهای ختم و ورد
+  const isNative = Capacitor.isNativePlatform();
+  const [exactAlarmStatus, setExactAlarmStatus] = useState<boolean>(true);
+  const [khatmReminder, setKhatmReminder] = useState<KhatmReminderSettings>(DEFAULT_KHATM_REMINDER);
+  const [dailyWird, setDailyWird] = useState<DailyWirdSettings>(DEFAULT_DAILY_WIRD);
+  const [pendingAlarms, setPendingAlarms] = useState<AlarmItem[]>([]);
+  const [isTestingAlarm, setIsTestingAlarm] = useState<boolean>(false);
+  const [showBatteryGuide, setShowBatteryGuide] = useState<boolean>(false);
+  const [selectedBrand, setSelectedBrand] = useState<'xiaomi' | 'samsung' | 'huawei'>('xiaomi');
+
   useEffect(() => {
     const handlePreviewState = (e: any) => {
       setPreviewState(e.detail || { isPlaying: false, id: null, type: null });
@@ -104,6 +134,22 @@ export const AzanSettingsSection: React.FC<AzanSettingsSectionProps> = ({}) => {
     window.addEventListener('mobin-azan-preview-state', handlePreviewState);
     window.addEventListener('mobin-azan-downloads-changed', handleDownloadsChanged);
     window.addEventListener('mobin-duas-downloads-changed', handleDuasDownloadsChanged);
+
+    // بارگذاری تنظیمات یکپارچه و وضعیت مجوزهای سیستم
+    const loadUnified = async () => {
+      try {
+        const u = await getUnifiedSettings();
+        setKhatmReminder(u.khatmReminder);
+        setDailyWird(u.dailyWird);
+        const scheduler = getAlarmScheduler();
+        const perms = await scheduler.checkPermissions();
+        setExactAlarmStatus(perms.exactAlarm);
+        setPermissionStatus(perms.notifications ? 'granted' : 'denied');
+        const alarms = await scheduler.getPendingAlarms();
+        setPendingAlarms(alarms);
+      } catch {}
+    };
+    loadUnified().catch(() => {});
 
     return () => {
       window.removeEventListener('mobin-azan-preview-state', handlePreviewState);
@@ -122,6 +168,51 @@ export const AzanSettingsSection: React.FC<AzanSettingsSectionProps> = ({}) => {
     const updated = { ...settings, [key]: value };
     setSettings(updated);
     saveAzanSettings(updated);
+    rescheduleAllAlarms().catch(() => {});
+  };
+
+  const handleRequestPermissions = async () => {
+    const scheduler = getAlarmScheduler();
+    const granted = await scheduler.requestPermissions();
+    setPermissionStatus(granted ? 'granted' : 'denied');
+    showToast(granted ? 'مجوز نمایش اعلان صادر شد.' : 'مجوز اعلان صادر نشد.');
+    const perms = await scheduler.checkPermissions();
+    setExactAlarmStatus(perms.exactAlarm);
+  };
+
+  const handleOpenExactAlarm = async () => {
+    const scheduler = getAlarmScheduler();
+    await scheduler.openExactAlarmSettings();
+    showToast('تنظیمات آلارم دقیق سیستم باز شد.');
+  };
+
+  const handleTestNativeAlarm = async () => {
+    setIsTestingAlarm(true);
+    try {
+      const trigger = await testNativeAlarmIn1Minute();
+      showToast(`آلارم آزمایشی برای ساعت ${toPersianDigits(trigger.toLocaleTimeString('fa-IR'))} با موفقیت ثبت شد.`);
+      const scheduler = getAlarmScheduler();
+      const alarms = await scheduler.getPendingAlarms();
+      setPendingAlarms(alarms);
+    } catch {
+      showToast('خطا در ثبت آلارم آزمایشی');
+    } finally {
+      setIsTestingAlarm(false);
+    }
+  };
+
+  const updateKhatmReminder = (field: keyof KhatmReminderSettings, val: any) => {
+    const updated = { ...khatmReminder, [field]: val };
+    setKhatmReminder(updated);
+    saveUnifiedSettings({ khatmReminder: updated });
+    rescheduleAllAlarms().catch(() => {});
+  };
+
+  const updateDailyWird = (field: keyof DailyWirdSettings, val: any) => {
+    const updated = { ...dailyWird, [field]: val };
+    setDailyWird(updated);
+    saveUnifiedSettings({ dailyWird: updated });
+    rescheduleAllAlarms().catch(() => {});
   };
 
   const handleSelectMuezzin = (id: string) => {
@@ -641,14 +732,17 @@ export const AzanSettingsSection: React.FC<AzanSettingsSectionProps> = ({}) => {
           )}
         </div>
 
-        {/* جعبه راهنمای ویژه عملکرد در حالت بسته و سایلنت */}
-        <div className="p-3 rounded-2xl bg-teal-500/10 dark:bg-teal-950/40 border border-teal-500/30 text-xs text-teal-950 dark:text-teal-200 leading-relaxed space-y-1.5">
+        {/* جعبه راهنمای ویژه عملکرد نسخه وب و PWA */}
+        <div className="p-3.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/40 border border-teal-500/30 text-xs text-teal-950 dark:text-teal-200 leading-relaxed space-y-2">
           <div className="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-300">
             <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
-            <span>نحوه عملکرد هنگام بسته بودن برنامه یا خواب گوشی:</span>
+            <span>نحوه عملکرد در نسخه وب و PWA:</span>
           </div>
-          <p className="text-[11px] opacity-95">
-            در زمان دقیق اذان، اعلان سیستمی به همراه لرزش و زنگ اختصاصی روی صفحه گوشی ظاهر می‌شود. با لمس اعلان، برنامه به طور خودکار باز شده و نوای ملکوتی اذان مؤذن منتخب طنین‌انداز می‌گردد.
+          <p className="text-[11px] leading-relaxed">
+            <b className="text-amber-600 dark:text-amber-400 font-bold block mb-1">
+              توجه: در نسخهٔ وب، اذان فقط وقتی اپ باز یا فعال است پخش می‌شود.
+            </b>
+            هنگام بسته بودن مرورگر، اعلان سیستمی برای شما ارسال می‌شود که با لمس آن، برنامه باز شده و نوای اذان طنین‌انداز می‌گردد. (برای پخش قطعی و خودکار صوت در پس‌زمینه بدون نیاز به باز بودن برنامه، از نسخهٔ اندروید بومی با آلارم دقیق استفاده نمایید).
           </p>
         </div>
 
@@ -723,6 +817,282 @@ export const AzanSettingsSection: React.FC<AzanSettingsSectionProps> = ({}) => {
           <option value="mwl">رابطة العالم الإسلامی (MWL)</option>
           <option value="makkah">ام‌القری مکه مکرمه</option>
         </select>
+      </section>
+
+      {/* ۶. یادآور ختم قرآن و ورد روزانه */}
+      <section className="bg-stone-50 dark:bg-slate-800/40 rounded-3xl p-3.5 sm:p-5 border border-stone-200/80 dark:border-slate-800 space-y-4">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100">
+          <Calendar className="w-4 h-4 text-teal-600 shrink-0" />
+          <span>یادآورهای معنوی روزانه (ختم و ورد):</span>
+        </div>
+
+        {/* یادآور ختم قرآن */}
+        <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-stone-200/60 dark:border-slate-800/80 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">یادآور سهمیه ختم قرآن:</span>
+              <span className="text-[10px] text-slate-400">اعلان صفحات باقی‌مانده سهمیه امروز</span>
+            </div>
+            <button
+              onClick={() => updateKhatmReminder('enabled', !khatmReminder.enabled)}
+              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                khatmReminder.enabled ? 'bg-teal-600' : 'bg-stone-300 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                  khatmReminder.enabled ? 'left-1' : 'right-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {khatmReminder.enabled && (
+            <div className="flex items-center justify-between pt-2 border-t border-stone-100 dark:border-slate-800 text-xs">
+              <span className="text-slate-500 dark:text-slate-400">ساعت یادآور:</span>
+              <div className="flex items-center gap-1.5" dir="ltr">
+                <input
+                  type="number"
+                  min="0"
+                  max="23"
+                  value={khatmReminder.hour}
+                  onChange={(e) => updateKhatmReminder('hour', Math.max(0, Math.min(23, parseInt(e.target.value) || 0)))}
+                  className="w-12 text-center p-1 rounded-lg bg-stone-100 dark:bg-slate-800 border border-stone-300 dark:border-slate-700 font-bold"
+                />
+                <span>:</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={khatmReminder.minute}
+                  onChange={(e) => updateKhatmReminder('minute', Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                  className="w-12 text-center p-1 rounded-lg bg-stone-100 dark:bg-slate-800 border border-stone-300 dark:border-slate-700 font-bold"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ورد و تعقیبات روزانه */}
+        <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-stone-200/60 dark:border-slate-800/80 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">ورد و اذکار روزانه:</span>
+              <span className="text-[10px] text-slate-400">اعلان تکرارشونده ذکر روز</span>
+            </div>
+            <button
+              onClick={() => updateDailyWird('enabled', !dailyWird.enabled)}
+              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                dailyWird.enabled ? 'bg-teal-600' : 'bg-stone-300 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                  dailyWird.enabled ? 'left-1' : 'right-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {dailyWird.enabled && (
+            <div className="space-y-2 pt-2 border-t border-stone-100 dark:border-slate-800 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">ساعت اعلان:</span>
+                <div className="flex items-center gap-1.5" dir="ltr">
+                  <input
+                    type="number"
+                    min="0"
+                    max="23"
+                    value={dailyWird.hour}
+                    onChange={(e) => updateDailyWird('hour', Math.max(0, Math.min(23, parseInt(e.target.value) || 0)))}
+                    className="w-12 text-center p-1 rounded-lg bg-stone-100 dark:bg-slate-800 border border-stone-300 dark:border-slate-700 font-bold"
+                  />
+                  <span>:</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={dailyWird.minute}
+                    onChange={(e) => updateDailyWird('minute', Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                    className="w-12 text-center p-1 rounded-lg bg-stone-100 dark:bg-slate-800 border border-stone-300 dark:border-slate-700 font-bold"
+                  />
+                </div>
+              </div>
+              <input
+                type="text"
+                value={dailyWird.text}
+                onChange={(e) => updateDailyWird('text', e.target.value)}
+                placeholder="متن ذکر یا آیه منتخب..."
+                className="w-full p-2 text-xs rounded-xl bg-stone-100 dark:bg-slate-800 border border-stone-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
+              />
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ۷. بخش تخصصی پلتفرم، آلارم دقیق و بهینه‌سازی باتری اندروید */}
+      <section className="bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-teal-500/5 dark:from-teal-950/40 dark:via-slate-900 dark:to-teal-950/20 rounded-3xl p-3.5 sm:p-5 border border-teal-500/20 dark:border-teal-500/30 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-teal-600 shrink-0" />
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+              تنظیمات پیشرفته سیستم‌عامل و آلارم دقیق:
+            </span>
+          </div>
+          <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+            isNative ? 'bg-teal-600 text-white' : 'bg-stone-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+          }`}>
+            {isNative ? 'نسخه بومی اندروید' : 'نسخه وب / PWA'}
+          </span>
+        </div>
+
+        {/* وضعیت مجوزها */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-stone-200/60 dark:border-slate-800 flex items-center justify-between">
+            <span className="font-bold text-slate-700 dark:text-slate-300">مجوز اعلان سیستم:</span>
+            {permissionStatus === 'granted' ? (
+              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>مجاز</span>
+              </span>
+            ) : (
+              <button
+                onClick={handleRequestPermissions}
+                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[11px] font-bold cursor-pointer"
+              >
+                فعال‌سازی مجوز
+              </button>
+            )}
+          </div>
+
+          <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-stone-200/60 dark:border-slate-800 flex items-center justify-between">
+            <span className="font-bold text-slate-700 dark:text-slate-300">مجوز آلارم دقیق (Exact Alarm):</span>
+            {exactAlarmStatus ? (
+              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>فعال و مجاز</span>
+              </span>
+            ) : (
+              <button
+                onClick={handleOpenExactAlarm}
+                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[11px] font-bold cursor-pointer"
+              >
+                باز کردن تنظیمات
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* دکمه تست آلارم واقعی تا ۱ دقیقه دیگر */}
+        <div className="pt-1">
+          <button
+            onClick={handleTestNativeAlarm}
+            disabled={isTestingAlarm}
+            className="w-full py-2.5 px-4 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-2xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            <Clock className="w-4 h-4" />
+            <span>{isTestingAlarm ? 'در حال ثبت آلارم...' : 'تست آلارم دقیق سیستم عامل تا ۱ دقیقه دیگر'}</span>
+          </button>
+        </div>
+
+        {/* راهنمای بهینه‌سازی باتری و پس‌زمینه برای برندهای شیائومی، سامسونگ، هوآوی */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-stone-200/60 dark:border-slate-800 p-3 space-y-2.5">
+          <button
+            onClick={() => setShowBatteryGuide(!showBatteryGuide)}
+            className="w-full flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer"
+          >
+            <span className="flex items-center gap-1.5">
+              <BatteryCharging className="w-4 h-4 text-amber-500" />
+              <span>راهنمای استثنا از بهینه‌سازی باتری گوشی (شیائومی، سامسونگ، هوآوی)</span>
+            </span>
+            {showBatteryGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+
+          {showBatteryGuide && (
+            <div className="pt-2 border-t border-stone-100 dark:border-slate-800 space-y-3 text-[11px]">
+              <div className="flex gap-1.5">
+                {[
+                  { id: 'xiaomi', label: 'شیائومی (Xiaomi / Poco)' },
+                  { id: 'samsung', label: 'سامسونگ (Samsung)' },
+                  { id: 'huawei', label: 'هوآوی (Huawei)' },
+                ].map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => setSelectedBrand(b.id as any)}
+                    className={`flex-1 py-1.5 px-2 rounded-xl font-bold cursor-pointer transition-colors ${
+                      selectedBrand === b.id
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+
+              {selectedBrand === 'xiaomi' && (
+                <div className="p-2.5 bg-stone-50 dark:bg-slate-800/60 rounded-xl space-y-1.5 text-slate-600 dark:text-slate-300 leading-relaxed">
+                  <p className="font-bold text-slate-800 dark:text-slate-100">تنظیمات شیائومی (MIUI / HyperOS):</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>وارد تنظیمات گوشی (Settings) &gt; برنامه‌ها (Apps) &gt; مدیریت برنامه‌ها شوید.</li>
+                    <li>«قرآن مبین» را انتخاب کرده و گزینه <b>«شروع خودکار (Autostart)»</b> را روشن کنید.</li>
+                    <li>در بخش <b>«بهینه‌ساز باتری (Battery saver)»</b>، گزینه <b>«بدون محدودیت (No restrictions)»</b> را برگزینید.</li>
+                    <li>در صفحه برنامه‌های اخیر (Recent Apps)، دست خود را روی کارت برنامه نگه دارید و آیکون <b>قفل</b> را بزنید.</li>
+                  </ol>
+                </div>
+              )}
+
+              {selectedBrand === 'samsung' && (
+                <div className="p-2.5 bg-stone-50 dark:bg-slate-800/60 rounded-xl space-y-1.5 text-slate-600 dark:text-slate-300 leading-relaxed">
+                  <p className="font-bold text-slate-800 dark:text-slate-100">تنظیمات سامسونگ (One UI):</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>تنظیمات گوشی &gt; مراقبت از دستگاه (Device care) &gt; باتری &gt; محدودیت‌های پس‌زمینه.</li>
+                    <li>«قرآن مبین» را به فهرست <b>«برنامه‌هایی که هرگز به خواب نمی‌روند (Never sleeping apps)»</b> بیفزایید.</li>
+                    <li>در اطلاعات برنامه (App Info) &gt; باتری &gt; حالت <b>«نامحدود (Unrestricted)»</b> را انتخاب کنید.</li>
+                  </ol>
+                </div>
+              )}
+
+              {selectedBrand === 'huawei' && (
+                <div className="p-2.5 bg-stone-50 dark:bg-slate-800/60 rounded-xl space-y-1.5 text-slate-600 dark:text-slate-300 leading-relaxed">
+                  <p className="font-bold text-slate-800 dark:text-slate-100">تنظیمات هوآوی (EMUI / HarmonyOS):</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>تنظیمات &gt; باتری &gt; راه‌اندازی برنامه (App launch).</li>
+                    <li>«قرآن مبین» را پیدا کرده، مدیریت خودکار را خاموش و هر ۳ گزینه را فعال کنید: <b>راه‌اندازی خودکار</b>، <b>راه‌اندازی ثانویه</b>، و <b>اجرا در پس‌زمینه</b>.</li>
+                  </ol>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* فهرست آلارم‌های زمان‌بندی‌شده‌ی بعدی (جهت مشاهده و اطمینان) */}
+        {pendingAlarms.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-stone-200/60 dark:border-slate-800 p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <ListTodo className="w-4 h-4 text-teal-600" />
+                <span>فهرست آلارم‌های زمان‌بندی‌شده‌ی بعدی ({toPersianDigits(pendingAlarms.length)}):</span>
+              </span>
+            </div>
+            <div className="max-h-40 overflow-y-auto space-y-1.5 text-[11px] pr-1">
+              {pendingAlarms.slice(0, 6).map((alarm) => (
+                <div
+                  key={alarm.id}
+                  className="p-2 bg-stone-50 dark:bg-slate-800/60 rounded-xl flex items-center justify-between border border-stone-100 dark:border-slate-800"
+                >
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-slate-800 dark:text-slate-200">{alarm.title}</p>
+                    <p className="text-[10px] text-slate-400">{alarm.body}</p>
+                  </div>
+                  <span className="font-mono text-teal-600 dark:text-teal-400 text-[10px] font-bold shrink-0">
+                    {toPersianDigits(alarm.scheduleAt.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

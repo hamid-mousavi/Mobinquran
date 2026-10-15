@@ -3,6 +3,9 @@
  * ادعیه و مناجات قبل از اذان، و تنظیمات هشدارهای شرعی
  */
 
+import type { PrayerTimes } from './prayerTimesService';
+import { Capacitor } from '@capacitor/core';
+
 export interface AzanMuezzin {
   id: string;
   name: string;
@@ -32,9 +35,7 @@ export interface AzanSettings {
   preAlertMinutes: 0 | 5 | 10 | 15;
   fajrAlert: boolean;
   dhuhrAlert: boolean;
-  asrAlert: boolean;
   maghribAlert: boolean;
-  ishaAlert: boolean;
   inAppSoundEnabled: boolean;
   systemNotificationEnabled: boolean;
   playPostAzanDua: boolean;
@@ -233,34 +234,20 @@ export const PRE_AZAN_DUAS_LIST: PreAzanDua[] = [
       'https://archive.org/download/20240530_20240530_1944/%D8%AF%D8%B9%D8%A7%D9%8A%20%D9%81%D8%B1%D8%AC%20-%20%D8%B9%D9%84%D9%8A%20%D9%81%D8%A7%D9%86%D9%8A.mp3',
     ],
   },
-  {
-    id: 'dua_salamati',
-    name: 'دعای سلامتی امام زمان (عج)',
-    title: 'اللّهُمَّ كُنْ لِوَلِيِّكَ الْحُجَّةِ بْنِ الْحَسَنِ',
-    description: 'دعای شریف سلامتی و تعجیل در فرج حضرت بقیةالله الاعظم (عج)',
-    duration: '۲:۱۰',
-    approxSizeMb: 1.1,
-    audioUrls: [
-      '/audio/duas/dua_salamati.mp3',
-      'https://archive.org/download/DuaSalamati/Dua%20Salamati.mp3',
-    ],
-  },
 ];
 
 const SETTINGS_KEY = 'mobin_azan_settings';
 const DOWNLOADED_KEY = 'mobin_downloaded_azan_muezzins';
 const DOWNLOADED_DUAS_KEY = 'mobin_downloaded_duas';
 
-const DEFAULT_SETTINGS: AzanSettings = {
+export const DEFAULT_SETTINGS: AzanSettings = {
   selectedMuezzinId: 'moazenzadeh',
   selectedPreDuaId: 'salawat_reza',
   playPreAzanDua: true,
   preAlertMinutes: 5,
   fajrAlert: true,
   dhuhrAlert: true,
-  asrAlert: false,
   maghribAlert: true,
-  ishaAlert: false,
   inAppSoundEnabled: true,
   systemNotificationEnabled: true,
   playPostAzanDua: true,
@@ -284,10 +271,20 @@ export function getAzanSettings(): AzanSettings {
   return DEFAULT_SETTINGS;
 }
 
+function safeDispatchEvent(name: string, detail?: unknown): void {
+  if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent(name, { detail }));
+    } catch {
+      // Ignored if window event dispatching is unavailable (e.g. headless/ssr)
+    }
+  }
+}
+
 export function saveAzanSettings(settings: AzanSettings): void {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    window.dispatchEvent(new CustomEvent('mobin-azan-settings-changed', { detail: settings }));
+    safeDispatchEvent('mobin-azan-settings-changed', settings);
     syncPrayerAlarmsWithServiceWorker().catch(() => {});
   } catch {}
 }
@@ -303,7 +300,7 @@ export function getDownloadedMuezzinIds(): string[] {
 function setDownloadedMuezzinIds(ids: string[]): void {
   try {
     localStorage.setItem(DOWNLOADED_KEY, JSON.stringify(ids));
-    window.dispatchEvent(new CustomEvent('mobin-azan-downloads-changed', { detail: ids }));
+    safeDispatchEvent('mobin-azan-downloads-changed', ids);
   } catch {}
 }
 
@@ -322,7 +319,7 @@ export function getDownloadedDuaIds(): string[] {
 function setDownloadedDuaIds(ids: string[]): void {
   try {
     localStorage.setItem(DOWNLOADED_DUAS_KEY, JSON.stringify(ids));
-    window.dispatchEvent(new CustomEvent('mobin-duas-downloads-changed', { detail: ids }));
+    safeDispatchEvent('mobin-duas-downloads-changed', ids);
   } catch {}
 }
 
@@ -332,6 +329,10 @@ export function isDuaDownloaded(duaId: string): boolean {
 
 /**
  * دانلود و کش صوت اذان در Cache Storage برای پخش کاملاً آفلاین
+ */
+/**
+ * دانلود و کش صوت اذان در Cache Storage برای پخش کاملاً آفلاین
+ * فایل فقط در صورت موفقیت واقعی دانلود علامت‌گذاری می‌شود
  */
 export async function downloadMuezzinAudio(
   muezzinId: string,
@@ -365,13 +366,7 @@ export async function downloadMuezzinAudio(
     } catch {}
   }
 
-  // علامت‌گذاری به عنوان دردسترس
-  const current = getDownloadedMuezzinIds();
-  if (!current.includes(muezzinId)) {
-    setDownloadedMuezzinIds([...current, muezzinId]);
-  }
-  if (onProgress) onProgress(100);
-  return true;
+  throw new Error(`خطا در دانلود صوت اذان «${muezzin.name}». لطفاً اتصال اینترنت خود را بررسی کنید.`);
 }
 
 export async function deleteDownloadedMuezzin(muezzinId: string): Promise<void> {
@@ -417,12 +412,7 @@ export async function downloadDuaAudio(
     } catch {}
   }
 
-  const current = getDownloadedDuaIds();
-  if (!current.includes(duaId)) {
-    setDownloadedDuaIds([...current, duaId]);
-  }
-  if (onProgress) onProgress(100);
-  return true;
+  throw new Error(`خطا در دانلود نوای «${dua.name}». لطفاً اتصال اینترنت خود را بررسی کنید.`);
 }
 
 export async function deleteDownloadedDua(duaId: string): Promise<void> {
@@ -436,6 +426,30 @@ export async function deleteDownloadedDua(duaId: string): Promise<void> {
   setDownloadedDuaIds(current.filter((id) => id !== duaId));
 }
 
+// مدیریت آدرس‌های blob تولیدشده برای جلوگیری کامل از نشت حافظه (Memory Leak)
+const activeObjectUrls = new Map<string, string>();
+
+function createAndTrackObjectURL(key: string, blob: Blob): string {
+  const existing = activeObjectUrls.get(key);
+  if (existing) {
+    try {
+      URL.revokeObjectURL(existing);
+    } catch {}
+  }
+  const url = URL.createObjectURL(blob);
+  activeObjectUrls.set(key, url);
+  return url;
+}
+
+export function revokeAllPlayableUrls(): void {
+  for (const url of activeObjectUrls.values()) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {}
+  }
+  activeObjectUrls.clear();
+}
+
 /**
  * دریافت آدرس قابل پخش (کش آفلاین، سپس فایل محلی یا استریم)
  */
@@ -446,7 +460,7 @@ export async function getMuezzinPlayableUrl(muezzinId: string): Promise<string> 
       const cached = await cache.match(`/azan-audio/${muezzinId}.mp3`);
       if (cached) {
         const blob = await cached.blob();
-        return URL.createObjectURL(blob);
+        return createAndTrackObjectURL(`muezzin_${muezzinId}`, blob);
       }
     } catch {}
   }
@@ -465,7 +479,7 @@ export async function getDuaPlayableUrl(duaId: string): Promise<string> {
       const cached = await cache.match(`/duas-audio/${duaId}.mp3`);
       if (cached) {
         const blob = await cached.blob();
-        return URL.createObjectURL(blob);
+        return createAndTrackObjectURL(`dua_${duaId}`, blob);
       }
     } catch {}
   }
@@ -478,7 +492,7 @@ export async function getDuaPlayableUrl(duaId: string): Promise<string> {
 }
 
 /**
- * پخش‌کننده آزمایشی سراسری
+ * پخش‌کننده پیش‌نمایش در صفحه تنظیمات (با منطق Toggle برای تست توسط کاربر)
  */
 let previewAudio: HTMLAudioElement | null = null;
 let currentPreviewId: string | null = null;
@@ -492,11 +506,7 @@ export function stopAzanPreview(): void {
   }
   currentPreviewId = null;
   currentPreviewType = null;
-  window.dispatchEvent(
-    new CustomEvent('mobin-azan-preview-state', {
-      detail: { isPlaying: false, id: null, type: null },
-    })
-  );
+  safeDispatchEvent('mobin-azan-preview-state', { isPlaying: false, id: null, type: null });
 }
 
 export async function playAzanPreview(muezzinId: string, onEnd?: () => void): Promise<void> {
@@ -523,19 +533,17 @@ export async function playAzanPreview(muezzinId: string, onEnd?: () => void): Pr
   audio.onerror = () => {
     stopAzanPreview();
     playHarmonicAzanChime();
+    if (onEnd) onEnd();
   };
 
-  window.dispatchEvent(
-    new CustomEvent('mobin-azan-preview-state', {
-      detail: { isPlaying: true, id: muezzinId, type: 'azan' },
-    })
-  );
+  safeDispatchEvent('mobin-azan-preview-state', { isPlaying: true, id: muezzinId, type: 'azan' });
 
   try {
     await audio.play();
   } catch {
     stopAzanPreview();
     playHarmonicAzanChime();
+    if (onEnd) onEnd();
   }
 }
 
@@ -563,19 +571,17 @@ export async function playDuaPreview(duaId: string, onEnd?: () => void): Promise
   audio.onerror = () => {
     stopAzanPreview();
     playHarmonicAzanChime();
+    if (onEnd) onEnd();
   };
 
-  window.dispatchEvent(
-    new CustomEvent('mobin-azan-preview-state', {
-      detail: { isPlaying: true, id: duaId, type: 'dua' },
-    })
-  );
+  safeDispatchEvent('mobin-azan-preview-state', { isPlaying: true, id: duaId, type: 'dua' });
 
   try {
     await audio.play();
   } catch {
     stopAzanPreview();
     playHarmonicAzanChime();
+    if (onEnd) onEnd();
   }
 }
 
@@ -585,6 +591,115 @@ export function getCurrentPreviewState() {
     id: currentPreviewId,
     type: currentPreviewType,
   };
+}
+
+/**
+ * پخش‌کننده اذان واقعی / رسمی (بدون رفتار Toggle و جدا از پیش‌نمایش)
+ * پشتیبانی کامل از دعای قبل از اذان (صلوات خاصه / دعای فرج) و دعای پس از اذان
+ */
+let actualAzanAudio: HTMLAudioElement | null = null;
+let currentActualStage: 'pre_dua' | 'azan' | 'post_dua' | null = null;
+
+export function stopActualAzan(): void {
+  if (actualAzanAudio) {
+    actualAzanAudio.pause();
+    actualAzanAudio.currentTime = 0;
+    actualAzanAudio = null;
+  }
+  currentActualStage = null;
+  safeDispatchEvent('mobin-azan-playback-state', { isPlaying: false, stage: null });
+}
+
+export function stopAllAzanAudio(): void {
+  stopAzanPreview();
+  stopActualAzan();
+}
+
+export async function playActualAzan(options?: {
+  prayerName?: string;
+  muezzinId?: string;
+  skipPreDua?: boolean;
+  onEnd?: () => void;
+}): Promise<void> {
+  stopAllAzanAudio();
+
+  const settings = getAzanSettings();
+  const muezzinId = options?.muezzinId || settings.selectedMuezzinId;
+  const muezzin = MUEZZINS_LIST.find((m) => m.id === muezzinId) || MUEZZINS_LIST[0];
+
+  const playAzanCore = async () => {
+    currentActualStage = 'azan';
+    const azanUrl = await getMuezzinPlayableUrl(muezzin.id);
+    const audio = new Audio(azanUrl);
+    audio.volume = settings.volume;
+    actualAzanAudio = audio;
+
+    safeDispatchEvent('mobin-azan-playback-state', {
+      isPlaying: true,
+      stage: 'azan',
+      muezzinName: muezzin.name,
+    });
+
+    audio.onended = () => {
+      stopActualAzan();
+      if (settings.playPostAzanDua) {
+        playHarmonicAzanChime();
+      }
+      if (options?.onEnd) options.onEnd();
+    };
+
+    audio.onerror = () => {
+      stopActualAzan();
+      playHarmonicAzanChime();
+      if (options?.onEnd) options.onEnd();
+    };
+
+    try {
+      await audio.play();
+    } catch {
+      stopActualAzan();
+      playHarmonicAzanChime();
+      if (options?.onEnd) options.onEnd();
+    }
+  };
+
+  // بررسی پخش دعای قبل از اذان در صورت فعال بودن
+  if (settings.playPreAzanDua && !options?.skipPreDua && settings.selectedPreDuaId) {
+    const dua = PRE_AZAN_DUAS_LIST.find((d) => d.id === settings.selectedPreDuaId);
+    if (dua) {
+      currentActualStage = 'pre_dua';
+      try {
+        const duaUrl = await getDuaPlayableUrl(dua.id);
+        const duaAudio = new Audio(duaUrl);
+        duaAudio.volume = settings.volume;
+        actualAzanAudio = duaAudio;
+
+        safeDispatchEvent('mobin-azan-playback-state', {
+          isPlaying: true,
+          stage: 'pre_dua',
+          duaName: dua.name,
+        });
+
+        duaAudio.onended = () => {
+          actualAzanAudio = null;
+          playAzanCore();
+        };
+
+        duaAudio.onerror = () => {
+          actualAzanAudio = null;
+          playAzanCore();
+        };
+
+        await duaAudio.play();
+        return;
+      } catch {
+        actualAzanAudio = null;
+      }
+    }
+  }
+
+  // پخش مستقیم صوت اذان
+  await playAzanCore();
 }
 
 /**
@@ -644,39 +759,116 @@ export async function requestAzanNotificationPermission(): Promise<boolean> {
 }
 
 /**
+ * ساختار آلارم‌های زمان‌بندی‌شده اذان و هشدارهای شرعی
+ */
+export interface ScheduledPrayerAlarm {
+  id: string;
+  prayerKey: 'fajr' | 'dhuhr' | 'maghrib';
+  prayerName: string;
+  timestamp: number;
+  type: 'azan' | 'pre_alert';
+  preAlertMinutes?: number;
+  muezzinName?: string;
+}
+
+/**
+ * تابع خالص استخراج و زمان‌بندی هشدارهای امروز و فردا
+ * تست‌پذیر و قابل استفاده در محیط Web، Service Worker و Native Capacitor
+ */
+export function getPrayersToSchedule(
+  todayTimes: PrayerTimes,
+  tomorrowTimes: PrayerTimes,
+  now: Date = new Date(),
+  settings: AzanSettings = getAzanSettings(),
+  muezzinName?: string
+): ScheduledPrayerAlarm[] {
+  const nowMs = now.getTime();
+  const alarms: ScheduledPrayerAlarm[] = [];
+
+  const prayerDefs: Array<{
+    key: 'fajr' | 'dhuhr' | 'maghrib';
+    name: string;
+    enabled: boolean;
+  }> = [
+    { key: 'fajr', name: 'اذان صبح', enabled: settings.fajrAlert },
+    { key: 'dhuhr', name: 'اذان ظهر', enabled: settings.dhuhrAlert },
+    { key: 'maghrib', name: 'اذان مغرب', enabled: settings.maghribAlert },
+  ];
+
+  const processDay = (times: PrayerTimes, dayTag: 'today' | 'tomorrow') => {
+    for (const p of prayerDefs) {
+      if (!p.enabled) continue;
+      const rawDate = times.rawTimes[p.key];
+      if (!rawDate) continue;
+      const prayerMs = rawDate.getTime();
+
+      // ۱. هشدار قبل از اذان در صورت تنظیم
+      if (settings.preAlertMinutes > 0) {
+        const preAlertMs = prayerMs - settings.preAlertMinutes * 60 * 1000;
+        if (preAlertMs > nowMs) {
+          alarms.push({
+            id: `${p.key}_pre_${dayTag}_${preAlertMs}`,
+            prayerKey: p.key,
+            prayerName: p.name,
+            timestamp: preAlertMs,
+            type: 'pre_alert',
+            preAlertMinutes: settings.preAlertMinutes,
+            muezzinName,
+          });
+        }
+      }
+
+      // ۲. وقت اذان اصلی
+      if (prayerMs > nowMs) {
+        alarms.push({
+          id: `${p.key}_azan_${dayTag}_${prayerMs}`,
+          prayerKey: p.key,
+          prayerName: p.name,
+          timestamp: prayerMs,
+          type: 'azan',
+          muezzinName,
+        });
+      }
+    }
+  };
+
+  processDay(todayTimes, 'today');
+  processDay(tomorrowTimes, 'tomorrow');
+
+  alarms.sort((a, b) => a.timestamp - b.timestamp);
+  return alarms;
+}
+
+/**
  * اجرای آزمایش کامل هشدار اذان (صوت + اعلان تصویری درون‌برنامه و مرورگر + لرزش در حالت سایلنت)
  */
 export async function testAzanAlertNow(): Promise<void> {
   const settings = getAzanSettings();
   const muezzin = MUEZZINS_LIST.find((m) => m.id === settings.selectedMuezzinId) || MUEZZINS_LIST[0];
 
-  // ۱. لرزش پرقدرت دستگاه (حتی در حالت سایلنت و لرزش)
+  // ۱. لرزش پرقدرت دستگاه
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
       navigator.vibrate([600, 250, 600, 250, 1200, 300, 1200]);
     } catch {}
   }
 
-  // ۲. پخش صوت اذان انتخاب‌شده
+  // ۲. پخش واقعی اذان با پشتیبانی از صلوات/دعای قبل از اذان
   if (settings.inAppSoundEnabled) {
-    playAzanPreview(muezzin.id);
+    playActualAzan({ prayerName: 'اذان (آزمایشی)', muezzinId: muezzin.id });
   } else {
     playHarmonicAzanChime();
   }
 
-  // ۳. نمایش اعلان مرورگر / سرویس‌ورکر با قابلیت لرزش در سایلنت
+  // ۳. نمایش اعلان مرورگر
   await showAzanSystemNotification('اذان (تست هشدار)', muezzin.name, 'test');
 
   // ۴. ارسال رویداد درون‌برنامه‌ای برای نمایش بنر معنوی
-  window.dispatchEvent(
-    new CustomEvent('mobin-azan-alert', {
-      detail: {
-        prayerName: 'اذان (آزمایشی)',
-        muezzinName: muezzin.name,
-        timestamp: new Date().toISOString(),
-      },
-    })
-  );
+  safeDispatchEvent('mobin-azan-alert', {
+    prayerName: 'اذان (آزمایشی)',
+    muezzinName: muezzin.name,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 /**
@@ -691,11 +883,17 @@ export async function showAzanSystemNotification(
   if (Notification.permission !== 'granted') return;
 
   const title = `هنگام ${prayerName} - قرآن مبین`;
-  const options: any = {
+  type ExtendedNotificationOptions = NotificationOptions & {
+    vibrate?: number[];
+    renotify?: boolean;
+    requireInteraction?: boolean;
+    silent?: boolean;
+  };
+  const options: ExtendedNotificationOptions = {
     body: `نوای ملکوتی اذان شیعه با صدای ${muezzinName} - حیّ علی الصلاة و الفلاح`,
     icon: '/icon-192.png',
     badge: '/icon-192.png',
-    vibrate: [600, 250, 600, 250, 1200, 300, 1200], // الگوی ارتعاش قدرتمند در حالت سایلنت
+    vibrate: [600, 250, 600, 250, 1200, 300, 1200],
     tag: `mobin-azan-${prayerKey}`,
     renotify: true,
     requireInteraction: true,
@@ -709,11 +907,15 @@ export async function showAzanSystemNotification(
       await reg.showNotification(title, options);
       return;
     }
-  } catch {}
+  } catch {
+    // Fallback to standard window Notification if SW registration is not available
+  }
 
   try {
     new Notification(title, options);
-  } catch {}
+  } catch {
+    // Ignored if notifications are denied or unsupported
+  }
 }
 
 /**
@@ -735,41 +937,30 @@ export async function syncPrayerAlarmsWithServiceWorker(): Promise<void> {
     const muezzin = MUEZZINS_LIST.find((m) => m.id === settings.selectedMuezzinId) || MUEZZINS_LIST[0];
 
     const now = new Date();
-    const todayTimes = calculatePrayerTimes(coords, now, coords.timezone, settings.calculationMethod, settings.safetyMarginMinutes);
+    const todayTimes = calculatePrayerTimes(
+      coords,
+      now,
+      coords.timezone,
+      settings.calculationMethod,
+      settings.safetyMarginMinutes
+    );
 
     const tomorrow = new Date(now.getTime() + 24 * 3600 * 1000);
-    const tomorrowTimes = calculatePrayerTimes(coords, tomorrow, coords.timezone, settings.calculationMethod, settings.safetyMarginMinutes);
+    const tomorrowTimes = calculatePrayerTimes(
+      coords,
+      tomorrow,
+      coords.timezone,
+      settings.calculationMethod,
+      settings.safetyMarginMinutes
+    );
 
-    const prayersToSchedule = [
-      { key: 'fajr', name: 'اذان صبح', enabled: settings.fajrAlert },
-      { key: 'dhuhr', name: 'اذان ظهر', enabled: settings.dhuhrAlert },
-      { key: 'maghrib', name: 'اذان مغرب', enabled: settings.maghribAlert },
-    ];
-
-    const alarms: Array<{ prayerKey: string; prayerName: string; timestamp: number }> = [];
-
-    // اوقات امروز
-    for (const p of prayersToSchedule) {
-      if (!p.enabled) continue;
-      const date = (todayTimes.rawTimes as any)[p.key];
-      if (date && date.getTime() > now.getTime()) {
-        alarms.push({ prayerKey: p.key, prayerName: p.name, timestamp: date.getTime() });
-      }
-    }
-
-    // اوقات فردا
-    for (const p of prayersToSchedule) {
-      if (!p.enabled) continue;
-      const date = (tomorrowTimes.rawTimes as any)[p.key];
-      if (date && date.getTime() > now.getTime()) {
-        alarms.push({ prayerKey: `${p.key}_tomorrow`, prayerName: p.name, timestamp: date.getTime() });
-      }
-    }
-
+    const alarms = getPrayersToSchedule(todayTimes, tomorrowTimes, now, settings, muezzin.name);
     const payload = { alarms, muezzinName: muezzin.name };
 
-    const sendMsg = (workerOrReg: any) => {
-      const sw = navigator.serviceWorker.controller || workerOrReg?.active;
+    const sendMsg = (workerOrReg: ServiceWorker | ServiceWorkerRegistration | null | undefined) => {
+      const sw =
+        navigator.serviceWorker.controller ||
+        (workerOrReg && 'active' in workerOrReg ? workerOrReg.active : (workerOrReg as ServiceWorker | null));
       if (sw) {
         sw.postMessage({
           type: 'SCHEDULE_PRAYER_ALARMS',
@@ -783,6 +974,19 @@ export async function syncPrayerAlarmsWithServiceWorker(): Promise<void> {
     } else {
       navigator.serviceWorker.ready.then(sendMsg).catch(() => {});
     }
+
+    // ثبت دوره‌ای PeriodicSync در صورت پشتیبانی مرورگر
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready
+        .then((reg: ServiceWorkerRegistration) => {
+          if ('periodicSync' in reg) {
+            (reg as unknown as { periodicSync: { register: (tag: string, opt: { minInterval: number }) => Promise<void> } }).periodicSync
+              .register('azan-check', { minInterval: 60 * 60 * 1000 })
+              .catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
   } catch (err) {
     console.warn('[Azan] Could not sync alarms to SW:', err);
   }
@@ -791,11 +995,20 @@ export async function syncPrayerAlarmsWithServiceWorker(): Promise<void> {
 /**
  * زمان‌بند خودکار اذان و هشدارهای شرعی با کارکرد در پس‌زمینه و حالت خواب
  */
-let azanSchedulerTimer: any = null;
+let azanSchedulerTimer: ReturnType<typeof setInterval> | null = null;
 let bgWorker: Worker | null = null;
 
 export function initAzanScheduler(): () => void {
   if (typeof window === 'undefined') return () => {};
+
+  // در پلتفرم native، زمان‌بندی از طریق آلارم‌های دقیق سیستم‌عامل انجام می‌شود
+  // تایمر ورکر و بررسی‌های تکراری غیرفعال می‌شوند تا اذان دو بار پخش نشود.
+  if (Capacitor.isNativePlatform()) {
+    import('./notifications').then(({ initNotificationWatchers }) => {
+      initNotificationWatchers();
+    }).catch(() => {});
+    return () => {};
+  }
 
   // دریافت پیام از سرویس‌ورکر هنگام کلیک روی اعلان اذان
   if ('serviceWorker' in navigator) {
@@ -803,16 +1016,12 @@ export function initAzanScheduler(): () => void {
       if (event.data?.type === 'PLAY_AZAN_FROM_NOTIFICATION') {
         const settings = getAzanSettings();
         const muezzin = MUEZZINS_LIST.find((m) => m.id === settings.selectedMuezzinId) || MUEZZINS_LIST[0];
-        playAzanPreview(muezzin.id);
-        window.dispatchEvent(
-          new CustomEvent('mobin-azan-alert', {
-            detail: {
-              prayerName: event.data.prayerName || 'اذان شرعی',
-              muezzinName: muezzin.name,
-              timestamp: new Date().toISOString(),
-            },
-          })
-        );
+        playActualAzan({ prayerName: event.data.prayerName || 'اذان شرعی', muezzinId: muezzin.id });
+        safeDispatchEvent('mobin-azan-alert', {
+          prayerName: event.data.prayerName || 'اذان شرعی',
+          muezzinName: muezzin.name,
+          timestamp: new Date().toISOString(),
+        });
       }
     });
   }
@@ -823,7 +1032,7 @@ export function initAzanScheduler(): () => void {
       const { calculatePrayerTimes, getSavedCity, getSavedCustomCoords } = await import('./prayerTimesService');
       const now = new Date();
       const todayStr = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-      
+
       const city = getSavedCity();
       const customCoords = getSavedCustomCoords();
       const coords = customCoords || {
@@ -849,54 +1058,82 @@ export function initAzanScheduler(): () => void {
 
       const firedKey = `mobin_azan_fired_${todayStr}`;
       const firedPrayers: string[] = JSON.parse(localStorage.getItem(firedKey) || '[]');
+      const firedPreKey = `mobin_azan_pre_fired_${todayStr}`;
+      const firedPrePrayers: string[] = JSON.parse(localStorage.getItem(firedPreKey) || '[]');
       const nowMs = now.getTime();
 
       for (const p of prayersToCheck) {
         if (!p.alertEnabled) continue;
-        if (firedPrayers.includes(p.key)) continue;
 
-        const rawDate = (times.rawTimes as any)[p.key];
+        const rawDate = times.rawTimes[p.key];
         if (!rawDate) continue;
 
         const prayerMs = rawDate.getTime();
-        // آیا وقت اذان فرا رسیده است؟ (از ثانیهٔ اول تا حداکثر ۱۵ دقیقه پس از آن، برای اطمینان از عملکرد هنگام بازگشت از خواب یا پس‌زمینه)
-        const isDue = nowMs >= prayerMs && (nowMs - prayerMs) <= 15 * 60 * 1000;
 
-        if (isDue) {
-          firedPrayers.push(p.key);
-          localStorage.setItem(firedKey, JSON.stringify(firedPrayers));
+        // ۱. بررسی هشدار قبل از اذان (preAlertMinutes)
+        if (settings.preAlertMinutes > 0 && !firedPrePrayers.includes(p.key)) {
+          const preAlertMs = prayerMs - settings.preAlertMinutes * 60 * 1000;
+          const isPreAlertDue = nowMs >= preAlertMs && (nowMs - preAlertMs) <= 3 * 60 * 1000;
 
-          const muezzin = MUEZZINS_LIST.find((m) => m.id === settings.selectedMuezzinId) || MUEZZINS_LIST[0];
+          if (isPreAlertDue) {
+            firedPrePrayers.push(p.key);
+            localStorage.setItem(firedPreKey, JSON.stringify(firedPrePrayers));
 
-          // ۱. لرزش نیرومند حتی در حالت سایلنت
-          if (navigator.vibrate) {
-            try {
-              navigator.vibrate([600, 250, 600, 250, 1200, 300, 1200]);
-            } catch {}
+            if (navigator.vibrate) {
+              try {
+                navigator.vibrate([300, 150, 300]);
+              } catch {}
+            }
+
+            if (settings.systemNotificationEnabled) {
+              showAzanSystemNotification(
+                `نزدیک به ${p.name} (${settings.preAlertMinutes} دقیقه مانده)`,
+                'قرآن مبین',
+                `pre_${p.key}`
+              );
+            }
+
+            safeDispatchEvent('mobin-azan-alert', {
+              prayerName: `نزدیک به ${p.name} (${settings.preAlertMinutes} دقیقه مانده)`,
+              muezzinName: 'آمادگی اقامه نماز',
+              timestamp: new Date().toISOString(),
+            });
           }
+        }
 
-          // ۲. پخش صوت اذان
-          if (settings.inAppSoundEnabled) {
-            playAzanPreview(muezzin.id);
-          } else {
-            playHarmonicAzanChime();
+        // ۲. بررسی فرارسیدن وقت اذان
+        if (!firedPrayers.includes(p.key)) {
+          const isDue = nowMs >= prayerMs && (nowMs - prayerMs) <= 15 * 60 * 1000;
+
+          if (isDue) {
+            firedPrayers.push(p.key);
+            localStorage.setItem(firedKey, JSON.stringify(firedPrayers));
+
+            const muezzin = MUEZZINS_LIST.find((m) => m.id === settings.selectedMuezzinId) || MUEZZINS_LIST[0];
+
+            if (navigator.vibrate) {
+              try {
+                navigator.vibrate([600, 250, 600, 250, 1200, 300, 1200]);
+              } catch {}
+            }
+
+            // پخش واقعی اذان با رعایت دعای قبل و بعد
+            if (settings.inAppSoundEnabled) {
+              playActualAzan({ prayerName: p.name, muezzinId: muezzin.id });
+            } else {
+              playHarmonicAzanChime();
+            }
+
+            if (settings.systemNotificationEnabled) {
+              showAzanSystemNotification(p.name, muezzin.name, p.key);
+            }
+
+            safeDispatchEvent('mobin-azan-alert', {
+              prayerName: p.name,
+              muezzinName: muezzin.name,
+              timestamp: new Date().toISOString(),
+            });
           }
-
-          // ۳. نمایش اعلان سیستم‌عامل
-          if (settings.systemNotificationEnabled) {
-            showAzanSystemNotification(p.name, muezzin.name, p.key);
-          }
-
-          // ۴. نمایش بنر درون‌برنامه
-          window.dispatchEvent(
-            new CustomEvent('mobin-azan-alert', {
-              detail: {
-                prayerName: p.name,
-                muezzinName: muezzin.name,
-                timestamp: new Date().toISOString(),
-              },
-            })
-          );
         }
       }
     } catch {}

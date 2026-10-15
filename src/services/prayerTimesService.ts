@@ -450,13 +450,22 @@ function julianDay(year: number, month: number, day: number) {
 /**
  * محاسبه زمان زاویه خورشیدی
  */
+/**
+ * محاسبه زمان زاویه خورشیدی با پشتیبانی از هندلینگ خطای عرض‌های بالا
+ */
 function computeTime(
   angle: number,
   declination: number,
   latitude: number,
   direction: 'ccw' | 'cw'
 ): number {
-  const val = (-sin(angle) - sin(latitude) * sin(declination)) / (cos(latitude) * cos(declination));
+  const cosLat = cos(latitude);
+  const cosDec = cos(declination);
+  const denom = cosLat * cosDec;
+  if (Math.abs(denom) < 1e-7) {
+    return NaN;
+  }
+  const val = (-sin(angle) - sin(latitude) * sin(declination)) / denom;
   if (val > 1 || val < -1) return NaN;
   const hourAngle = acos(val) / 15.0;
   return direction === 'ccw' ? -hourAngle : hourAngle;
@@ -467,6 +476,9 @@ function fixHour(h: number): number {
 }
 
 function formatDecimalTime(hours: number): string {
+  if (isNaN(hours) || !isFinite(hours)) {
+    return '00:00';
+  }
   const norm = fixHour(hours);
   const totalMinutes = Math.round(norm * 60);
   const h = Math.floor(totalMinutes / 60) % 24;
@@ -476,15 +488,32 @@ function formatDecimalTime(hours: number): string {
   return `${paddedH}:${paddedM}`;
 }
 
-function createDateFromHours(baseDate: Date, hours: number): Date {
-  const d = new Date(baseDate);
-  const norm = fixHour(hours);
+/**
+ * ساخت تاریخ مطلق بر مبنای ساعت اعشاری و منطقه زمانی شهر
+ * به جای setHours (که بر مبنای ساعت دستگاه کار می‌کند)، از Date.UTC استفاده می‌شود
+ * تا با تغییر منطقه زمانی دستگاه، زمان‌های نجومی و شمارشگر اوقات شرعی تغییر نکنند.
+ */
+function createDateFromHours(
+  baseDate: Date,
+  hours: number,
+  timezoneOffsetHours: number = 3.5,
+  dayOffset: number = 0
+): Date {
+  const safeHours = isNaN(hours) || !isFinite(hours) ? 12.0 : hours;
+  const norm = fixHour(safeHours);
   const totalSeconds = Math.round(norm * 3600);
   const h = Math.floor(totalSeconds / 3600) % 24;
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
-  d.setHours(h, m, s, 0);
-  return d;
+
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
+  const day = baseDate.getDate() + dayOffset;
+
+  // محاسبه بر مبنای UTC مطلق و کسر آفست شهر از ساعت محلی
+  const localUtcMs = Date.UTC(year, month, day, h, m, s, 0);
+  const offsetMs = Math.round(timezoneOffsetHours * 3600 * 1000);
+  return new Date(localUtcMs - offsetMs);
 }
 
 /**
@@ -507,15 +536,15 @@ export function calculatePrayerTimes(
 
   const jd = julianDay(year, month, day);
 
-  // محاسبه منطقه زمانی: پیش‌فرض ایران (+3.5)
+  // محاسبه منطقه زمانی: پیش‌فرض رسمی ایران (+3.5)
+  // مستقل از منطقه زمانی دستگاه کلاینت
   let timezoneOffsetHours: number;
   if (customTimezone !== undefined) {
     timezoneOffsetHours = customTimezone;
   } else if (coords.timezone !== undefined) {
     timezoneOffsetHours = coords.timezone;
   } else {
-    const sysOffset = -date.getTimezoneOffset() / 60.0;
-    timezoneOffsetHours = sysOffset !== 0 ? sysOffset : 3.5;
+    timezoneOffsetHours = 3.5;
   }
 
   const { declination, equation } = sunPosition(jd);
@@ -525,8 +554,21 @@ export function calculatePrayerTimes(
 
   // طلوع و غروب آفتاب با احتساب شکست جوی و ارتفاع
   const sunriseAngle = 0.833 + 0.0347 * Math.sqrt(Math.max(0, elev));
-  const sunriseDiff = computeTime(sunriseAngle, declination, lat, 'ccw');
-  const sunsetDiff = computeTime(sunriseAngle, declination, lat, 'cw');
+  let sunriseDiff = computeTime(sunriseAngle, declination, lat, 'ccw');
+  let sunsetDiff = computeTime(sunriseAngle, declination, lat, 'cw');
+
+  // در عرض‌های جغرافیایی بالا (پدیده خورشید نیمه‌شب یا شب‌های سفید)
+  // از تقریب استاندارد فقهی عرض معتدل (۴۵ درجه) به عنوان fallback استفاده می‌شود تا مقدار NaN ایجاد نگردد.
+  if (isNaN(sunriseDiff)) {
+    const safeLat = Math.sign(lat || 1) * 45.0;
+    sunriseDiff = computeTime(sunriseAngle, declination, safeLat, 'ccw');
+    if (isNaN(sunriseDiff)) sunriseDiff = -6.0;
+  }
+  if (isNaN(sunsetDiff)) {
+    const safeLat = Math.sign(lat || 1) * 45.0;
+    sunsetDiff = computeTime(sunriseAngle, declination, safeLat, 'cw');
+    if (isNaN(sunsetDiff)) sunsetDiff = 6.0;
+  }
 
   const sunrise = noon + sunriseDiff;
   const sunset = noon + sunsetDiff;
@@ -546,13 +588,23 @@ export function calculatePrayerTimes(
     maghribAngle = 0.833;
   }
 
-  const fajrDiff = computeTime(fajrAngle, declination, lat, 'ccw');
+  let fajrDiff = computeTime(fajrAngle, declination, lat, 'ccw');
+  if (isNaN(fajrDiff)) {
+    const safeLat = Math.sign(lat || 1) * 45.0;
+    fajrDiff = computeTime(fajrAngle, declination, safeLat, 'ccw');
+    if (isNaN(fajrDiff)) fajrDiff = sunriseDiff - 1.5;
+  }
   let fajr = noon + fajrDiff;
 
-  const maghribDiff = computeTime(maghribAngle, declination, lat, 'cw');
+  let maghribDiff = computeTime(maghribAngle, declination, lat, 'cw');
+  if (isNaN(maghribDiff)) {
+    const safeLat = Math.sign(lat || 1) * 45.0;
+    maghribDiff = computeTime(maghribAngle, declination, safeLat, 'cw');
+    if (isNaN(maghribDiff)) maghribDiff = sunsetDiff + 0.35;
+  }
   let maghrib = noon + maghribDiff;
 
-  // اعمال احتیاط شرعی در صورت فعال بودن (+دقایق احتیاط به فجر و مغرب)
+  // اعمال احتیاط شرعی در صورت فعال بودن (+دقایق احتیاط به مغرب جهت اطمینان از دخول وقت شرعی و افطار)
   if (safetyMarginMinutes > 0) {
     const marginHours = safetyMarginMinutes / 60.0;
     maghrib += marginHours;
@@ -562,19 +614,30 @@ export function calculatePrayerTimes(
   const nextJd = jd + 1;
   const nextSun = sunPosition(nextJd);
   const nextNoon = 12 + timezoneOffsetHours - lng / 15.0 - nextSun.equation;
-  const nextFajrDiff = computeTime(fajrAngle, nextSun.declination, lat, 'ccw');
+  let nextFajrDiff = computeTime(fajrAngle, nextSun.declination, lat, 'ccw');
+  if (isNaN(nextFajrDiff)) {
+    const safeLat = Math.sign(lat || 1) * 45.0;
+    nextFajrDiff = computeTime(fajrAngle, nextSun.declination, safeLat, 'ccw');
+    if (isNaN(nextFajrDiff)) nextFajrDiff = fajrDiff;
+  }
   const nextFajr = nextNoon + nextFajrDiff;
 
   // نیمه‌شب شرعی = میانه غروب و اذان صبح فردا
   const midnight = sunset + (nextFajr + 24 - sunset) / 2.0;
+  const isNextDayMidnight = midnight >= 24;
 
   const rawTimes = {
-    fajr: createDateFromHours(date, fajr),
-    sunrise: createDateFromHours(date, sunrise),
-    dhuhr: createDateFromHours(date, noon),
-    sunset: createDateFromHours(date, sunset),
-    maghrib: createDateFromHours(date, maghrib),
-    midnight: createDateFromHours(date, midnight % 24),
+    fajr: createDateFromHours(date, fajr, timezoneOffsetHours, 0),
+    sunrise: createDateFromHours(date, sunrise, timezoneOffsetHours, 0),
+    dhuhr: createDateFromHours(date, noon, timezoneOffsetHours, 0),
+    sunset: createDateFromHours(date, sunset, timezoneOffsetHours, 0),
+    maghrib: createDateFromHours(date, maghrib, timezoneOffsetHours, 0),
+    midnight: createDateFromHours(
+      date,
+      fixHour(midnight),
+      timezoneOffsetHours,
+      isNextDayMidnight ? 1 : 0
+    ),
   };
 
   return {
@@ -587,6 +650,8 @@ export function calculatePrayerTimes(
     rawTimes,
   };
 }
+
+
 
 /**
  * تعیین وقت شرعی بعدی و محاسبه ثانیه‌های باقی‌مانده
@@ -628,8 +693,7 @@ export function getNextPrayer(times: PrayerTimes, now: Date = new Date()): NextP
   }
 
   // اگر همه اوقات امروز گذشته باشند، وقت بعدی اذان صبح فرداست
-  const tomorrowFajr = new Date(times.rawTimes.fajr);
-  tomorrowFajr.setDate(tomorrowFajr.getDate() + 1);
+  const tomorrowFajr = new Date(times.rawTimes.fajr.getTime() + 24 * 3600 * 1000);
   const diffMs = tomorrowFajr.getTime() - currentMs;
   const remainingSec = Math.max(0, Math.floor(diffMs / 1000));
   const remainingMin = Math.floor(remainingSec / 60);

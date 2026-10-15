@@ -370,6 +370,12 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
     }
   }, [activePlayingVerseNumber, performScrollToVerse]);
 
+  const [selectedVerseNumber, setSelectedVerseNumber] = useState<number | null>(null);
+
+  useEffect(() => {
+    setSelectedVerseNumber(null);
+  }, [currentSurah.id]);
+
   const arabicFontFamily = getArabicFontFamily(settings.arabicFont);
 
   const arabicLineHeightClass =
@@ -454,6 +460,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
             {visibleVerses.map((verse) => {
               const isBookmarked = bookmarkedVerseIds.has(verse.verseNumber);
               const isCurrentlyPlaying = activePlayingVerseNumber === verse.verseNumber;
+              const isSelected = selectedVerseNumber === verse.verseNumber;
 
             return (
               <article
@@ -463,13 +470,17 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                 data-verse-number={verse.verseNumber}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest('button, a, input, select')) return;
-                  onOpenVerseAction(verse);
+                  setSelectedVerseNumber((prev) => (prev === verse.verseNumber ? null : verse.verseNumber));
                 }}
                 className={`reader-verse-card p-4 sm:p-5 rounded-2xl border transition-all duration-200 relative group cursor-pointer ${
                   isCurrentlyPlaying
                     ? darkMode
                       ? 'bg-teal-950/40 border-teal-500 ring-2 ring-teal-500/30'
                       : 'bg-teal-50/70 border-teal-400 ring-2 ring-teal-500/20'
+                    : isSelected
+                    ? darkMode
+                      ? 'bg-emerald-950/50 border-emerald-500 ring-2 ring-emerald-500/50 shadow-md'
+                      : 'bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-500/40 shadow-sm'
                     : darkMode
                     ? 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
                     : 'bg-white border-stone-200/90 hover:border-stone-300 shadow-xs'

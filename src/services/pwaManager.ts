@@ -1,4 +1,5 @@
 import { registerSW } from 'virtual:pwa-register';
+import { Capacitor } from '@capacitor/core';
 
 export interface StorageStatus {
   isPersisted: boolean;
@@ -21,7 +22,7 @@ let isUpdateAvailable = false;
  * مدیریت چرخه عمر Service Worker بدون رفرش ناخواسته یا وقفه در قرائت و صوت
  */
 export function initServiceWorker() {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || Capacitor.isNativePlatform()) {
     return;
   }
 
@@ -29,14 +30,9 @@ export function initServiceWorker() {
     updateSWFunction = registerSW({
       immediate: true,
       onNeedRefresh() {
-        console.log('[PWA] New version detected, updating automatically.');
+        console.log('[PWA] New version detected.');
         isUpdateAvailable = true;
-        // بروزرسانی خودکار بدون نیاز به تایید یا کلیک کاربر طبق درخواست
-        if (updateSWFunction) {
-          updateSWFunction(true).catch((e) => {
-            console.warn('[PWA] Auto update error:', e);
-          });
-        }
+        // اطلاع به شنوندگان جهت نمایش بنر بروزرسانی توسط کاربر
         refreshListeners.forEach((listener) => {
           try {
             listener();

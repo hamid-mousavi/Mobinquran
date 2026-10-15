@@ -3,6 +3,7 @@ import { X, BookOpen, Layers, Bookmark, Sparkles, Copy, Check, Save } from 'luci
 import { Verse, Surah, ArabicFont } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
 import { toPersianDigits } from '../utils/textNormalization';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface VerseDetailModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
   onOpenAIForVerse,
   onSaveNote,
 }) => {
+  const modalRef = useModalA11y<HTMLDivElement>({ isOpen, onClose });
   const [activeTab, setActiveTab] = useState<'tafsir' | 'translations' | 'grammar' | 'note'>('tafsir');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [personalNote, setPersonalNote] = useState('');
@@ -48,12 +50,15 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
     <div
       id="modal-verse-detail-backdrop"
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in"
+      onClick={onClose}
     >
       <div
+        ref={modalRef}
         id="modal-verse-detail-content"
         className={`w-full sm:max-w-2xl h-[85vh] sm:h-[80vh] flex flex-col rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden transition-all ${
           darkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-800'
         }`}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* سربرگ مشخصات آیه */}
         <div className={`p-4 border-b flex items-center justify-between ${
@@ -167,61 +172,78 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
 
         {/* محتوای تب فعال */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {/* این داده‌ها تا زمان اتصال به منبع دارای ارجاع، تفسیرِ قابل استناد نیستند. */}
+          {/* تب تفاسیر مستند */}
           {activeTab === 'tafsir' && (
             <div className="space-y-4">
-              <div className={`p-3 rounded-xl text-xs leading-relaxed border ${
-                darkMode ? 'bg-amber-950/30 border-amber-800/60 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'
-              }`}>
-                این بخش فعلاً یادداشت راهنمای تدبّر است، نه متن یا چکیدهٔ مستندِ تفسیر. برای استناد پژوهشی، منبع و ارجاع صفحه را بررسی کنید.
-              </div>
-              {/* تفسیر نمونه */}
-              <div className={`p-4 rounded-2xl border space-y-2 ${
-                darkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-white border-stone-200 shadow-sm'
-              }`}>
-                <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
-                    <h4 className="font-bold text-sm text-teal-700 dark:text-teal-300">
-                      راهنمای تدبّر اخلاقی
-                    </h4>
-                  </div>
-                  <button
-                    onClick={() => handleCopyText('nemoneh', verse.tafsirNemoneh || '')}
-                    className="text-slate-400 hover:text-teal-600 p-1 rounded"
-                    title="کپی متن راهنما"
-                  >
-                    {copiedKey === 'nemoneh' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 text-justify">
-                  {verse.tafsirNemoneh || 'نکات تفسیری برای این آیه در حال آماده‌سازی است.'}
-                </p>
-              </div>
+              {verse.tafsirNemoneh || verse.tafsirMizan ? (
+                <>
+                  {/* تفسیر نمونه */}
+                  {verse.tafsirNemoneh && (
+                    <div className={`p-4 rounded-2xl border space-y-2 ${
+                      darkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-white border-stone-200 shadow-sm'
+                    }`}>
+                      <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                          <h4 className="font-bold text-sm text-teal-700 dark:text-teal-300">
+                            تفسیر نمونه (آیت‌الله العظمی مکارم شیرازی)
+                          </h4>
+                        </div>
+                        <button
+                          onClick={() => handleCopyText('nemoneh', verse.tafsirNemoneh || '')}
+                          className="text-slate-400 hover:text-teal-600 p-1 rounded"
+                          title="کپی متن تفسیر"
+                        >
+                          {copiedKey === 'nemoneh' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 text-justify">
+                        {verse.tafsirNemoneh}
+                      </p>
+                    </div>
+                  )}
 
-              {/* تفسیر المیزان */}
-              <div className={`p-4 rounded-2xl border space-y-2 ${
-                darkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-white border-stone-200 shadow-sm'
-              }`}>
-                <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-600" />
-                    <h4 className="font-bold text-sm text-amber-700 dark:text-amber-300">
-                      راهنمای تدبّر مفهومی
-                    </h4>
+                  {/* تفسیر المیزان */}
+                  {verse.tafsirMizan && (
+                    <div className={`p-4 rounded-2xl border space-y-2 ${
+                      darkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-white border-stone-200 shadow-sm'
+                    }`}>
+                      <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-600" />
+                          <h4 className="font-bold text-sm text-amber-700 dark:text-amber-300">
+                            تفسیر المیزان (علامه طباطبایی)
+                          </h4>
+                        </div>
+                        <button
+                          onClick={() => handleCopyText('mizan', verse.tafsirMizan || '')}
+                          className="text-slate-400 hover:text-amber-600 p-1 rounded"
+                          title="کپی متن تفسیر"
+                        >
+                          {copiedKey === 'mizan' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 text-justify">
+                        {verse.tafsirMizan}
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className={`p-6 rounded-2xl border text-center space-y-3 ${
+                  darkMode ? 'bg-slate-800/40 border-slate-700/60 text-slate-300' : 'bg-amber-50/60 border-amber-200/80 text-stone-700'
+                }`}>
+                  <div className="w-10 h-10 mx-auto rounded-full bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600">
+                    <BookOpen className="w-5 h-5" />
                   </div>
-                  <button
-                    onClick={() => handleCopyText('mizan', verse.tafsirMizan || '')}
-                    className="text-slate-400 hover:text-amber-600 p-1 rounded"
-                    title="کپی متن راهنما"
-                  >
-                    {copiedKey === 'mizan' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                  </button>
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                    محتوای تفسیر در این نسخه موجود نیست
+                  </h4>
+                  <p className="text-xs leading-relaxed max-w-md mx-auto text-slate-600 dark:text-slate-400">
+                    متن مستند و کامل تفاسیر المیزان و نمونه برای این آیه در بسته پایه بارگذاری نشده است. برای مطالعه تفاسیر کامل، می‌توانید به پایگاه‌های جامع تفاسیر یا منابع مکتوب معتبر مراجعه فرمایید.
+                  </p>
                 </div>
-                <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 text-justify">
-                  {verse.tafsirMizan || 'برای این آیه هنوز راهنمای تدبّر افزوده نشده است.'}
-                </p>
-              </div>
+              )}
             </div>
           )}
 

@@ -136,12 +136,12 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* دکمه سریع تنظیمات اذان */}
+          {/* دکمه سریع تنظیمات اذان (فعلاً طبق درخواست کامنت شده است)
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onOpenModal('azan');
+              onOpenModal('times');
             }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-xs font-bold transition-all cursor-pointer border border-teal-500/20"
             title="تنظیمات اذان و دانلود مؤذن"
@@ -149,6 +149,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
             <Volume2 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">اذان: {currentMuezzin.name.split(' ')[0]}</span>
           </button>
+          */}
 
           <div className="flex items-center gap-1 text-xs font-extrabold text-teal-700 dark:text-teal-300 group-hover:translate-x-[-2px] transition-transform">
             <span>قبله‌نما</span>

@@ -93,6 +93,24 @@ export const aiResponseSchema = z.object({
     .default(['تولیدشده با هوش مصنوعی؛ این دستیار مرجع فتوا نیست.']),
 });
 
+export const verifyRecitationRequestSchema = z.object({
+  targetText: z.string().trim().min(1, 'متن اصلی آیه الزامی است.').max(500, 'متن اصلی نباید بیش از ۵۰۰ کاراکتر باشد.'),
+  spokenText: z.string().trim().min(1, 'متن قرائت شده الزامی است.').max(500, 'متن قرائت نباید بیش از ۵۰۰ کاراکتر باشد.'),
+  surahName: z.string().trim().max(100).optional(),
+  verseNumber: z.union([z.number(), z.string().regex(/^\d+$/)]).optional(),
+});
+
+export const verifyRecitationResponseSchema = z.object({
+  isPass: z.boolean().default(false),
+  accuracy: z.number().min(0).max(100).default(0),
+  verdictMessage: z.string().trim().max(500).default('ارزیابی انجام شد.'),
+  matchedWords: z.array(z.string().trim().max(100)).default([]),
+  missedWords: z.array(z.string().trim().max(100)).default([]),
+  tajweedNote: z.string().trim().max(500).optional(),
+});
+
+export type VerifyRecitationRequest = z.infer<typeof verifyRecitationRequestSchema>;
+export type VerifyRecitationResponse = z.infer<typeof verifyRecitationResponseSchema>;
 export type SourceItemContract = z.infer<typeof sourceItemSchema>;
 export type AiAskRequest = z.infer<typeof aiAskRequestSchema>;
 export type AiResponse = z.infer<typeof aiResponseSchema>;

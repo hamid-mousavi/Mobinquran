@@ -5,6 +5,7 @@ import { localDateKey, currentKhatmDay } from '../utils/date';
 import { buildKhatmSegments, KhatmSegment } from '../utils/khatmMath';
 import { QuranService } from '../services/quranService';
 import { toPersianDigits } from '../utils/textNormalization';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface KhatmModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
   darkMode,
   onNavigateToPage,
 }) => {
+  const modalRef = useModalA11y<HTMLDivElement>({ isOpen, onClose });
   const [plan, setPlan] = useState<KhatmPlan | null>(null);
   const [segments, setSegments] = useState<KhatmSegment[]>([]);
   const [perDayLabel, setPerDayLabel] = useState('');
@@ -245,6 +247,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
       onClick={onClose}
     >
       <div
+        ref={modalRef}
         id="khatm-modal-container"
         className={`w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border transition-all overflow-hidden ${
           darkMode

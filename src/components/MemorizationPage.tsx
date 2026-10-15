@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import {
   ArrowRight,
   BookOpen,
@@ -25,9 +25,14 @@ import { ReciterId, RECITER_NAMES, getAudioSourceUrl } from '../services/audioSo
 import { getArabicFontFamily } from '../utils/fontHelper';
 import { toPersianDigits } from '../utils/textNormalization';
 import { QuranicCard } from './QuranicOrnament';
-import { MemorizationQuizStudio } from './MemorizationQuizStudio';
-import { VoiceDiscussionStudio } from './VoiceDiscussionStudio';
 import { ReciterSelectorDropdown } from './ReciterSelectorDropdown';
+
+const MemorizationQuizStudio = React.lazy(() =>
+  import('./MemorizationQuizStudio').then((m) => ({ default: m.MemorizationQuizStudio }))
+);
+const VoiceDiscussionStudio = React.lazy(() =>
+  import('./VoiceDiscussionStudio').then((m) => ({ default: m.VoiceDiscussionStudio }))
+);
 import { SurahSelectorModal } from './SurahSelectorModal';
 import {
   getMemorizationProgress,
@@ -456,14 +461,20 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   if (currentView === 'quiz') {
     return (
       <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
-        <MemorizationQuizStudio
-          currentSurah={currentSurah}
-          surahs={surahs}
-          verses={verses}
-          darkMode={darkMode}
-          onSelectSurah={onSelectSurah}
-          onBack={() => navigateToView('menu')}
-        />
+        <Suspense fallback={
+          <div className="text-center py-20 text-slate-400 font-medium animate-pulse">
+            در حال بارگذاری استودیو آزمون…
+          </div>
+        }>
+          <MemorizationQuizStudio
+            currentSurah={currentSurah}
+            surahs={surahs}
+            verses={verses}
+            darkMode={darkMode}
+            onSelectSurah={onSelectSurah}
+            onBack={() => navigateToView('menu')}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -474,14 +485,20 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   if (currentView === 'discussion') {
     return (
       <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
-        <VoiceDiscussionStudio
-          currentSurah={currentSurah}
-          surahs={surahs}
-          verses={verses}
-          darkMode={darkMode}
-          onSelectSurah={onSelectSurah}
-          onBack={() => navigateToView('menu')}
-        />
+        <Suspense fallback={
+          <div className="text-center py-20 text-slate-400 font-medium animate-pulse">
+            در حال بارگذاری استودیو مباحثه صوتی…
+          </div>
+        }>
+          <VoiceDiscussionStudio
+            currentSurah={currentSurah}
+            surahs={surahs}
+            verses={verses}
+            darkMode={darkMode}
+            onSelectSurah={onSelectSurah}
+            onBack={() => navigateToView('menu')}
+          />
+        </Suspense>
       </div>
     );
   }

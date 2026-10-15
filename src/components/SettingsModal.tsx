@@ -5,6 +5,7 @@ import { getArabicFontFamily, ARABIC_FONT_OPTIONS } from '../utils/fontHelper';
 import { getStorageStatus, requestStoragePersistence, StorageStatus } from '../services/pwaManager';
 import { PWAInstallButton } from './PWAInstallButton';
 import { toPersianDigits } from '../utils/textNormalization';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenAbout,
   darkMode,
 }) => {
+  const modalRef = useModalA11y<HTMLDivElement>({ isOpen, onClose });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [requestingPersist, setRequestingPersist] = useState(false);
@@ -62,13 +64,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div
       id="modal-settings-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn"
+      onClick={onClose}
     >
       <div
+        ref={modalRef}
         id="modal-settings-content"
         className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden transition-all ${
           darkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-800'
         }`}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* سربرگ */}
         <div className={`p-4 border-b flex items-center justify-between ${darkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50'}`}>

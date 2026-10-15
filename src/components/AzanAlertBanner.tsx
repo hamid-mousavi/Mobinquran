@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Volume2, VolumeX, X, Clock, Sparkles } from 'lucide-react';
-import { stopAzanPreview } from '../services/azanService';
+import { stopAllAzanAudio } from '../services/azanService';
 
 interface AzanAlertDetail {
   prayerName: string;
@@ -27,7 +27,7 @@ export const AzanAlertBanner: React.FC = () => {
   if (!alertData) return null;
 
   const handleDismiss = () => {
-    stopAzanPreview();
+    stopAllAzanAudio();
     setAlertData(null);
   };
 

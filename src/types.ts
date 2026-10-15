@@ -174,3 +174,12 @@ export interface AudioDownloadRecord {
   downloadedAt: number;
   sourcesUsed: string[];
 }
+
+
+export interface AppSettingsRecord<T = unknown> {
+  key: string;
+  version: number;
+  data: T;
+  updatedAt: string;
+}
+

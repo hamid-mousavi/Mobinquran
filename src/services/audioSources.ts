@@ -1,4 +1,5 @@
 import { ALL_SURAHS } from '../data/surahs';
+import { getApiUrl } from './apiClient';
 
 export type ReciterId =
   | 'parhizgar'
@@ -549,6 +550,6 @@ export const getProxiedAudioUrl = (url: string): string => {
   if (!url || url.startsWith('blob:') || url.startsWith('/') || url.startsWith('data:')) {
     return url;
   }
-  return `/api/audio/proxy?url=${encodeURIComponent(url)}`;
+  return getApiUrl(`/api/audio/proxy?url=${encodeURIComponent(url)}`);
 };
 

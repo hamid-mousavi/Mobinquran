@@ -1,38 +1,50 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Header } from './components/Header';
 import { QuranReader } from './components/QuranReader';
 import { MushafPageView } from './components/MushafPageView';
-import { SurahSelectorModal } from './components/SurahSelectorModal';
-import { SettingsModal } from './components/SettingsModal';
-import { VerseDetailModal } from './components/VerseDetailModal';
-import { BookmarksModal } from './components/BookmarksModal';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
-import { SearchModal } from './components/SearchModal';
-import { KhatmModal } from './components/KhatmModal';
 import { PWAUpdateBanner } from './components/PWAUpdateBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { AutoScrollControls } from './components/AutoScrollControls';
 import { QuranHomePage } from './components/QuranHomePage';
-import { AIPage } from './components/AIPage';
-import { MemorizationPage } from './components/MemorizationPage';
-import { OfflinePage } from './components/OfflinePage';
-import { QuranStoriesExplorer } from './components/QuranStoriesExplorer';
 import { AzanAlertBanner } from './components/AzanAlertBanner';
 import { SplashScreen } from './components/SplashScreen';
-import { initAzanScheduler, playAzanPreview } from './services/azanService';
+import { initAzanScheduler, playActualAzan } from './services/azanService';
 import { BookOpen, ChevronRight } from 'lucide-react';
 import { BottomNavigation } from './components/BottomNavigation';
 import { MoreMenuModal } from './components/MoreMenuModal';
-import { AboutModal } from './components/AboutModal';
-import { SurahSearchModal } from './components/SurahSearchModal';
 import { QuranService } from './services/quranService';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
 import { ALL_SURAHS, getJuzStartInfo } from './data/surahs';
 import { Surah, Verse, AppSettings, ViewMode } from './types';
 import { MushafPageData } from './types/mushafLayout';
-import MushafPrototype from './components/MushafPrototype';
 import { requestQuranScrollToVerse } from './components/QuranReader';
 import { recordUserActivity } from './services/activityTracker';
+import { App as CapApp } from '@capacitor/app';
+
+// کامپوننت‌های سنگین صفحه‌ای و مودال‌ها به‌صورت Lazy جهت بهینه‌سازی بارگذاری اولیه
+const AIPage = lazy(() => import('./components/AIPage').then((m) => ({ default: m.AIPage })));
+const MemorizationPage = lazy(() => import('./components/MemorizationPage').then((m) => ({ default: m.MemorizationPage })));
+const OfflinePage = lazy(() => import('./components/OfflinePage').then((m) => ({ default: m.OfflinePage })));
+const QuranStoriesExplorer = lazy(() => import('./components/QuranStoriesExplorer').then((m) => ({ default: m.QuranStoriesExplorer })));
+const MushafPrototype = lazy(() => import('./components/MushafPrototype'));
+
+// مودال‌های کمکی با بارگذاری در زمان نیاز
+const SurahSelectorModal = lazy(() => import('./components/SurahSelectorModal').then((m) => ({ default: m.SurahSelectorModal })));
+const SettingsModal = lazy(() => import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal })));
+const VerseDetailModal = lazy(() => import('./components/VerseDetailModal').then((m) => ({ default: m.VerseDetailModal })));
+const BookmarksModal = lazy(() => import('./components/BookmarksModal').then((m) => ({ default: m.BookmarksModal })));
+const SearchModal = lazy(() => import('./components/SearchModal').then((m) => ({ default: m.SearchModal })));
+const KhatmModal = lazy(() => import('./components/KhatmModal').then((m) => ({ default: m.KhatmModal })));
+const SurahSearchModal = lazy(() => import('./components/SurahSearchModal').then((m) => ({ default: m.SurahSearchModal })));
+const AboutModal = lazy(() => import('./components/AboutModal').then((m) => ({ default: m.AboutModal })));
+
+const PageLoadingFallback: React.FC = () => (
+  <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center" dir="rtl">
+    <div className="w-10 h-10 border-3 border-emerald-500/20 border-t-emerald-600 rounded-full animate-spin mb-4" />
+    <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">در حال بارگذاری بخش...</p>
+  </div>
+);
 
 const getInitialSystemDarkMode = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -60,6 +72,7 @@ export default function App() {
   const [currentMushafPage, setCurrentMushafPage] = useState<number>(1);
   const [activePage, setActivePage] = useState<'home' | 'reader' | 'ai' | 'memorization' | 'offline' | 'stories'>('home');
   const [previousPage, setPreviousPage] = useState<'home' | 'reader'>('home');
+  const [pageHistory, setPageHistory] = useState<Array<'home' | 'reader' | 'ai' | 'memorization' | 'offline' | 'stories'>>(['home']);
   const [lastReadPosition, setLastReadPosition] = useState<{ surahId: number; verseNumber: number; pageNumber?: number } | null>(null);
 
   // پروتوتایپ P3-T3: نمایش چیدمان ۱۵ خطی واقعی (دادهٔ MIT) از طریق ?proto=mushaf
@@ -121,11 +134,17 @@ export default function App() {
   // آیهٔ از سرگیری قرائت (P3-T1): عددی که پس از بارگذاری آیات سوره، QuranReader به آن اسکرول می‌کند
   const [resumeScrollVerse, setResumeScrollVerse] = useState<number | null>(null);
 
-  // وضعیت نمایش اسپلش اسکرین معنوی
+  // وضعیت نمایش اسپلش اسکرین معنوی - فقط بار اول که سایت باز می‌شود یا برنامه نصب می‌شود
   const [showSplash, setShowSplash] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
-    return params.get('action') !== 'azan';
+    if (params.get('action') === 'azan') return false;
+    try {
+      const hasSeen = localStorage.getItem('mobin_has_seen_splash');
+      return !hasSeen;
+    } catch {
+      return false;
+    }
   });
 
   // راه‌اندازی زمان‌بند پس‌زمینه اذان و هشدارهای شرعی
@@ -140,10 +159,10 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'azan') {
       setShowSplash(false);
-      import('./services/azanService').then(({ getAzanSettings, playAzanPreview, MUEZZINS_LIST }) => {
+      import('./services/azanService').then(({ getAzanSettings, playActualAzan, MUEZZINS_LIST }) => {
         const azanSettings = getAzanSettings();
         const muezzin = MUEZZINS_LIST.find((m) => m.id === azanSettings.selectedMuezzinId) || MUEZZINS_LIST[0];
-        playAzanPreview(muezzin.id);
+        playActualAzan({ prayerName: 'اذان شرعی', muezzinId: muezzin.id });
         window.dispatchEvent(
           new CustomEvent('mobin-azan-alert', {
             detail: {
@@ -154,6 +173,25 @@ export default function App() {
           })
         );
       });
+    }
+  }, []);
+
+  // پشتیبانی از میانبرهای وب‌اپلیکیشن در مانیفست PWA (?view=surahs, ?action=last-read, ?action=search)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get('view');
+    const action = params.get('action');
+
+    if (view === 'surahs') {
+      setShowSplash(false);
+      setIsSurahModalOpen(true);
+    } else if (action === 'last-read') {
+      setShowSplash(false);
+      setActivePage('reader');
+    } else if (action === 'search') {
+      setShowSplash(false);
+      setIsSearchModalOpen(true);
     }
   }, []);
 
@@ -313,9 +351,121 @@ export default function App() {
     setActivePage('offline');
   };
 
+  // همگام‌سازی پشته تاریخچه صفحات هنگام ناوبری کاربر
+  useEffect(() => {
+    setPageHistory((prev) => {
+      if (prev[prev.length - 1] === activePage) return prev;
+      return [...prev, activePage];
+    });
+  }, [activePage]);
+
+  // مدیریت هوشمند کلید Back (در موبایل و وب):
+  // اولویت ۱: بستن مودال‌های باز
+  // اولویت ۲: بازگشت به صفحه قبلی (پشته تاریخچه) مانند اینستاگرام
+  // اولویت ۳: خروج از برنامه در صفحه خانه با لمس مجدد
+  const handleAppBack = useCallback((): boolean => {
+    // ۱. بررسی مودال‌های باز
+    if (isVerseDetailOpen) {
+      setIsVerseDetailOpen(false);
+      setSelectedVerseForDetail(null);
+      return true;
+    }
+    if (isSearchModalOpen) {
+      setIsSearchModalOpen(false);
+      setSearchInitialQuery('');
+      return true;
+    }
+    if (isSurahSearchOpen) {
+      setIsSurahSearchOpen(false);
+      return true;
+    }
+    if (isKhatmModalOpen) {
+      setIsKhatmModalOpen(false);
+      return true;
+    }
+    if (isBookmarksModalOpen) {
+      setIsBookmarksModalOpen(false);
+      return true;
+    }
+    if (isSurahModalOpen) {
+      setIsSurahModalOpen(false);
+      return true;
+    }
+    if (isSettingsModalOpen) {
+      setIsSettingsModalOpen(false);
+      return true;
+    }
+    if (isAboutModalOpen) {
+      setIsAboutModalOpen(false);
+      return true;
+    }
+    if (isMoreMenuOpen) {
+      setIsMoreMenuOpen(false);
+      return true;
+    }
+
+    // ۲. بررسی پشته صفحات و بازگشت به صفحه قبلی مانند اینستاگرام
+    if (pageHistory.length > 1) {
+      const nextHistory = pageHistory.slice(0, -1);
+      const targetPage = nextHistory[nextHistory.length - 1] || 'home';
+      setPageHistory(nextHistory);
+      setActivePage(targetPage);
+      return true;
+    }
+
+    // ۳. اگر در صفحه‌ای غیر از خانه بودیم، بازگشت به خانه
+    if (activePage !== 'home') {
+      setActivePage('home');
+      setPageHistory(['home']);
+      return true;
+    }
+
+    return false;
+  }, [
+    isVerseDetailOpen,
+    isSearchModalOpen,
+    isSurahSearchOpen,
+    isKhatmModalOpen,
+    isBookmarksModalOpen,
+    isSurahModalOpen,
+    isSettingsModalOpen,
+    isAboutModalOpen,
+    isMoreMenuOpen,
+    pageHistory,
+    activePage,
+  ]);
+
   const handleBackToPrevious = () => {
-    setActivePage(previousPage === 'home' ? 'home' : 'reader');
+    handleAppBack();
   };
+
+  // اتصال به رویداد دکمه فیزیکی Back اندروید و دکمه بازگشت مرورگر وب / PWA
+  useEffect(() => {
+    let lastBackPressTime = 0;
+
+    const backListenerPromise = CapApp.addListener('backButton', () => {
+      const handled = handleAppBack();
+      if (!handled) {
+        const now = Date.now();
+        if (now - lastBackPressTime < 2000) {
+          CapApp.exitApp();
+        } else {
+          lastBackPressTime = now;
+        }
+      }
+    });
+
+    const handlePopState = () => {
+      handleAppBack();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      backListenerPromise.then((h) => h?.remove?.()).catch(() => {});
+    };
+  }, [handleAppBack]);
 
   // اسکرول به ابتدای صفحه در زمان بازگشت به صفحه اصلی
   useEffect(() => {
@@ -518,7 +668,14 @@ export default function App() {
       {/* اسپلش اسکرین اختصاصی و معنوی قرآن مبین و موکب حضرت فاطمه‌الزهرا (س) */}
       {showSplash && (
         <SplashScreen
-          onFinish={() => setShowSplash(false)}
+          onFinish={() => {
+            setShowSplash(false);
+            try {
+              localStorage.setItem('mobin_has_seen_splash', 'true');
+            } catch {
+              // Ignore storage exceptions
+            }
+          }}
           darkMode={settings.darkMode}
         />
       )}
@@ -586,32 +743,36 @@ export default function App() {
           darkMode={settings.darkMode}
         />
       ) : activePage === 'ai' ? (
-        <AIPage
-          currentVerse={aiContextVerse}
-          currentSurah={currentSurah}
-          surahs={surahs}
-          darkMode={settings.darkMode}
-          onBack={handleBackToPrevious}
-          onNavigateHome={() => setActivePage('home')}
-          onNavigateToVerse={(sId, vNum) => {
-            handleNavigateToVerse(sId, vNum);
-          }}
-        />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <AIPage
+            currentVerse={aiContextVerse}
+            currentSurah={currentSurah}
+            surahs={surahs}
+            darkMode={settings.darkMode}
+            onBack={handleBackToPrevious}
+            onNavigateHome={() => setActivePage('home')}
+            onNavigateToVerse={(sId, vNum) => {
+              handleNavigateToVerse(sId, vNum);
+            }}
+          />
+        </Suspense>
       ) : activePage === 'memorization' ? (
-        <MemorizationPage
-          surahs={surahs}
-          currentSurah={currentSurah}
-          verses={verses}
-          onSelectSurah={(surah) => {
-            setResumeScrollVerse(null);
-            setCurrentSurah(surah);
-            setCurrentMushafPage(surah.startPage || 1);
-            // کاربر در همان صفحه حفظ می‌ماند و خارج نمی‌شود
-          }}
-          settings={settings}
-          darkMode={settings.darkMode}
-          onBack={handleBackToPrevious}
-        />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <MemorizationPage
+            surahs={surahs}
+            currentSurah={currentSurah}
+            verses={verses}
+            onSelectSurah={(surah) => {
+              setResumeScrollVerse(null);
+              setCurrentSurah(surah);
+              setCurrentMushafPage(surah.startPage || 1);
+              // کاربر در همان صفحه حفظ می‌ماند و خارج نمی‌شود
+            }}
+            settings={settings}
+            darkMode={settings.darkMode}
+            onBack={handleBackToPrevious}
+          />
+        </Suspense>
       ) : activePage === 'stories' ? (
         <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-28 animate-fadeIn select-none" dir="rtl">
           {/* سربرگ اختصاصی و فاخر صفحه داستان‌ها */}
@@ -640,30 +801,36 @@ export default function App() {
             </button>
           </div>
 
-          <QuranStoriesExplorer
-            darkMode={settings.darkMode}
-            onNavigateToSurah={(sId) => {
-              const target = surahs.find((s) => s.id === sId);
-              if (target) {
-                setCurrentSurah(target);
-                setCurrentMushafPage(target.startPage || 1);
-                setActivePage('reader');
-              }
-            }}
-          />
+          <Suspense fallback={<PageLoadingFallback />}>
+            <QuranStoriesExplorer
+              darkMode={settings.darkMode}
+              onNavigateToSurah={(sId) => {
+                const target = surahs.find((s) => s.id === sId);
+                if (target) {
+                  setCurrentSurah(target);
+                  setCurrentMushafPage(target.startPage || 1);
+                  setActivePage('reader');
+                }
+              }}
+            />
+          </Suspense>
         </div>
       ) : activePage === 'offline' ? (
-        <OfflinePage
-          darkMode={settings.darkMode}
-          onBack={handleBackToPrevious}
-        />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <OfflinePage
+            darkMode={settings.darkMode}
+            onBack={handleBackToPrevious}
+          />
+        </Suspense>
       ) : isLayoutPrototype ? (
-        <MushafPrototype
-          pages={prototypePages}
-          darkMode={settings.darkMode}
-          arabicFont={settings.arabicFont}
-          arabicFontSize={settings.arabicFontSize}
-        />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <MushafPrototype
+            pages={prototypePages}
+            darkMode={settings.darkMode}
+            arabicFont={settings.arabicFont}
+            arabicFontSize={settings.arabicFontSize}
+          />
+        </Suspense>
       ) : viewMode === 'verse-by-verse' ? (
         <QuranReader
           currentSurah={currentSurah}
@@ -770,91 +937,109 @@ export default function App() {
         }}
       />
 
-      {/* کشوی جامع تفاسیر، ۳ ترجمه، واژه‌شناسی و یادداشت */}
-      <VerseDetailModal
-        isOpen={isVerseDetailOpen}
-        onClose={() => {
-          setIsVerseDetailOpen(false);
-          setSelectedVerseForDetail(null);
-        }}
-        verse={selectedVerseForDetail}
-        currentSurah={currentSurah}
-        darkMode={settings.darkMode}
-        arabicFont={settings.arabicFont}
-        onOpenAIForVerse={(verse) => {
-          handleOpenAI(verse);
-        }}
-        onSaveNote={handleSaveNote}
-      />
+      {/* مودال‌های کمکی بارگذاری‌شده با کداسپلیتینگ */}
+      <Suspense fallback={null}>
+        {isVerseDetailOpen && (
+          <VerseDetailModal
+            isOpen={isVerseDetailOpen}
+            onClose={() => {
+              setIsVerseDetailOpen(false);
+              setSelectedVerseForDetail(null);
+            }}
+            verse={selectedVerseForDetail}
+            currentSurah={currentSurah}
+            darkMode={settings.darkMode}
+            arabicFont={settings.arabicFont}
+            onOpenAIForVerse={(verse) => {
+              handleOpenAI(verse);
+            }}
+            onSaveNote={handleSaveNote}
+          />
+        )}
 
-      {/* مودال جستجوی پیشرفته متنی و ترجمه */}
-      <SearchModal
-        isOpen={isSearchModalOpen}
-        onClose={() => {
-          setIsSearchModalOpen(false);
-          setSearchInitialQuery('');
-        }}
-        surahs={surahs}
-        onSelectResult={handleNavigateToVerse}
-        onNavigateToPage={(pageNum, forcePage) => handleNavigateToMushafPage(pageNum, forcePage ?? true)}
-        onNavigateToJuz={handleNavigateToJuz}
-        darkMode={settings.darkMode}
-        initialQuery={searchInitialQuery}
-      />
+        {isSearchModalOpen && (
+          <SearchModal
+            isOpen={isSearchModalOpen}
+            onClose={() => {
+              setIsSearchModalOpen(false);
+              setSearchInitialQuery('');
+            }}
+            surahs={surahs}
+            onSelectResult={handleNavigateToVerse}
+            onNavigateToPage={(pageNum, forcePage) => handleNavigateToMushafPage(pageNum, forcePage ?? true)}
+            onNavigateToJuz={handleNavigateToJuz}
+            darkMode={settings.darkMode}
+            initialQuery={searchInitialQuery}
+          />
+        )}
 
-      {/* مودال جستجوی اختصاصی و سریع در سوره جاری (P5-T2) */}
-      <SurahSearchModal
-        isOpen={isSurahSearchOpen}
-        onClose={() => setIsSurahSearchOpen(false)}
-        currentSurah={currentSurah}
-        verses={verses}
-        onSelectVerse={(verseNum) => {
-          requestQuranScrollToVerse(verseNum);
-        }}
-        darkMode={settings.darkMode}
-      />
+        {isSurahSearchOpen && (
+          <SurahSearchModal
+            isOpen={isSurahSearchOpen}
+            onClose={() => setIsSurahSearchOpen(false)}
+            currentSurah={currentSurah}
+            verses={verses}
+            onSelectVerse={(verseNum) => {
+              requestQuranScrollToVerse(verseNum);
+            }}
+            darkMode={settings.darkMode}
+          />
+        )}
 
-      {/* مودال برنامه‌ریزی و پیگیری ختم قرآن کریم */}
-      <KhatmModal
-        isOpen={isKhatmModalOpen}
-        onClose={() => setIsKhatmModalOpen(false)}
-        darkMode={settings.darkMode}
-        onNavigateToPage={(pageNum) => handleNavigateToMushafPage(pageNum, false)}
-      />
+        {isKhatmModalOpen && (
+          <KhatmModal
+            isOpen={isKhatmModalOpen}
+            onClose={() => setIsKhatmModalOpen(false)}
+            darkMode={settings.darkMode}
+            onNavigateToPage={(pageNum) => handleNavigateToMushafPage(pageNum, false)}
+          />
+        )}
 
-      {/* مودال بوکمارک‌ها و یادداشت‌های شخصی */}
-      <BookmarksModal
-        isOpen={isBookmarksModalOpen}
-        onClose={() => setIsBookmarksModalOpen(false)}
-        surahs={surahs}
-        onSelectBookmark={handleNavigateToVerse}
-        darkMode={settings.darkMode}
-      />
+        {isBookmarksModalOpen && (
+          <BookmarksModal
+            isOpen={isBookmarksModalOpen}
+            onClose={() => setIsBookmarksModalOpen(false)}
+            surahs={surahs}
+            onSelectBookmark={handleNavigateToVerse}
+            darkMode={settings.darkMode}
+          />
+        )}
 
-      {/* مودال انتخاب سوره و جزء */}
-      <SurahSelectorModal
-        isOpen={isSurahModalOpen}
-        onClose={() => setIsSurahModalOpen(false)}
-        surahs={surahs}
-        currentSurahId={currentSurah.id}
-        onSelectSurah={handleSelectSurah}
-        onSelectJuz={handleNavigateToJuz}
-        onOpenAdvancedSearch={() => {
-          setIsSurahModalOpen(false);
-          setIsSearchModalOpen(true);
-        }}
-        darkMode={settings.darkMode}
-      />
+        {isSurahModalOpen && (
+          <SurahSelectorModal
+            isOpen={isSurahModalOpen}
+            onClose={() => setIsSurahModalOpen(false)}
+            surahs={surahs}
+            currentSurahId={currentSurah.id}
+            onSelectSurah={handleSelectSurah}
+            onSelectJuz={handleNavigateToJuz}
+            onOpenAdvancedSearch={() => {
+              setIsSurahModalOpen(false);
+              setIsSearchModalOpen(true);
+            }}
+            darkMode={settings.darkMode}
+          />
+        )}
 
-      {/* مودال تنظیمات اندازه فونت و مترجم */}
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        settings={settings}
-        onUpdateSettings={handleUpdateSettings}
-        onOpenAbout={() => setIsAboutModalOpen(true)}
-        darkMode={settings.darkMode}
-      />
+        {isSettingsModalOpen && (
+          <SettingsModal
+            isOpen={isSettingsModalOpen}
+            onClose={() => setIsSettingsModalOpen(false)}
+            settings={settings}
+            onUpdateSettings={handleUpdateSettings}
+            onOpenAbout={() => setIsAboutModalOpen(true)}
+            darkMode={settings.darkMode}
+          />
+        )}
+
+        {isAboutModalOpen && (
+          <AboutModal
+            isOpen={isAboutModalOpen}
+            onClose={() => setIsAboutModalOpen(false)}
+            darkMode={settings.darkMode}
+          />
+        )}
+      </Suspense>
 
       {/* بنر اعلان اذان و پخش صوتی اوقات شرعی */}
       <AzanAlertBanner />
@@ -899,13 +1084,6 @@ export default function App() {
           setViewMode('mushaf-page');
           setActivePage('reader');
         }}
-        darkMode={settings.darkMode}
-      />
-
-      {/* مودال درباره ما، تماس با ما، حریم خصوصی و امتیاز در مایکت */}
-      <AboutModal
-        isOpen={isAboutModalOpen}
-        onClose={() => setIsAboutModalOpen(false)}
         darkMode={settings.darkMode}
       />
     </div>

@@ -618,7 +618,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
       <section id="home-main-shortcuts" className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         {/* ۱. قرآن کریم */}
         <div
-          onClick={onContinueReading}
+          onClick={onOpenSurahSelector}
           className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-teal-500/35 bg-gradient-to-br from-teal-500/15 via-white to-white dark:from-teal-950/40 dark:via-slate-900 dark:to-slate-900 shadow-xs hover:shadow-md hover:border-teal-500 transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group"
         >
           <div className="flex items-center justify-between mb-3">
