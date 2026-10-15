@@ -7,5 +7,3 @@ coverage/
 .env*
 !.env.example
 dev-dist/
-api/index.js
-api/[...path].js
