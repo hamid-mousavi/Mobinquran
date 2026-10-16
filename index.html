@@ -29,10 +29,10 @@
         var saved = JSON.parse(localStorage.getItem('quran_settings') || '{}');
         var isDark = saved.darkMode !== false;
         if (isDark) document.documentElement.classList.add('dark');
-        document.body.style.backgroundColor = isDark ? '#0b1120' : '#faf8f5';
+        document.body.style.backgroundColor = isDark ? '#0b1f1d' : '#f7f3e8';
       } catch (e) {
         document.documentElement.classList.add('dark');
-        document.body.style.backgroundColor = '#0b1120';
+        document.body.style.backgroundColor = '#0b1f1d';
       }
     </script>
   </body>

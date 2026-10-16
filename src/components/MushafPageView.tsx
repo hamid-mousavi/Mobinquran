@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronRight, ChevronLeft, Volume2, Sparkles, BookOpen, Bookmark, Loader2, Share2 } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Volume2, Sparkles, BookOpen, Bookmark, Loader2, Share2, Copy, X } from 'lucide-react';
 import { Surah, Verse, AppSettings } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
 import { shareAyah } from '../utils/shareAyah';
@@ -49,6 +49,17 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
   const [verses, setVerses] = useState<Verse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedVerse, setSelectedVerse] = useState<Verse | null>(null);
+
+  // دکمهٔ Back ابتدا منوی آیهٔ انتخاب‌شده را می‌بندد
+  useEffect(() => {
+    if (!selectedVerse) return;
+    const onBack = (e: Event) => {
+      e.preventDefault();
+      setSelectedVerse(null);
+    };
+    window.addEventListener('mobin-back', onBack);
+    return () => window.removeEventListener('mobin-back', onBack);
+  }, [selectedVerse]);
   const [isJumpInputOpen, setIsJumpInputOpen] = useState(false);
   const [jumpPageInput, setJumpPageInput] = useState(String(initialPageNumber || 1));
   const [isPartNavOpen, setIsPartNavOpen] = useState(false);
@@ -315,7 +326,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         className={`relative p-5 sm:p-8 rounded-3xl border-2 transition-all duration-300 shadow-md outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
           darkMode
             ? 'bg-slate-900 border-amber-500/20 text-slate-100'
-            : 'bg-[#fcfaf6] border-[#d4b982]/60 text-slate-900 shadow-stone-200'
+            : 'bg-[#fbf8ef] border-[#d4b982]/60 text-slate-900 shadow-stone-200'
         }`}
         aria-label="نمای صفحه مصحف — برای صفخهٔ قبل و بعد از کلیدهای جهتنما استفاده کنید"
       >
@@ -405,110 +416,108 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         </div>
       </div>
 
-      {/* نوار شناور مشخصات و ترجمه آیه انتخاب شده در صفحه */}
-      {selectedVerse && (
-        <div
-          className={`p-4 rounded-2xl border transition-all space-y-3 animate-fadeIn shadow-lg ${
-            darkMode
-              ? 'bg-slate-900 border-slate-700 text-slate-100'
-              : 'bg-white border-stone-300 text-slate-800'
-          }`}
-          dir="rtl"
-        >
-          <div className="flex items-center justify-between border-b border-stone-200 dark:border-slate-800 pb-2">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-teal-700 dark:text-teal-400">
-                سوره {surahs.find((s) => s.id === selectedVerse.surahId)?.nameArabic || selectedVerse.surahId} • آیه {selectedVerse.verseNumber}
-              </span>
-              <span className="text-xs text-slate-400">
-                (صفحه {selectedVerse.pageNumber}، جزء {selectedVerse.juzNumber})
-              </span>
+      {/* منوی عملیات آیهٔ انتخاب‌شده: پایین صفحه، با تپ روی آیه باز می‌شود */}
+      {selectedVerse && (() => {
+        const verseSurah =
+          surahs.find((s) => s.id === selectedVerse.surahId) || {
+            id: selectedVerse.surahId,
+            nameArabic: `سورة ${selectedVerse.surahId}`,
+            namePersian: `سوره ${selectedVerse.surahId}`,
+            englishName: '',
+            revelationType: 'Meccan' as const,
+            versesCount: 0,
+            startPage: selectedVerse.pageNumber,
+            juzNumber: selectedVerse.juzNumber,
+          };
+        const translation = getTranslationDisplay(selectedVerse, settings);
+        const isBookmarked = bookmarkedVerseIds.has(selectedVerse.verseNumber);
+        const actions = [
+          { label: 'تدبّر هوشمند', icon: Sparkles, primary: true, run: () => onOpenAIForVerse(selectedVerse) },
+          { label: 'پخش', icon: Volume2, run: () => onPlayVerseAudio(selectedVerse.verseNumber) },
+          { label: isBookmarked ? 'حذف نشانک' : 'نشانک', icon: Bookmark, active: isBookmarked, run: () => onToggleBookmark(selectedVerse.verseNumber) },
+          { label: 'تفسیر', icon: BookOpen, run: () => onOpenVerseDetail(selectedVerse) },
+          {
+            label: 'کپی',
+            icon: Copy,
+            run: () => {
+              try {
+                navigator.clipboard.writeText(
+                  `${selectedVerse.textArabic}\n\n«${translation}»\n(سوره ${verseSurah.nameArabic}، آیه ${selectedVerse.verseNumber})`
+                );
+              } catch {}
+            },
+          },
+          { label: 'اشتراک', icon: Share2, run: () => shareAyah(selectedVerse, translation, verseSurah) },
+        ];
+        return (
+          <>
+            {/* فضای خالی تا آیه‌های پایین صفحه زیر منو نمانند */}
+            <div className="h-80" aria-hidden="true" />
+            <div
+              role="dialog"
+              aria-label="منوی آیه"
+              className="fixed bottom-0 inset-x-0 z-[90] max-w-3xl mx-auto rounded-t-3xl border-t-2 border-amber-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 shadow-[0_-8px_28px_rgba(19,78,74,0.18)] px-5 pt-2.5 space-y-3 animate-fadeIn max-h-[70vh] overflow-y-auto"
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
+              dir="rtl"
+            >
+              <div className="mx-auto w-10 h-1 rounded-full bg-stone-300 dark:bg-slate-600" />
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-extrabold">
+                  آیه {toPersianDigits(selectedVerse.verseNumber)} · سوره {verseSurah.nameArabic}
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-300">
+                  <span>صفحه {toPersianDigits(selectedVerse.pageNumber)}</span>
+                  <button
+                    onClick={() => setSelectedVerse(null)}
+                    className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 hover:bg-stone-200 dark:hover:bg-slate-800 cursor-pointer"
+                    aria-label="بستن منوی آیه"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {actions.map((a) => {
+                  const Icon = a.icon;
+                  return (
+                    <button
+                      key={a.label}
+                      onClick={a.run}
+                      className={`min-h-[64px] flex flex-col items-center justify-center gap-1 rounded-2xl border text-xs font-bold cursor-pointer active:scale-[0.97] transition-transform ${
+                        a.primary
+                          ? 'bg-teal-800 border-teal-800 text-white'
+                          : a.active
+                          ? 'bg-amber-100 border-amber-300 text-amber-800 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-300'
+                          : 'bg-white dark:bg-slate-800 border-amber-300/70 dark:border-slate-700 text-slate-800 dark:text-slate-100'
+                      }`}
+                    >
+                      <Icon className={`w-[22px] h-[22px] ${a.primary ? 'text-amber-300' : a.active ? 'fill-current' : 'text-teal-600 dark:text-teal-400'}`} />
+                      {a.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  {settings.activeTranslator === 'makarem'
+                    ? 'ترجمه آیت‌الله مکارم: '
+                    : settings.activeTranslator === 'fooladvand'
+                    ? 'ترجمه استاد فولادوند: '
+                    : 'ترجمه استاد انصاریان: '}
+                </span>
+                {translation}
+              </p>
+              {selectedVerse.sajda && (
+                <p className="text-[11px] text-red-500 dark:text-red-400 font-bold">
+                  ⚠️ {selectedVerse.sajda.obligatory ? 'این آیه از آیات سجدهٔ واجب است.' : 'این آیه از آیات سجدهٔ مستحب است.'}
+                </p>
+              )}
             </div>
-
-            {/* کلیدهای سریع آیه انتخاب شده */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => onPlayVerseAudio(selectedVerse.verseNumber)}
-                className="p-1.5 rounded-lg bg-teal-600/10 text-teal-700 dark:text-teal-400 hover:bg-teal-600/20"
-                title="تلاوت صوتی این آیه"
-                aria-label="تلاوت صوتی این آیه"
-              >
-                <Volume2 className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={() => onOpenVerseDetail(selectedVerse)}
-                className="p-1.5 rounded-lg bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 text-slate-600 dark:text-slate-300"
-                title="مشاهده ترجمه‌ها و تفاسیر"
-                aria-label="مشاهده ترجمه‌ها و تفاسیر"
-              >
-                <BookOpen className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={() => onOpenAIForVerse(selectedVerse)}
-                className="p-1.5 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25"
-                title="تدبّر هوشمند"
-                aria-label="تدبر هوشمند"
-              >
-                <Sparkles className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={() => onToggleBookmark(selectedVerse.verseNumber)}
-                className="p-1.5 rounded-lg bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 text-slate-600 dark:text-slate-300"
-                title="نشانه‌گذاری"
-                aria-label="نشانه‌گذاری"
-              >
-                <Bookmark
-                  className={`w-4 h-4 ${
-                    bookmarkedVerseIds.has(selectedVerse.verseNumber)
-                      ? 'fill-amber-500 text-amber-500'
-                      : ''
-                  }`}
-                />
-              </button>
-
-              <button
-                onClick={() =>
-                  shareAyah(selectedVerse, getTranslationDisplay(selectedVerse, settings), surahs.find((s) => s.id === selectedVerse.surahId) || {
-                    id: selectedVerse.surahId,
-                    nameArabic: `سورة ${selectedVerse.surahId}`,
-                    namePersian: `سوره ${selectedVerse.surahId}`,
-                    englishName: '',
-                    revelationType: 'Meccan',
-                    versesCount: 0,
-                    startPage: selectedVerse.pageNumber,
-                    juzNumber: selectedVerse.juzNumber,
-                  })
-                }
-                className="p-1.5 rounded-lg bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 text-slate-600 dark:text-slate-300"
-                title="اشتراک‌گذاری آیه"
-                aria-label="اشتراک‌گذاری آیه"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* ترجمه فارسی بر اساس مترجم انتخابی */}
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            <span className="font-bold text-slate-800 dark:text-slate-200">
-              {settings.activeTranslator === 'makarem'
-                ? 'ترجمه آیت‌الله مکارم: '
-                : settings.activeTranslator === 'fooladvand'
-                ? 'ترجمه استاد فولادوند: '
-                : 'ترجمه استاد انصاریان: '}
-            </span>
-            {getTranslationDisplay(selectedVerse, settings)}
-          </p>
-          {selectedVerse.sajda && (
-            <p className="text-[11px] text-red-500 dark:text-red-400 font-bold">
-              ⚠️ {selectedVerse.sajda.obligatory ? 'این آیه از آیات سجدهٔ واجب است.' : 'این آیه از آیات سجدهٔ مستحب است.'}
-            </p>
-          )}
-        </div>
-      )}
+          </>
+        );
+      })()}
     </div>
   );
 };

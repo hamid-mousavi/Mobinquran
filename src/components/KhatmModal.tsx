@@ -243,16 +243,16 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
   return (
     <div
       id="khatm-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
       onClick={onClose}
     >
       <div
         ref={modalRef}
         id="khatm-modal-container"
-        className={`w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border transition-all overflow-hidden ${
+        className={`w-full max-w-xl max-h-[92vh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl border-2 transition-all overflow-hidden ${
           darkMode
-            ? 'bg-slate-900 border-slate-800 text-slate-100'
-            : 'bg-[#faf8f5] border-stone-200 text-slate-800'
+            ? 'bg-slate-900 border-amber-500/50 text-slate-100'
+            : 'bg-[#f7f3e8] border-amber-600 text-slate-800'
         }`}
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
@@ -272,7 +272,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-stone-200 dark:hover:bg-slate-800 transition-colors text-slate-500"
+            className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-stone-200 dark:hover:bg-slate-800 transition-colors text-slate-500 cursor-pointer"
             aria-label="بستن پنجره ختم"
           >
             <X className="w-5 h-5" />
@@ -283,7 +283,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
         <div className="flex border-b border-stone-200 dark:border-slate-800 text-xs font-bold px-4 pt-2 shrink-0">
           <button
             onClick={() => setActiveTab('status')}
-            className={`pb-2.5 px-4 border-b-2 transition-all ${
+            className={`min-h-[44px] pb-2.5 px-4 border-b-2 transition-all ${
               activeTab === 'status'
                 ? 'border-amber-600 text-amber-700 dark:text-amber-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -293,7 +293,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('new_plan')}
-            className={`pb-2.5 px-4 border-b-2 transition-all ${
+            className={`min-h-[44px] pb-2.5 px-4 border-b-2 transition-all ${
               activeTab === 'new_plan'
                 ? 'border-amber-600 text-amber-700 dark:text-amber-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -304,7 +304,7 @@ export const KhatmModal: React.FC<KhatmModalProps> = ({
         </div>
 
         {/* محتوای مودال */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 pb-[max(env(safe-area-inset-bottom,0px),24px)] space-y-5">
           {activeTab === 'status' ? (
             isPlanLoading && !plan ? (
               <div className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">

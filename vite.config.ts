@@ -23,10 +23,12 @@ export default defineConfig(() => {
           'icon-maskable-192.png',
           'icon-maskable-512.png',
           'fonts/*.woff2',
-          'data/*.json',
+          'data/quran-core-v1.json',
         ],
         injectManifest: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
+          // چیدمان مصحف (۵٫۵ مگابایت) فقط هنگام اولین استفاده با CacheFirst ذخیره می‌شود (sw.ts)
+          globIgnores: ['**/data/mushaf-layout-v1.json'],
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
         },
         devOptions: {

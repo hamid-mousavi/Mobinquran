@@ -346,7 +346,7 @@ export const AIPage: React.FC<AIPageProps> = ({
       }
       if (sId && vNum && onNavigateToVerse) {
         try {
-          window.history.pushState(null, '', `/quran/${sId}/${vNum}`);
+          window.history.replaceState(window.history.state, '', `/quran/${sId}/${vNum}`);
         } catch {}
         onNavigateToVerse(sId, vNum);
         return;
@@ -379,17 +379,17 @@ export const AIPage: React.FC<AIPageProps> = ({
   return (
     <div
       id="ai-fullscreen-chat"
-      className="flex flex-col w-full h-[calc(100dvh-64px-env(safe-area-inset-bottom,0px))] max-h-[calc(100dvh-64px-env(safe-area-inset-bottom,0px))] bg-[#faf8f5] dark:bg-[#070b14] text-slate-800 dark:text-slate-100 overflow-hidden font-['Vazirmatn'] select-none relative"
+      className="flex flex-col w-full h-[calc(100dvh-env(safe-area-inset-bottom,0px))] max-h-[calc(100dvh-env(safe-area-inset-bottom,0px))] bg-[#f7f3e8] dark:bg-[#081917] text-slate-800 dark:text-slate-100 overflow-hidden font-['Vazirmatn'] select-none relative"
       dir="rtl"
     >
       {/* سربرگ اختصاصی دستیار تدبّر */}
-      <header className="shrink-0 h-16 border-b border-stone-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xs">
+      <header className="shrink-0 h-16 border-b border-amber-300/60 dark:border-slate-800/90 bg-stone-50/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xs">
         {/* سمت راست: دکمه بازگشت و عنوان */}
         <div className="flex items-center gap-2 min-w-0">
           {/* دکمه آیکونی بازگشت به نمای قبل در صورت وجود */}
           <button
             onClick={onBack}
-            className="p-2 sm:p-2.5 rounded-xl border border-stone-200 dark:border-slate-700/80 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-95 shrink-0 cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-stone-200 dark:border-slate-700/80 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-95 shrink-0 cursor-pointer"
             title="بازگشت به صفحه قبل"
             aria-label="بازگشت"
           >
@@ -420,7 +420,7 @@ export const AIPage: React.FC<AIPageProps> = ({
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
-            className={`p-2 sm:p-2.5 rounded-xl border relative transition-all active:scale-95 ${
+            className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border relative transition-all active:scale-95 ${
               showHistoryDrawer
                 ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
                 : 'border-stone-200 dark:border-slate-700 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
@@ -438,7 +438,7 @@ export const AIPage: React.FC<AIPageProps> = ({
 
           <button
             onClick={handleStartNewChat}
-            className="p-2 sm:p-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all active:scale-95 shrink-0"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all active:scale-95 shrink-0"
             title="گفتگوی جدید"
             aria-label="گفتگوی جدید"
           >
@@ -564,7 +564,7 @@ export const AIPage: React.FC<AIPageProps> = ({
                   type="button"
                   onClick={() => {
                     try {
-                      window.history.pushState(null, '', `/quran/${currentVerse.surahId}/${currentVerse.verseNumber}`);
+                      window.history.replaceState(window.history.state, '', `/quran/${currentVerse.surahId}/${currentVerse.verseNumber}`);
                     } catch {}
                     onNavigateToVerse?.(currentVerse.surahId, currentVerse.verseNumber);
                   }}

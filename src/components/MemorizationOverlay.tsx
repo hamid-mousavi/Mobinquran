@@ -173,7 +173,7 @@ export const MemorizationOverlay: React.FC<MemorizationOverlayProps> = ({
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-slate-950/70 dark:bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className={`flex-1 overflow-y-auto ${darkMode ? 'bg-slate-950' : 'bg-[#faf8f5]'}`}>
+      <div className={`flex-1 overflow-y-auto ${darkMode ? 'bg-slate-950' : 'bg-[#f7f3e8]'}`}>
         <div className="max-w-3xl mx-auto px-3 sm:px-4 py-5 space-y-4">
           {/* سربرگ */}
           <div className="flex items-center justify-between">

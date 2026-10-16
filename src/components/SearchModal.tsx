@@ -323,10 +323,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       <div
         ref={modalRef}
         id="search-modal-container"
-        className={`w-full sm:max-w-2xl h-[92vh] sm:h-[86vh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl border transition-all duration-200 overflow-hidden ${
+        className={`w-full sm:max-w-2xl h-[92vh] sm:h-[86vh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl border-2 transition-all duration-200 overflow-hidden ${
           darkMode
-            ? 'bg-slate-900 border-slate-800 text-slate-100'
-            : 'bg-[#faf8f5] border-stone-200 text-slate-800'
+            ? 'bg-slate-900 border-amber-500/50 text-slate-100'
+            : 'bg-[#f7f3e8] border-amber-600 text-slate-800'
         }`}
         onClick={(e) => e.stopPropagation()}
         dir="rtl"

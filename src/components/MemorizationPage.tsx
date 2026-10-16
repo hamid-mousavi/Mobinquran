@@ -251,7 +251,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   // -------------------------------------------------------------
   if (currentView === 'menu') {
     return (
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 pb-28 space-y-6" dir="rtl">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 pb-12 space-y-6" dir="rtl">
         {/* سربرگ اصلی صفحه حفظ - بهینه‌سازی شده برای موبایل */}
         <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-slate-800/80">
           <div className="flex items-center gap-2.5">
@@ -460,7 +460,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   // -------------------------------------------------------------
   if (currentView === 'quiz') {
     return (
-      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
+      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-12 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
         <Suspense fallback={
           <div className="text-center py-20 text-slate-400 font-medium animate-pulse">
             در حال بارگذاری استودیو آزمون…
@@ -484,7 +484,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   // -------------------------------------------------------------
   if (currentView === 'discussion') {
     return (
-      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
+      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-12 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
         <Suspense fallback={
           <div className="text-center py-20 text-slate-400 font-medium animate-pulse">
             در حال بارگذاری استودیو مباحثه صوتی…
@@ -508,7 +508,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   // -------------------------------------------------------------
   if (currentView === 'progress') {
     return (
-      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-5 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
+      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-12 space-y-5 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
         {/* سربرگ کارنامه */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
@@ -647,7 +647,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   // ۶. صفحه اختصاصی تمرین و خط‌بر حفظ
   // -------------------------------------------------------------
   return (
-    <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-28 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
+    <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-12 space-y-6 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
       {/* المان صوتی */}
       <audio
         ref={audioRef}

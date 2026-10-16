@@ -90,7 +90,7 @@ export default function MushafPrototype({
         className={`relative rounded-3xl border-2 p-5 sm:p-8 shadow-md transition-colors ${
           darkMode
             ? 'bg-slate-900 border-amber-500/20'
-            : 'bg-[#fcfaf6] border-[#d4b982]/60'
+            : 'bg-[#fbf8ef] border-[#d4b982]/60'
         }`}
       >
         {/* حاشیه تذهیب ساده */}

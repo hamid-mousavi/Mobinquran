@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Bookmark, Sparkles, Copy, BookOpen, Play, Volume2, Loader2, AlertCircle, RefreshCw, Share2 } from 'lucide-react';
+import { Bookmark, Sparkles, Copy, BookOpen, Play, Volume2, Loader2, AlertCircle, RefreshCw, Share2, MoreHorizontal } from 'lucide-react';
 import { Verse, Surah, AppSettings } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
 import { prefersReducedMotion } from '../utils/motion';
@@ -7,6 +7,7 @@ import { shareAyah } from '../utils/shareAyah';
 import { QuranicSurahBanner } from './QuranicOrnament';
 import { toPersianDigits } from '../utils/textNormalization';
 import { recordUserActivity } from '../services/activityTracker';
+import { StarBadge } from './StarBadge';
 
 export interface VerseCandidate {
   verse: Verse;
@@ -371,6 +372,17 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   }, [activePlayingVerseNumber, performScrollToVerse]);
 
   const [selectedVerseNumber, setSelectedVerseNumber] = useState<number | null>(null);
+  // منوی سه‌نقطهٔ آیه (تدبّر هوشمند، تفسیر، کپی، اشتراک)
+  const [moreMenuVerse, setMoreMenuVerse] = useState<number | null>(null);
+  useEffect(() => {
+    if (moreMenuVerse === null) return;
+    const onBack = (e: Event) => {
+      e.preventDefault();
+      setMoreMenuVerse(null);
+    };
+    window.addEventListener('mobin-back', onBack);
+    return () => window.removeEventListener('mobin-back', onBack);
+  }, [moreMenuVerse]);
 
   useEffect(() => {
     setSelectedVerseNumber(null);
@@ -504,87 +516,88 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
 
                 {/* نوار بالایی آیه: فقط جزء و صفحه در هدر کارت (شماره آیه حذف شد و فقط انتهای متن می‌آید) */}
                 <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-stone-100 dark:border-slate-800/80">
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    <StarBadge size={34}>{toPersianDigits(verse.verseNumber)}</StarBadge>
                     <span>جزء {toPersianDigits(verse.juzNumber)}</span>
                     <span>•</span>
                     <span>صفحه {toPersianDigits(verse.pageNumber)}</span>
                   </div>
 
-                  {/* دکمه‌های کنشی روی هر آیه */}
-                  <div className="flex items-center gap-1">
-                    {/* دکمه ترتیل صوتی آیه */}
+                  {/* دکمه‌های کنشی: پخش، نشانک و منوی سه‌نقطه */}
+                  <div className="flex items-center gap-1.5 relative">
                     <button
                       onClick={() => onPlayVerseAudio(verse.verseNumber)}
-                      className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all active:scale-95 ${
                         isCurrentlyPlaying
-                          ? 'bg-amber-500 text-slate-950 shadow'
-                          : darkMode
-                          ? 'hover:bg-slate-800 text-slate-400 hover:text-amber-400'
-                          : 'hover:bg-slate-100 text-slate-500 hover:text-amber-600'
+                          ? 'bg-amber-300 text-teal-900 shadow'
+                          : 'bg-teal-800 text-amber-300'
                       }`}
                       title="پخش ترتیل صوتی این آیه"
+                      aria-label="پخش ترتیل صوتی این آیه"
                     >
                       {isCurrentlyPlaying ? (
-                        <Volume2 className="w-4 h-4 animate-pulse" />
+                        <Volume2 className="w-5 h-5 animate-pulse" />
                       ) : (
-                        <Play className="w-4 h-4 fill-current mr-0.5" />
+                        <Play className="w-5 h-5 fill-current" />
                       )}
                     </button>
 
-                    {/* دکمه دستیار هوش مصنوعی تدبّر برای این آیه */}
-                    <button
-                      onClick={() => onOpenAIFortVerse(verse)}
-                      className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                        darkMode
-                          ? 'bg-teal-950/80 text-teal-300 hover:bg-teal-900 border border-teal-800'
-                          : 'bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200'
-                      }`}
-                      title="تدبّر و پرسش از هوش مصنوعی درباره این آیه"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span className="hidden sm:inline">تدبّر با هوش مصنوعی</span>
-                    </button>
-
-                    {/* تفسیر و جزئیات */}
-                    <button
-                      onClick={() => onOpenVerseAction(verse)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-                      title="مشاهده تفسیر و مقایسه ترجمه‌ها"
-                    >
-                      <BookOpen className="w-4 h-4" />
-                    </button>
-
-                    {/* کپی متن */}
-                    <button
-                      onClick={() => handleCopy(verse)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
-                      title="کپی آیه و ترجمه"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-
-                    {/* اشتراک‌گذاری آیه (متن + کارت تصویری) */}
-                    <button
-                      onClick={() => shareAyah(verse, getTranslationText(verse), currentSurah)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-                      title="اشتراک‌گذاری آیه"
-                      aria-label="اشتراک‌گذاری آیه"
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </button>
-
-                    {/* نشانه‌گذاری آیه (Bookmark) */}
                     <button
                       onClick={() => onToggleBookmark(verse.verseNumber)}
-                      className={`p-1.5 rounded-lg transition-colors ${
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-colors active:scale-95 ${
                         isBookmarked
-                          ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40'
-                          : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          ? 'text-amber-600 bg-amber-100 border-amber-300 dark:bg-amber-950/40 dark:border-amber-700'
+                          : 'text-slate-500 border-stone-300 dark:border-slate-700 hover:text-amber-600'
                       }`}
                       title={isBookmarked ? 'حذف از نشانه‌گذاری‌ها' : 'افزودن به نشانه‌گذاری‌ها'}
+                      aria-label={isBookmarked ? 'حذف نشانک' : 'افزودن نشانک'}
                     >
-                      <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
+                      <Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-current' : ''}`} />
                     </button>
+
+                    <button
+                      onClick={() => setMoreMenuVerse((prev) => (prev === verse.verseNumber ? null : verse.verseNumber))}
+                      className="w-11 h-11 rounded-xl flex items-center justify-center border border-stone-300 dark:border-slate-700 text-teal-700 dark:text-teal-300 active:scale-95"
+                      title="گزینه‌های بیشتر"
+                      aria-label="گزینه‌های بیشتر"
+                      aria-haspopup="menu"
+                      aria-expanded={moreMenuVerse === verse.verseNumber}
+                    >
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
+
+                    {moreMenuVerse === verse.verseNumber && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setMoreMenuVerse(null)} />
+                        <div
+                          role="menu"
+                          className="absolute left-0 top-full mt-1.5 z-40 w-52 p-1.5 rounded-2xl border border-amber-300/70 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl"
+                        >
+                          {[
+                            { label: 'تدبّر هوشمند', icon: Sparkles, tone: 'text-amber-600', run: () => onOpenAIFortVerse(verse) },
+                            { label: 'تفسیر و ترجمه‌ها', icon: BookOpen, tone: 'text-teal-600', run: () => onOpenVerseAction(verse) },
+                            { label: 'کپی آیه و ترجمه', icon: Copy, tone: 'text-slate-500', run: () => handleCopy(verse) },
+                            { label: 'اشتراک‌گذاری', icon: Share2, tone: 'text-slate-500', run: () => shareAyah(verse, getTranslationText(verse), currentSurah) },
+                          ].map((item) => {
+                            const Icon = item.icon;
+                            return (
+                              <button
+                                key={item.label}
+                                role="menuitem"
+                                onClick={() => {
+                                  setMoreMenuVerse(null);
+                                  item.run();
+                                }}
+                                className="w-full min-h-[44px] flex items-center gap-3 px-3 rounded-xl text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-stone-100 dark:hover:bg-slate-800 text-right cursor-pointer"
+                              >
+                                <Icon className={`w-[18px] h-[18px] ${item.tone}`} />
+                                {item.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 

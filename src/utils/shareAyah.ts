@@ -63,7 +63,7 @@ function drawCard(
   ctx.textAlign = 'center';
 
   // سربرگ
-  ctx.fillStyle = darkMode ? '#fbbf24' : '#fcd34d';
+  ctx.fillStyle = darkMode ? '#d9c27d' : '#fcd34d';
   ctx.font = `600 44px ${PERSIAN_FONT}`;
   ctx.fillText(`سوره ${surah.namePersian} — آیه ${verse.verseNumber}`, width / 2, 150);
 

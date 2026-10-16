@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Search, MapPin, Layers, Sparkles, SlidersHorizontal, BookOpen } from 'lucide-react';
 import { Surah } from '../types';
+import { StarBadge } from './StarBadge';
 import { toPersianDigits } from '../utils/textNormalization';
 import { JUZ_STARTS, getJuzStartInfo } from '../data/surahs';
 import { useModalA11y } from '../hooks/useModalA11y';
@@ -13,6 +14,7 @@ interface SurahSelectorModalProps {
   onSelectSurah: (surah: Surah) => void;
   onSelectJuz?: (juzNumber: number) => void;
   onOpenAdvancedSearch?: () => void;
+  initialTab?: 'surahs' | 'juz';
   darkMode: boolean;
 }
 
@@ -24,10 +26,11 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
   onSelectSurah,
   onSelectJuz,
   onOpenAdvancedSearch,
+  initialTab = 'surahs',
   darkMode,
 }) => {
   const modalRef = useModalA11y<HTMLDivElement>({ isOpen, onClose });
-  const [activeTab, setActiveTab] = useState<'surahs' | 'juz'>('surahs');
+  const [activeTab, setActiveTab] = useState<'surahs' | 'juz'>(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [surahTypeFilter, setSurahTypeFilter] = useState<'all' | 'meccan' | 'medinan'>('all');
 
@@ -75,10 +78,10 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
       <div
         ref={modalRef}
         id="modal-surah-selector-content"
-        className={`w-full sm:max-w-2xl h-[88vh] sm:h-[84vh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden transition-all border ${
+        className={`w-full sm:max-w-2xl h-[88vh] sm:h-[84vh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden transition-all border-2 ${
           darkMode
-            ? 'bg-slate-900 border-slate-800 text-slate-100'
-            : 'bg-[#faf8f5] border-stone-200 text-slate-800'
+            ? 'bg-slate-900 border-amber-500/50 text-slate-100'
+            : 'bg-[#f7f3e8] border-amber-600 text-slate-800'
         }`}
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
@@ -135,10 +138,10 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
               placeholder="جستجوی سوره یا جزء (مثلاً یس، بقره، جزء ۳۰)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pr-10 pl-9 py-2.5 text-xs sm:text-sm rounded-xl outline-none border transition-all ${
+              className={`w-full pr-10 pl-9 py-3 text-sm rounded-xl outline-none border transition-all ${
                 darkMode
                   ? 'bg-slate-800 border-slate-700 focus:border-teal-500 text-white placeholder-slate-400'
-                  : 'bg-white border-stone-200 focus:border-teal-600 text-slate-900 placeholder-slate-400 shadow-2xs'
+                  : 'bg-white border-amber-300/70 focus:border-teal-600 text-slate-900 placeholder-slate-400 shadow-2xs'
               }`}
             />
             {searchQuery && (
@@ -156,7 +159,7 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveTab('surahs')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                className={`min-h-[44px] px-3 rounded-xl font-bold transition-all ${
                   activeTab === 'surahs'
                     ? 'bg-teal-600 text-white shadow-xs'
                     : 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
@@ -166,7 +169,7 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
               </button>
               <button
                 onClick={() => setActiveTab('juz')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                className={`min-h-[44px] px-3 rounded-xl font-bold transition-all ${
                   activeTab === 'juz'
                     ? 'bg-teal-600 text-white shadow-xs'
                     : 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
@@ -180,7 +183,7 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setSurahTypeFilter('all')}
-                  className={`px-2 py-1 rounded-lg font-bold transition-all ${
+                  className={`min-h-[40px] px-3 rounded-lg font-bold transition-all ${
                     surahTypeFilter === 'all'
                       ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
                       : 'text-slate-400 hover:text-slate-600'
@@ -190,7 +193,7 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
                 </button>
                 <button
                   onClick={() => setSurahTypeFilter('meccan')}
-                  className={`px-2 py-1 rounded-lg font-bold transition-all ${
+                  className={`min-h-[40px] px-3 rounded-lg font-bold transition-all ${
                     surahTypeFilter === 'meccan'
                       ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
                       : 'text-slate-400 hover:text-slate-600'
@@ -200,7 +203,7 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
                 </button>
                 <button
                   onClick={() => setSurahTypeFilter('medinan')}
-                  className={`px-2 py-1 rounded-lg font-bold transition-all ${
+                  className={`min-h-[40px] px-3 rounded-lg font-bold transition-all ${
                     surahTypeFilter === 'medinan'
                       ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
                       : 'text-slate-400 hover:text-slate-600'
@@ -252,25 +255,15 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
                             : 'bg-teal-50 border-teal-600 text-teal-900 shadow-sm'
                           : darkMode
                           ? 'bg-slate-800/60 border-slate-800 hover:border-slate-700 text-slate-200'
-                          : 'bg-white border-stone-200 hover:border-stone-300 text-slate-800 shadow-2xs'
+                          : 'bg-white border-amber-300/60 hover:border-amber-500 text-slate-800 shadow-2xs'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                            isSelected
-                              ? 'bg-teal-600 text-white'
-                              : darkMode
-                              ? 'bg-slate-800 text-slate-300 border border-slate-700'
-                              : 'bg-stone-100 text-slate-700 border border-stone-200'
-                          }`}
-                        >
-                          {toPersianDigits(surah.id)}
-                        </div>
+                        <StarBadge size={38}>{toPersianDigits(surah.id)}</StarBadge>
 
                         <div className="min-w-0">
                           <div className="font-bold text-sm flex items-center gap-1.5 truncate">
-                            <span className="font-['Amiri'] text-base text-teal-700 dark:text-teal-300 font-bold">
+                            <span className="font-['Amiri_Quran'] text-base text-teal-700 dark:text-teal-300 font-bold">
                               سورة {surah.nameArabic}
                             </span>
                             <span className="text-xs text-slate-500 dark:text-slate-400 font-normal truncate">
@@ -317,13 +310,11 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
                   className={`p-3.5 rounded-2xl border text-right transition-all flex items-start justify-between gap-3 group hover:scale-[1.01] ${
                     darkMode
                       ? 'bg-slate-800/60 border-slate-800 hover:border-amber-500/50 hover:bg-slate-800'
-                      : 'bg-white border-stone-200 hover:border-amber-600/50 hover:bg-amber-50/30 shadow-2xs'
+                      : 'bg-white border-amber-300/60 hover:border-amber-600/50 hover:bg-amber-50/30 shadow-2xs'
                   }`}
                 >
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center font-bold text-sm shrink-0 border border-amber-500/20">
-                      {toPersianDigits(juzInfo.juz)}
-                    </div>
+                    <StarBadge size={40}>{toPersianDigits(juzInfo.juz)}</StarBadge>
 
                     <div className="min-w-0 space-y-0.5">
                       <div className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
@@ -334,7 +325,7 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
                       </div>
 
                       <p
-                        className="text-xs text-slate-600 dark:text-slate-300 font-['Amiri'] truncate"
+                        className="text-xs text-slate-600 dark:text-slate-300 font-['Amiri_Quran'] truncate"
                         dir="rtl"
                       >
                         «{juzInfo.startWordsArabic}»

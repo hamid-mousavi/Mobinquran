@@ -40,12 +40,12 @@ const BACKGROUND_THEMES = [
     name: 'حریم زمردی و محراب',
     gradient: 'from-[#021814] via-[#05332a] to-[#011410]',
     accentGlow: 'rgba(52, 211, 153, 0.18)',
-    accentColor: '#34d399',
+    accentColor: '#4fa89c',
   },
   {
     id: 'midnight',
     name: 'شب قدر و کهکشان',
-    gradient: 'from-[#030712] via-[#0b1329] to-[#020617]',
+    gradient: 'from-[#030712] via-[#0b1329] to-[#0b1f1d]',
     accentGlow: 'rgba(56, 189, 248, 0.18)',
     accentColor: '#38bdf8',
   },
@@ -54,7 +54,7 @@ const BACKGROUND_THEMES = [
     name: 'کهربا و مصحف زرین',
     gradient: 'from-[#170e03] via-[#2e1d08] to-[#120a02]',
     accentGlow: 'rgba(251, 191, 36, 0.18)',
-    accentColor: '#fbbf24',
+    accentColor: '#d9c27d',
   },
   {
     id: 'azure',

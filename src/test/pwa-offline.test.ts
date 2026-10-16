@@ -17,7 +17,7 @@ describe('Phase 2 - PWA & Offline Verification', () => {
     expect(manifest.short_name).toBeTruthy();
     expect(manifest.short_name.length).toBeLessThanOrEqual(12);
     expect(manifest.theme_color).toBe('#134e4a');
-    expect(manifest.background_color).toBe('#0b1120');
+    expect(manifest.background_color).toBe('#0b1f1d');
 
     // بررسی آیکون‌ها
     expect(manifest.icons).toBeDefined();

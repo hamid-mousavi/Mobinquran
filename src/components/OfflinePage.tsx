@@ -249,7 +249,7 @@ export const OfflinePage: React.FC<OfflinePageProps> = ({ darkMode, onBack }) =>
   });
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 pb-28 space-y-6" dir="rtl">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 pb-12 space-y-6" dir="rtl">
       {/* سربرگ صفحه با بازگشت به قرآن */}
       <div className="flex items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-slate-800">
         <div className="flex items-center gap-3">

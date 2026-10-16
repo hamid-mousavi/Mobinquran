@@ -53,6 +53,18 @@ function modelFor(provider: ProviderName): string {
   }[provider];
 }
 
+/**
+ * مدل‌های «تفکرکننده» (Qwen 3.x و GPT-OSS روی Groq) به‌صورت پیش‌فرض ابتدا استدلال می‌کنند و
+ * توکن‌های استدلال از max_tokens کم می‌شود؛ با سقف ۸۰۰ توکن معمولاً قبل از نوشتن پاسخ تمام می‌شود
+ * و پاسخ خالی برمی‌گردد. برای گفتگوی کوتاه JSON، استدلال را خاموش/حداقل می‌کنیم.
+ */
+function providerTuning(provider: Exclude<ProviderName, 'gemini'>, model: string): Record<string, unknown> {
+  if (provider !== 'groq') return {};
+  if (model.startsWith('qwen/')) return { reasoning_effort: 'none' };
+  if (model.startsWith('openai/gpt-oss')) return { reasoning_effort: 'low', include_reasoning: false };
+  return {};
+}
+
 async function callOpenAiStyle(provider: Exclude<ProviderName, 'gemini'>, key: string, request: ProviderRequest): Promise<{ content: string; webChunks?: Array<{ title: string; uri: string }> }> {
   const response = await fetch(urls[provider], {
     method: 'POST',
@@ -66,6 +78,7 @@ async function callOpenAiStyle(provider: Exclude<ProviderName, 'gemini'>, key: s
     },
     body: JSON.stringify({
       model: modelFor(provider),
+      ...providerTuning(provider, modelFor(provider)),
       messages: [
         { role: 'system', content: request.system },
         { role: 'user', content: request.user },
@@ -152,9 +165,13 @@ export async function generateWithFallback(request: ProviderRequest): Promise<{ 
       return { content: res.content, provider, webChunks: res.webChunks };
     } catch (error) {
       lastError = error;
-      if (error instanceof ProviderError && error.status !== 404 && error.status !== 408 && error.status !== 429 && error.status < 500) {
-        break;
-      }
+      // ثبت علت دقیق (بدون کلید) تا در لاگ سرور دیده شود؛ سپس سراغ ارائه‌دهندهٔ بعدی می‌رویم
+      console.warn(JSON.stringify({
+        event: 'ai_provider_failed',
+        provider,
+        status: error instanceof ProviderError ? error.status : undefined,
+        message: error instanceof Error ? error.message.slice(0, 160) : String(error).slice(0, 160),
+      }));
     }
   }
   throw lastError instanceof Error ? lastError : new Error('all AI providers failed');

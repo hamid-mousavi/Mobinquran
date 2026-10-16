@@ -14,15 +14,13 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "sync:sounds": "node scripts/sync-azan-sounds.mjs",
-    "build:android": "vite build && node scripts/sync-azan-sounds.mjs && cap sync android",
+    "build:android": "vite build && cap sync android",
     "open:android": "cap open android"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.3",
-    "@capacitor/local-notifications": "^8.3.1",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",

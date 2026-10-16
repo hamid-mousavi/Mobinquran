@@ -2,6 +2,74 @@
 
 @theme {
   --breakpoint-xs: 380px;
+
+  /* ===== پالت یکپارچه قرآن مبین =====
+     سبز تیره + طلایی + کرم گرم. با بازتعریف پالت‌های Tailwind، همهٔ کلاس‌های موجود
+     (teal / emerald / amber / stone / slate) بدون تغییر در کامپوننت‌ها هماهنگ می‌شوند. */
+
+  /* سبز اصلی (برند): 800 = #134e4a ، 600 = #0f766e */
+  --color-teal-50: #eaf6f3;
+  --color-teal-100: #dcf3ef;
+  --color-teal-200: #bfe3dc;
+  --color-teal-300: #8fcdc3;
+  --color-teal-400: #4fa89c;
+  --color-teal-500: #1d8a7d;
+  --color-teal-600: #0f766e;
+  --color-teal-700: #0d5f59;
+  --color-teal-800: #134e4a;
+  --color-teal-900: #0f3d3a;
+  --color-teal-950: #0a2a28;
+
+  --color-emerald-50: #eaf6f3;
+  --color-emerald-100: #dcf3ef;
+  --color-emerald-200: #bfe3dc;
+  --color-emerald-300: #8fcdc3;
+  --color-emerald-400: #4fa89c;
+  --color-emerald-500: #1d8a7d;
+  --color-emerald-600: #0f766e;
+  --color-emerald-700: #0d5f59;
+  --color-emerald-800: #134e4a;
+  --color-emerald-900: #0f3d3a;
+  --color-emerald-950: #0a2a28;
+
+  /* طلایی (کادرها، آیکن‌ها و تأکید): 600 = #a8802c ، 300 = #e8d9a8 */
+  --color-amber-50: #fbf7ea;
+  --color-amber-100: #f6edd0;
+  --color-amber-200: #efe3b8;
+  --color-amber-300: #e8d9a8;
+  --color-amber-400: #d9c27d;
+  --color-amber-500: #c4a24f;
+  --color-amber-600: #a8802c;
+  --color-amber-700: #8a6a1f;
+  --color-amber-800: #6b5218;
+  --color-amber-900: #4d3b12;
+  --color-amber-950: #2e230a;
+
+  /* کرم گرم (زمینه و کارت‌های روشن) */
+  --color-stone-50: #fbf8ef;
+  --color-stone-100: #f7f3e8;
+  --color-stone-200: #ebe5cf;
+  --color-stone-300: #e3d6ab;
+  --color-stone-400: #b9b39a;
+  --color-stone-500: #7d7c6e;
+  --color-stone-600: #5f625a;
+  --color-stone-700: #454a44;
+  --color-stone-800: #2b3330;
+  --color-stone-900: #1c2523;
+  --color-stone-950: #0f1a18;
+
+  /* خنثی با کَسِ سبز (متن، حاشیه و زمینهٔ حالت شب) */
+  --color-slate-50: #f5f7f4;
+  --color-slate-100: #e9eeec;
+  --color-slate-200: #d4dcd9;
+  --color-slate-300: #aebbb7;
+  --color-slate-400: #82938f;
+  --color-slate-500: #5b6b68;
+  --color-slate-600: #465552;
+  --color-slate-700: #2a3f3c;
+  --color-slate-800: #14312e;
+  --color-slate-900: #0f2a28;
+  --color-slate-950: #0b1f1d;
 }
 
 /* استفاده از کلاس .dark برای کنترل کامل حالت شب (به‌جای تنظیمات سیستم‌عامل) */
@@ -62,6 +130,17 @@ body,
   font-weight: normal;
   font-style: normal;
   font-display: swap;
+}
+
+/* زمینهٔ سراسری هماهنگ با تم (روشن: کرم، شب: سبز-مشکی) */
+body {
+  background-color: #f7f3e8;
+  color: #14312e;
+  font-family: 'Vazirmatn', system-ui, sans-serif;
+}
+.dark body {
+  background-color: #0b1f1d;
+  color: #e9eeec;
 }
 
 /* احترام به کاهش حرکت کاربر (P3-T6): حذف انیمیشن/انتقال غیرضروری وقتی پیش-کاهش فعال است */

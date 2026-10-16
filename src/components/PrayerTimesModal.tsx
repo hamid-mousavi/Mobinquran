@@ -12,7 +12,6 @@ import {
   Moon,
   Info,
   Check,
-  Volume2,
   CheckCircle2,
   AlertCircle,
   Navigation,
@@ -35,9 +34,8 @@ import {
   PROVINCES_LIST,
 } from '../services/prayerTimesService';
 import { toPersianDigits } from '../utils/textNormalization';
-import { AzanSettingsSection } from './AzanSettingsSection';
 
-export type PrayerModalTab = 'times' | 'azan' | 'qibla' | 'cities';
+export type PrayerModalTab = 'times' | 'qibla' | 'cities';
 
 interface PrayerTimesModalProps {
   isOpen: boolean;
@@ -74,7 +72,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
   const [customCoords, setCustomCoords] = useState(getSavedCustomCoords());
   const [citySearch, setCitySearch] = useState('');
   const [selectedProvince, setSelectedProvince] = useState<string>('همه');
-  const [activeTab, setActiveTab] = useState<PrayerModalTab>(initialTab === 'azan' ? 'times' : initialTab);
+  const [activeTab, setActiveTab] = useState<PrayerModalTab>(initialTab);
   const [now, setNow] = useState<Date>(new Date());
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
   const [unwrappedHeading, setUnwrappedHeading] = useState<number | null>(null);
@@ -90,7 +88,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
   // هماهنگ‌سازی تب با initialTab هنگام باز شدن
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(initialTab === 'azan' ? 'times' : initialTab);
+      setActiveTab(initialTab);
       setGpsMessage(null);
     }
   }, [isOpen, initialTab]);
@@ -367,19 +365,6 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
             <Clock className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">اوقات</span>
           </button>
-          {/* تب تنظیمات اذان فعلاً کامنت شد:
-          <button
-            onClick={() => setActiveTab('azan')}
-            className={`py-2 px-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer min-w-0 truncate ${
-              activeTab === 'azan'
-                ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Volume2 className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">تنظیمات اذان</span>
-          </button>
-          */}
           <button
             onClick={() => setActiveTab('qibla')}
             className={`py-2 px-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer min-w-0 truncate ${
@@ -624,9 +609,6 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
               </div>
             )}
 
-            {/* ۲. تب تنظیمات اذان (فعلاً طبق درخواست کامنت شده است) */}
-            {/* {activeTab === 'azan' && <AzanSettingsSection darkMode={darkMode} />} */}
-
             {/* ۳. تب قبله‌نما با قبله‌نمای دقیق ریاضی SVG و سنسور */}
             {activeTab === 'qibla' && (
               <div className="space-y-3.5 flex flex-col items-center">
@@ -708,12 +690,12 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                       <radialGradient id="dialBg" cx="50%" cy="50%" r="50%">
                         <stop offset="0%" stopColor={darkMode ? '#1e293b' : '#ffffff'} />
                         <stop offset="85%" stopColor={darkMode ? '#0f172a' : '#f8fafc'} />
-                        <stop offset="100%" stopColor={darkMode ? '#020617' : '#e2e8f0'} />
+                        <stop offset="100%" stopColor={darkMode ? '#0b1f1d' : '#e2e8f0'} />
                       </radialGradient>
                       {/* گرادیان عقربه قبله */}
                       <linearGradient id="qiblaNeedleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#0d9488" />
-                        <stop offset="50%" stopColor="#14b8a6" />
+                        <stop offset="0%" stopColor="#0f766e" />
+                        <stop offset="50%" stopColor="#1d8a7d" />
                         <stop offset="100%" stopColor="#0f766e" />
                       </linearGradient>
                       {/* گرادیان عقربه شمال */}
@@ -729,7 +711,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                       cy="130"
                       r="126"
                       fill="url(#dialBg)"
-                      stroke={isFacingQibla ? '#10b981' : '#14b8a6'}
+                      stroke={isFacingQibla ? '#1d8a7d' : '#1d8a7d'}
                       strokeWidth={isFacingQibla ? '4.5' : '2.5'}
                       className="transition-colors duration-300"
                     />
@@ -750,7 +732,7 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                             y1="10"
                             x2="130"
                             y2={deg % 90 === 0 ? '22' : '16'}
-                            stroke={deg % 90 === 0 ? '#0d9488' : '#94a3b8'}
+                            stroke={deg % 90 === 0 ? '#0f766e' : '#94a3b8'}
                             strokeWidth={deg % 90 === 0 ? '2.5' : '1'}
                           />
                         </g>
@@ -837,15 +819,15 @@ export const PrayerTimesModal: React.FC<PrayerTimesModalProps> = ({
                       />
 
                       {/* نشان کعبه در نوک عقربه */}
-                      <circle cx="130" cy="42" r="12" fill="#0d9488" stroke="#fbbf24" strokeWidth="2.5" />
+                      <circle cx="130" cy="42" r="12" fill="#0f766e" stroke="#d9c27d" strokeWidth="2.5" />
                       <text x="130" y="46" textAnchor="middle" fontSize="12">
                         🕋
                       </text>
                     </g>
 
                     {/* مرکز فلزی قطب‌نما */}
-                    <circle cx="130" cy="130" r="16" fill={darkMode ? '#334155' : '#e2e8f0'} stroke="#0d9488" strokeWidth="2" />
-                    <circle cx="130" cy="130" r="8" fill="#0d9488" />
+                    <circle cx="130" cy="130" r="16" fill={darkMode ? '#334155' : '#e2e8f0'} stroke="#0f766e" strokeWidth="2" />
+                    <circle cx="130" cy="130" r="8" fill="#0f766e" />
                     <circle cx="130" cy="130" r="3" fill="#ffffff" />
                   </svg>
 

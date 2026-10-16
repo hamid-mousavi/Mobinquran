@@ -8,17 +8,6 @@ import {
   CITIES_LIST,
   PROVINCES_LIST,
 } from '../services/prayerTimesService';
-import {
-  MUEZZINS_LIST,
-  PRE_AZAN_DUAS_LIST,
-  getAzanSettings,
-  saveAzanSettings,
-  getPrayersToSchedule,
-  getDownloadedDuaIds,
-  playActualAzan,
-  stopActualAzan,
-  stopAllAzanAudio,
-} from '../services/azanService';
 
 describe('Prayer Times & Qibla Calculation', () => {
   it('calculates valid prayer times for Tehran without errors', () => {
@@ -88,50 +77,6 @@ describe('Prayer Times & Qibla Calculation', () => {
     expect(next.remainingMinutes).toBeGreaterThanOrEqual(0);
   });
 
-  it('contains ONLY authentic Shia Muezzins with Ali Waliullah badge', () => {
-    expect(MUEZZINS_LIST.length).toBeGreaterThanOrEqual(6);
-    expect(MUEZZINS_LIST.every((m) => m.isShia === true)).toBe(true);
-
-    const moazenzadeh = MUEZZINS_LIST.find((m) => m.id === 'moazenzadeh');
-    expect(moazenzadeh).toBeDefined();
-    expect(moazenzadeh?.name).toContain('مؤذن‌زاده');
-
-    const sobhdel = MUEZZINS_LIST.find((m) => m.id === 'sobhdel');
-    expect(sobhdel).toBeDefined();
-
-    // Verify non-Shia reciters were removed
-    expect(MUEZZINS_LIST.some((m) => m.id === 'abdulbasit')).toBe(false);
-    expect(MUEZZINS_LIST.some((m) => m.id === 'ali_mullah')).toBe(false);
-  });
-
-  it('contains Pre-Azan Duas (Salawat Imam Reza, Dua Faraj, etc.)', () => {
-    expect(PRE_AZAN_DUAS_LIST.length).toBeGreaterThanOrEqual(2);
-    const salawatReza = PRE_AZAN_DUAS_LIST.find((d) => d.id === 'salawat_reza');
-    expect(salawatReza).toBeDefined();
-    expect(salawatReza?.name).toContain('امام رضا');
-
-    const duaFaraj = PRE_AZAN_DUAS_LIST.find((d) => d.id === 'dua_faraj');
-    expect(duaFaraj).toBeDefined();
-    expect(duaFaraj?.name).toContain('فرج');
-
-    // تایید حذف دعای ربنا، تواشیح و مناجات منظومه بنا به درخواست کاربر
-    expect(PRE_AZAN_DUAS_LIST.some((d) => d.id === 'rabbana')).toBe(false);
-    expect(PRE_AZAN_DUAS_LIST.some((d) => d.id === 'asmaul_husna')).toBe(false);
-    expect(PRE_AZAN_DUAS_LIST.some((d) => d.id === 'monajat_masjed_kufa')).toBe(false);
-  });
-
-  it('provides default Shia Azan settings with in-app sound enabled and no asr/isha alerts', () => {
-    const defaultSettings = getAzanSettings();
-    expect(defaultSettings.selectedMuezzinId).toBe('moazenzadeh');
-    expect(defaultSettings.selectedPreDuaId).toBe('salawat_reza');
-    expect(defaultSettings.inAppSoundEnabled).toBe(true);
-    expect(defaultSettings.playPreAzanDua).toBe(true);
-    // تأیید تمرکز روی ۳ وقت اصلی و حذف asrAlert و ishaAlert
-    expect('asrAlert' in defaultSettings).toBe(false);
-    expect('ishaAlert' in defaultSettings).toBe(false);
-  });
-
-  // تست‌های فاز ۳: انطباق با جدول مرجع مؤسسه ژئوفیزیک دانشگاه تهران با تلورانس حداکثر ۲ دقیقه
   describe('Phase 3 — Reference Prayer Times & Robustness', () => {
     // تابع کمکی تبدیل HH:mm به دقیقه از ابتدای روز
     const timeToMinutes = (t: string) => {
@@ -290,82 +235,4 @@ describe('Prayer Times & Qibla Calculation', () => {
     });
   });
 
-  // تست‌های فاز ۴-الف: منطق اذان در نسخه وب و PWA
-  describe('Phase 4-A — Azan Logic, Scheduling & Memory Safety', () => {
-    it('verifies dua_salamati is removed from PRE_AZAN_DUAS_LIST and defaults as requested', () => {
-      expect(PRE_AZAN_DUAS_LIST.some((d) => d.id === 'dua_salamati')).toBe(false);
-      expect(getDownloadedDuaIds()).not.toContain('dua_salamati');
-    });
-
-    it('pure function getPrayersToSchedule correctly schedules today and tomorrow alarms', () => {
-      const tehran = CITIES_LIST.find((c) => c.id === 'tehran')!;
-      // فرض: ساعت ۱۰ صبح است (قبل از ظهر و بعد از فجر امروز)
-      const baseDate = new Date(2026, 2, 21);
-      const todayTimes = calculatePrayerTimes(tehran, baseDate);
-
-      const nextDate = new Date(2026, 2, 22);
-      const tomorrowTimes = calculatePrayerTimes(tehran, nextDate);
-
-      // شبیه‌سازی زمان جاری: ساعت ۱۰:۰۰ صبح به وقت تهران
-      // در تهران (UTC+3.5)، ساعت ۱۰:۰۰ معادل ساعت ۰۶:۳۰ UTC است
-      const simulatedNow = new Date(Date.UTC(2026, 2, 21, 6, 30, 0));
-
-      const settings = {
-        ...getAzanSettings(),
-        fajrAlert: true,
-        dhuhrAlert: true,
-        maghribAlert: true,
-        preAlertMinutes: 10 as const, // هشدار ۱۰ دقیقه قبل
-      };
-
-      const alarms = getPrayersToSchedule(todayTimes, tomorrowTimes, simulatedNow, settings, 'مؤذن‌زاده');
-
-      // چون ساعت ۱۰ است:
-      // فجر امروز گذشته است، بنابراین ظهر و مغرب امروز باید زمان‌بندی شوند (همراه پیش‌هشدار)
-      // فردا نیز هر ۳ وقت (فجر، ظهر، مغرب) باید زمان‌بندی شوند
-      expect(alarms.length).toBeGreaterThanOrEqual(4);
-
-      // بررسی مرتب‌سازی زمانی صعودی
-      for (let i = 0; i < alarms.length - 1; i++) {
-        expect(alarms[i].timestamp).toBeLessThanOrEqual(alarms[i + 1].timestamp);
-      }
-
-      // ظهر امروز باید در لیست باشد
-      const dhuhrToday = alarms.find((a) => a.prayerKey === 'dhuhr' && a.type === 'azan');
-      expect(dhuhrToday).toBeDefined();
-
-      // پیش‌هشدار ظهر امروز (۱۰ دقیقه قبل از ظهر) باید قبل از خود ظهر باشد
-      const preDhuhr = alarms.find((a) => a.prayerKey === 'dhuhr' && a.type === 'pre_alert');
-      expect(preDhuhr).toBeDefined();
-      expect(preDhuhr!.timestamp).toBe(dhuhrToday!.timestamp - 10 * 60 * 1000);
-    });
-
-    it('respects alert toggles (e.g. disabling fajrAlert excludes it from scheduling)', () => {
-      const tehran = CITIES_LIST.find((c) => c.id === 'tehran')!;
-      const todayTimes = calculatePrayerTimes(tehran, new Date(2026, 2, 21));
-      const tomorrowTimes = calculatePrayerTimes(tehran, new Date(2026, 2, 22));
-      const simulatedNow = new Date(Date.UTC(2026, 2, 21, 0, 0, 0));
-
-      const settings = {
-        ...getAzanSettings(),
-        fajrAlert: false, // غیرفعال کردن فجر
-        dhuhrAlert: true,
-        maghribAlert: true,
-      };
-
-      const alarms = getPrayersToSchedule(todayTimes, tomorrowTimes, simulatedNow, settings);
-      expect(alarms.some((a) => a.prayerKey === 'fajr')).toBe(false);
-      expect(alarms.some((a) => a.prayerKey === 'dhuhr')).toBe(true);
-      expect(alarms.some((a) => a.prayerKey === 'maghrib')).toBe(true);
-    });
-
-    it('provides actual azan playback and audio stopper APIs', () => {
-      expect(typeof playActualAzan).toBe('function');
-      expect(typeof stopActualAzan).toBe('function');
-      expect(typeof stopAllAzanAudio).toBe('function');
-
-      // اجرای تابع توقف بدون پرتاب خطا
-      expect(() => stopAllAzanAudio()).not.toThrow();
-    });
-  });
 });

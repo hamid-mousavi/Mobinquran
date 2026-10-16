@@ -123,7 +123,7 @@ export const AutoScrollControls: React.FC<AutoScrollControlsProps> = ({
   return (
     <div
       id="auto-scroll-floating-bar"
-      className="fixed bottom-20 sm:bottom-16 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-sm transition-all duration-300 select-none animate-fadeIn"
+      className="fixed bottom-6 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-sm transition-all duration-300 select-none animate-fadeIn"
       dir="rtl"
     >
       <div

@@ -673,31 +673,39 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     <>
       <div
         id="audio-player-bar-container"
-        className={`fixed left-0 right-0 z-40 border-t backdrop-blur-md transition-all select-none ${
+        className={`fixed left-0 right-0 z-40 border-t-2 backdrop-blur-md transition-all select-none ${
           hasBottomNav ? 'bottom-[60px]' : 'bottom-0'
         } ${
           darkMode
-            ? 'bg-slate-900/95 border-slate-800 text-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.5)]'
-            : 'bg-white/95 border-stone-200 text-slate-800 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]'
+            ? 'bg-slate-900/95 border-amber-500/40 text-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.5)]'
+            : 'bg-stone-50/95 border-amber-600 text-slate-800 shadow-[0_-4px_20px_rgba(19,78,74,0.12)]'
         }`}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         dir="rtl"
       >
-        {/* نوار پیشرفت باریک در بالای پلیر */}
+        {/* نوار پیشرفت (ناحیهٔ لمس بزرگ‌تر از خط نمایش) */}
         <div
-          className="h-1 w-full bg-slate-200 dark:bg-slate-800 cursor-pointer overflow-hidden"
+          className="h-4 w-full flex items-center px-3 cursor-pointer"
+          role="slider"
+          aria-label="موقعیت پخش"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(audioProgress)}
           onClick={(e) => {
             if (!audioRef.current || !audioRef.current.duration) return;
             const rect = e.currentTarget.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
             const width = rect.width;
             const percent = 1 - clickX / width;
-            audioRef.current.currentTime = percent * audioRef.current.duration;
+            audioRef.current.currentTime = Math.min(1, Math.max(0, percent)) * audioRef.current.duration;
           }}
         >
-          <div
-            className="h-full bg-gradient-to-l from-teal-500 to-amber-500 transition-all duration-150"
-            style={{ width: `${audioProgress}%` }}
-          />
+          <div className="h-1.5 w-full rounded-full bg-stone-200 dark:bg-slate-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-l from-amber-400 to-teal-600 transition-all duration-150"
+              style={{ width: `${audioProgress}%` }}
+            />
+          </div>
         </div>
 
         {/* پیام خطای پخش در صورت بروز با راهنمای شفاف و دکمه‌های کنشی */}
@@ -759,130 +767,133 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
           </div>
         )}
 
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2 flex items-center justify-between gap-2">
-          {/* بخش راست: مشخصات قاری و آیه جاری */}
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 pt-0.5 pb-2 space-y-2">
+          {/* ردیف اول: قاری و آیهٔ جاری + دکمه‌های اصلی پخش */}
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setShowReciterModal(true)}
               className="relative group shrink-0"
               title={`قاری: ${currentReciter.name} (کلیک جهت مشاهده بیوگرافی یا تغییر)`}
+              aria-label={`قاری: ${currentReciter.name}`}
             >
               <div
-                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm border-2 border-teal-600 shadow-sm group-hover:scale-105 transition-all ${currentReciter.avatarColor}`}
+                className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm border-2 border-amber-500 shadow-sm group-hover:scale-105 transition-transform ${currentReciter.avatarColor}`}
               >
                 {currentReciter.initials}
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-teal-600 border-2 border-white dark:border-slate-900 rounded-full flex items-center justify-center text-white text-[8px]">
-                <Info className="w-2 h-2" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-teal-700 border-2 border-white dark:border-slate-900 rounded-full flex items-center justify-center text-white">
+                <Info className="w-2.5 h-2.5" />
               </span>
             </button>
 
-            <div
-              className="min-w-0 text-right cursor-pointer"
-              onClick={() => setShowReciterModal(true)}
-            >
-              <div className="font-bold text-xs sm:text-sm truncate hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
+            <div className="flex-1 min-w-0 text-right cursor-pointer" onClick={() => setShowReciterModal(true)}>
+              <div className="font-bold text-[13px] sm:text-sm truncate hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
                 سوره {currentSurah.nameArabic} : آیه {toPersianDigits(currentPlayingVerseNumber)}
               </div>
-              <div className="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1.5 truncate">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 truncate">
                 <span className="truncate">{currentReciter.name}</span>
                 {repeatTarget > 1 && (
-                  <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-1 rounded">
+                  <span className="text-amber-700 dark:text-amber-400 font-bold bg-amber-500/10 px-1 rounded shrink-0">
                     تکرار {toPersianDigits(currentRepeatIndex)}/{repeatTarget >= 999 ? '∞' : toPersianDigits(repeatTarget)}
                   </span>
                 )}
               </div>
             </div>
+
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                onClick={handlePrevVerse}
+                className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 transition-colors active:scale-95"
+                title="آیه قبلی"
+                aria-label="آیه قبلی"
+              >
+                <SkipForward className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={togglePlay}
+                className="w-12 h-12 rounded-full bg-teal-800 hover:bg-teal-900 text-amber-300 flex items-center justify-center shadow-lg transition-all active:scale-95"
+                title={isLoadingAudio ? 'در حال بارگذاری صوت...' : isPlaying ? 'توقف' : 'پخش ترتیل'}
+                aria-label={isPlaying ? 'توقف' : 'پخش ترتیل'}
+              >
+                {isLoadingAudio ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : isPlaying ? (
+                  <Pause className="w-5 h-5 fill-current" />
+                ) : (
+                  <Play className="w-5 h-5 fill-current mr-0.5" />
+                )}
+              </button>
+
+              <button
+                onClick={handleNextVerse}
+                className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 transition-colors active:scale-95"
+                title="آیه بعدی"
+                aria-label="آیه بعدی"
+              >
+                <SkipBack className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          {/* بخش مرکز: دکمه‌های اصلی پخش (آیه قبل، پخش/مکث، آیه بعد) */}
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            <button
-              onClick={handlePrevVerse}
-              className="p-1.5 sm:p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-colors"
-              title="آیه قبلی"
-            >
-              <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-
-            <button
-              onClick={togglePlay}
-              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg hover:shadow-teal-500/20 transition-all active:scale-95 cursor-pointer"
-              title={isLoadingAudio ? 'در حال بارگذاری صوت...' : isPlaying ? 'توقف' : 'پخش ترتیل'}
-            >
-              {isLoadingAudio ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : isPlaying ? (
-                <Pause className="w-4 h-4 sm:w-5 sm:h-5" />
-              ) : (
-                <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current mr-0.5" />
-              )}
-            </button>
-
-            <button
-              onClick={handleNextVerse}
-              className="p-1.5 sm:p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-colors"
-              title="آیه بعدی"
-            >
-              <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          </div>
-
-          {/* بخش چپ: دسته‌بندی دکمه‌ها (صف پخش، تنظیمات ترتیل، صدا، بستن) */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* دکمه صف پخش (پلی‌لیست سوره‌ها) */}
-            <button
-              onClick={() => setShowQueueMenu(true)}
-              className="relative p-1.5 sm:p-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-black/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-colors"
-              title="صف پخش سوره‌ها"
-            >
-              <ListMusic className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden md:inline mr-1 text-xs font-medium">صف پخش</span>
-            </button>
-
-            {/* دکمه دسته‌بندی‌شده تنظیمات ترتیل (تکرار + سرعت + تایمر خواب) */}
-            <button
-              onClick={() => setShowOptionsModal(true)}
-              className={`relative flex items-center gap-1 p-1.5 sm:p-2 rounded-xl border transition-colors text-xs font-bold ${
-                hasActiveOptionsBadge
-                  ? 'border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                  : 'border-slate-300 dark:border-slate-700 hover:bg-black/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300'
-              }`}
-              title="تنظیمات ترتیل (تکرار، سرعت و تایمر خواب)"
-            >
-              <SlidersHorizontal className="w-4 h-4 sm:w-4 sm:h-4" />
-              <span className="hidden md:inline">تنظیمات</span>
-              {hasActiveOptionsBadge && (
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
-              )}
-            </button>
-
-            {/* کلید قطع / وصل صدا */}
-            <button
-              onClick={() => {
-                if (audioRef.current) {
-                  audioRef.current.muted = !isMuted;
-                  setIsMuted(!isMuted);
-                }
-              }}
-              className="p-1.5 sm:p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-500"
-              title={isMuted ? 'صدا وصل' : 'بی‌صدا'}
-            >
-              {isMuted ? <VolumeX className="w-4 h-4 text-red-500" /> : <Volume2 className="w-4 h-4" />}
-            </button>
-
-            {/* بستن پلیر */}
-            <button
-              onClick={() => {
-                if (audioRef.current) audioRef.current.pause();
-                setIsPlaying(false);
-                onClose();
-              }}
-              className="p-1.5 sm:p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600"
-              title="بستن پلیر"
-            >
-              <X className="w-4 h-4" />
-            </button>
+          {/* ردیف دوم: ابزارها با برچسب (صف پخش، تنظیمات ترتیل، صدا، بستن) */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              {
+                key: 'queue',
+                label: 'صف پخش',
+                icon: <ListMusic className="w-4 h-4" />,
+                title: 'صف پخش سوره‌ها',
+                onClick: () => setShowQueueMenu(true),
+              },
+              {
+                key: 'options',
+                label: 'تنظیمات',
+                icon: <SlidersHorizontal className="w-4 h-4" />,
+                title: 'تنظیمات ترتیل (تکرار، سرعت و تایمر خواب)',
+                active: hasActiveOptionsBadge,
+                onClick: () => setShowOptionsModal(true),
+              },
+              {
+                key: 'mute',
+                label: isMuted ? 'صدا وصل' : 'بی‌صدا',
+                icon: isMuted ? <VolumeX className="w-4 h-4 text-red-500" /> : <Volume2 className="w-4 h-4" />,
+                title: isMuted ? 'صدا وصل' : 'بی‌صدا',
+                onClick: () => {
+                  if (audioRef.current) {
+                    audioRef.current.muted = !isMuted;
+                    setIsMuted(!isMuted);
+                  }
+                },
+              },
+              {
+                key: 'close',
+                label: 'بستن',
+                icon: <X className="w-4 h-4" />,
+                title: 'بستن پلیر',
+                onClick: () => {
+                  if (audioRef.current) audioRef.current.pause();
+                  setIsPlaying(false);
+                  onClose();
+                },
+              },
+            ].map((btn) => (
+              <button
+                key={btn.key}
+                onClick={btn.onClick}
+                title={btn.title}
+                aria-label={btn.title}
+                className={`relative min-h-[40px] flex items-center justify-center gap-1.5 rounded-xl border text-[11px] font-bold transition-colors cursor-pointer active:scale-[0.97] ${
+                  btn.active
+                    ? 'border-amber-500 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                    : 'border-amber-300/60 dark:border-slate-700 bg-white/60 dark:bg-transparent text-slate-700 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/10'
+                }`}
+              >
+                {btn.icon}
+                <span>{btn.label}</span>
+                {btn.active && <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
+              </button>
+            ))}
           </div>
         </div>
 

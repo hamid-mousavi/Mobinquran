@@ -1,16 +1,8 @@
-import React from 'react';
-import {
-  BookOpen,
-  Search,
-  Moon,
-  Sun,
-  FileText,
-  ChevronsDown,
-  ChevronDown,
-  Settings,
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Search, ChevronDown, ChevronsDown, Menu } from 'lucide-react';
 import { Surah, ViewMode } from '../types';
 import { toPersianDigits } from '../utils/textNormalization';
+import { StarBadge } from './StarBadge';
 
 interface HeaderProps {
   currentSurah: Surah;
@@ -19,130 +11,143 @@ interface HeaderProps {
   onOpenSurahList: () => void;
   onOpenSurahSearch: () => void;
   darkMode: boolean;
-  onToggleDarkMode: () => void;
+  onToggleDarkMode?: () => void;
   isAutoScrollActive: boolean;
   onToggleAutoScroll: () => void;
   onOpenSettings?: () => void;
   onToggleHomeView?: () => void;
+  onOpenMenu?: () => void;
 }
 
+const QURAN_FONT = "'Amiri Quran', 'UthmanTaha', serif";
+const iconBtn =
+  'w-11 h-11 shrink-0 flex items-center justify-center rounded-xl border border-amber-300/70 dark:border-slate-700 bg-stone-50 dark:bg-slate-900 text-teal-700 dark:text-teal-300 hover:bg-stone-100 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer';
+
+/**
+ * هدر سبک قرائت: منو، چیپ انتخاب سوره، Aa، جستجو و سوییچ «مصحف | آیه‌به‌آیه».
+ * هنگام اسکرول به پایین مخفی و با اسکرول به بالا دوباره نمایان می‌شود.
+ */
 export const Header: React.FC<HeaderProps> = ({
   currentSurah,
   viewMode,
   onToggleViewMode,
   onOpenSurahList,
   onOpenSurahSearch,
-  darkMode,
-  onToggleDarkMode,
   isAutoScrollActive,
   onToggleAutoScroll,
   onOpenSettings,
-  onToggleHomeView,
+  onOpenMenu,
 }) => {
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const delta = y - last;
+      if (Math.abs(delta) < 8) return;
+      setHidden(delta > 0 && y > 96);
+      last = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const isMushaf = viewMode === 'mushaf-page';
+  const segBase = 'flex-1 min-h-[40px] rounded-xl text-[13px] font-bold transition-colors cursor-pointer';
+  const segOn = 'bg-teal-800 text-white font-extrabold';
+  const segOff = 'text-slate-600 dark:text-slate-300';
+
   return (
     <header
       id="app-main-header"
-      className={`sticky top-0 z-40 transition-colors duration-200 border-b select-none ${
-        darkMode
-          ? 'bg-slate-900/95 border-slate-800 text-slate-100 backdrop-blur-md'
-          : 'bg-teal-900 text-white border-teal-800 shadow-sm backdrop-blur-md'
+      className={`sticky top-0 z-40 border-b border-amber-300/60 dark:border-slate-800 bg-stone-50/95 dark:bg-slate-950/95 backdrop-blur-md select-none transition-transform duration-200 ${
+        hidden ? '-translate-y-full' : 'translate-y-0'
       }`}
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 h-16 flex items-center justify-between gap-2">
-        {/* راست: دکمه آیکونی تنظیمات قلم و ترجمه و انتخاب سوره */}
-        <div className="flex items-center gap-2 min-w-0">
-          {/* دکمه آیکونی تنظیمات قلم و ترجمه */}
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 pt-3 pb-2.5 space-y-2.5">
+        <div className="flex items-center gap-2">
+          {onOpenMenu && (
+            <button id="btn-header-menu" onClick={onOpenMenu} className={iconBtn} title="منو" aria-label="باز کردن منو">
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+
+          <button
+            id="btn-open-surah-selector"
+            onClick={onOpenSurahList}
+            className="flex-1 min-w-0 min-h-[52px] flex items-center gap-2.5 px-3 rounded-2xl border border-amber-300/70 dark:border-slate-700 bg-stone-50 dark:bg-slate-900 text-right cursor-pointer active:scale-[0.99] transition-all"
+            title="انتخاب سوره و جزء"
+          >
+            <StarBadge size={32}>{toPersianDigits(currentSurah.id)}</StarBadge>
+            <span className="min-w-0 flex-1">
+              <span
+                className="block text-[19px] leading-[1.4] text-slate-900 dark:text-slate-50 truncate"
+                style={{ fontFamily: QURAN_FONT }}
+              >
+                {currentSurah.nameArabic}
+              </span>
+              <span className="block text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                جزء {toPersianDigits(currentSurah.juzNumber)} · {currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'} ·{' '}
+                {toPersianDigits(currentSurah.versesCount)} آیه
+              </span>
+            </span>
+            <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+          </button>
+
           {onOpenSettings && (
             <button
               id="btn-header-settings-toggle"
               onClick={onOpenSettings}
-              className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white border border-white/15 transition-all shrink-0 cursor-pointer"
-              title="تنظیمات قلم و ترجمه"
-              aria-label="تنظیمات قلم و ترجمه"
+              className={`${iconBtn} text-[15px] font-extrabold`}
+              title="اندازه و ظاهر متن"
+              aria-label="اندازه و ظاهر متن"
             >
-              <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
+              Aa
             </button>
           )}
 
-          {/* دکمه انتخاب سوره */}
-          <button
-            id="btn-open-surah-selector"
-            onClick={onOpenSurahList}
-            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:scale-98 transition-all text-right border border-white/10 min-w-0"
-            title="انتخاب سوره و جزء"
-          >
-            <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 shrink-0" />
-            <div className="flex flex-col min-w-0 text-right">
-              <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm leading-tight truncate">
-                <span>سوره {currentSurah.nameArabic}</span>
-                <span className="text-[10px] sm:text-xs px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 font-normal shrink-0">
-                  {toPersianDigits(currentSurah.versesCount)}
-                </span>
-              </div>
-              <span className="text-[10px] sm:text-[11px] opacity-80 leading-none mt-0.5 truncate">
-                جزء {toPersianDigits(currentSurah.juzNumber)} • {currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'}
-              </span>
-            </div>
-            <ChevronDown className="w-3.5 h-3.5 opacity-70 shrink-0 mr-0.5" />
-          </button>
-        </div>
-
-        {/* چپ: دکمه‌های کاملاً آیکونی و خلوت (بدون تایتل و نوشته اضافه) */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* دکمه جستجو در همین سوره */}
           <button
             id="btn-header-surah-search"
             onClick={onOpenSurahSearch}
-            className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white transition-all"
+            className={iconBtn}
             title={`جستجو در سورهٔ ${currentSurah.nameArabic}`}
             aria-label="جستجو در سوره"
           >
-            <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+            <Search className="w-5 h-5" />
           </button>
 
-          {/* سوئیچ نما (نمای صفحه‌ای / آیه‌ای) */}
-          <button
-            id="btn-header-viewmode-toggle"
-            onClick={onToggleViewMode}
-            className={`p-2 sm:p-2.5 rounded-xl active:scale-95 transition-all border ${
-              viewMode === 'mushaf-page'
-                ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm'
-                : 'bg-white/10 hover:bg-white/20 text-white/90 border-white/10'
-            }`}
-            title={
-              viewMode === 'mushaf-page'
-                ? 'نمای فعلی: صفحه‌ای (کلیک جهت نمای آیه‌ای)'
-                : 'نمای فعلی: آیه‌ای (کلیک جهت نمای صفحه‌ای)'
-            }
-            aria-label="تغییر نمای مطالعه"
-          >
-            <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
+          {!isMushaf && (
+            <button
+              id="btn-header-autoscroll-toggle"
+              onClick={onToggleAutoScroll}
+              aria-pressed={isAutoScrollActive}
+              className={`${iconBtn} ${isAutoScrollActive ? '!bg-amber-300 !text-teal-900 !border-amber-400' : ''}`}
+              title={isAutoScrollActive ? 'توقف اسکرول خودکار' : 'مطالعه پیوسته با اسکرول خودکار'}
+              aria-label="اسکرول خودکار"
+            >
+              <ChevronsDown className="w-5 h-5" />
+            </button>
+          )}
+        </div>
 
-          {/* اسکرول خودکار */}
+        <div role="tablist" aria-label="نحوه نمایش" className="flex p-1 gap-1 rounded-2xl bg-stone-200/70 dark:bg-slate-800">
           <button
-            id="btn-header-autoscroll-toggle"
-            onClick={onToggleAutoScroll}
-            className={`p-2 sm:p-2.5 rounded-xl active:scale-95 transition-all border ${
-              isAutoScrollActive
-                ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm'
-                : 'bg-white/10 hover:bg-white/20 text-white/90 border-white/10'
-            }`}
-            title={isAutoScrollActive ? 'توقف اسکرول خودکار' : 'شروع مطالعه پیوسته با اسکرول خودکار'}
-            aria-label="اسکرول خودکار"
+            role="tab"
+            aria-selected={isMushaf}
+            onClick={() => !isMushaf && onToggleViewMode()}
+            className={`${segBase} ${isMushaf ? segOn : segOff}`}
           >
-            <ChevronsDown className="w-4 h-4 sm:w-5 sm:h-5" />
+            مصحف
           </button>
-
-          {/* تغییر تم تاریک/روشن */}
           <button
-            id="btn-header-theme"
-            onClick={onToggleDarkMode}
-            className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white transition-all"
-            title={darkMode ? 'حالت روز' : 'حالت شب'}
-            aria-label="تغییر تم"
+            role="tab"
+            aria-selected={!isMushaf}
+            onClick={() => isMushaf && onToggleViewMode()}
+            className={`${segBase} ${!isMushaf ? segOn : segOff}`}
           >
-            {darkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
+            آیه‌به‌آیه + ترجمه
           </button>
         </div>
       </div>

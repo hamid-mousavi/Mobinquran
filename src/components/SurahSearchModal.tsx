@@ -80,10 +80,10 @@ export const SurahSearchModal: React.FC<SurahSearchModalProps> = ({
       dir="rtl"
     >
       <div
-        className={`w-full max-w-xl rounded-2xl border shadow-2xl transition-all overflow-hidden flex flex-col max-h-[85vh] ${
+        className={`w-full max-w-xl rounded-2xl border-2 shadow-2xl transition-all overflow-hidden flex flex-col max-h-[85vh] ${
           darkMode
-            ? 'bg-slate-900 border-slate-700/80 text-slate-100 shadow-black/80'
-            : 'bg-white border-stone-200 text-slate-800 shadow-slate-400/30'
+            ? 'bg-slate-900 border-amber-500/50 text-slate-100 shadow-black/80'
+            : 'bg-[#f7f3e8] border-amber-600 text-slate-800 shadow-slate-400/30'
         }`}
         onClick={(e) => e.stopPropagation()}
       >

@@ -7,12 +7,9 @@ import { PWAUpdateBanner } from './components/PWAUpdateBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { AutoScrollControls } from './components/AutoScrollControls';
 import { QuranHomePage } from './components/QuranHomePage';
-import { AzanAlertBanner } from './components/AzanAlertBanner';
 import { SplashScreen } from './components/SplashScreen';
-import { initAzanScheduler, playActualAzan } from './services/azanService';
 import { BookOpen, ChevronRight } from 'lucide-react';
-import { BottomNavigation } from './components/BottomNavigation';
-import { MoreMenuModal } from './components/MoreMenuModal';
+import { AppDrawer } from './components/AppDrawer';
 import { QuranService } from './services/quranService';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
 import { ALL_SURAHS, getJuzStartInfo } from './data/surahs';
@@ -101,6 +98,7 @@ export default function App() {
 
   // مودال‌ها و کشوها
   const [isSurahModalOpen, setIsSurahModalOpen] = useState(false);
+  const [surahModalInitialTab, setSurahModalInitialTab] = useState<'surahs' | 'juz'>('surahs');
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isVerseDetailOpen, setIsVerseDetailOpen] = useState(false);
   const [selectedVerseForDetail, setSelectedVerseForDetail] = useState<Verse | null>(null);
@@ -138,7 +136,6 @@ export default function App() {
   const [showSplash, setShowSplash] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('action') === 'azan') return false;
     try {
       const hasSeen = localStorage.getItem('mobin_has_seen_splash');
       return !hasSeen;
@@ -146,35 +143,6 @@ export default function App() {
       return false;
     }
   });
-
-  // راه‌اندازی زمان‌بند پس‌زمینه اذان و هشدارهای شرعی
-  useEffect(() => {
-    const cleanup = initAzanScheduler();
-    return cleanup;
-  }, []);
-
-  // بررسی درخواست اجرای فوری اذان از طریق اعلان یا شورتکات
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('action') === 'azan') {
-      setShowSplash(false);
-      import('./services/azanService').then(({ getAzanSettings, playActualAzan, MUEZZINS_LIST }) => {
-        const azanSettings = getAzanSettings();
-        const muezzin = MUEZZINS_LIST.find((m) => m.id === azanSettings.selectedMuezzinId) || MUEZZINS_LIST[0];
-        playActualAzan({ prayerName: 'اذان شرعی', muezzinId: muezzin.id });
-        window.dispatchEvent(
-          new CustomEvent('mobin-azan-alert', {
-            detail: {
-              prayerName: 'اذان شرعی',
-              muezzinName: muezzin.name,
-              timestamp: new Date().toISOString(),
-            },
-          })
-        );
-      });
-    }
-  }, []);
 
   // پشتیبانی از میانبرهای وب‌اپلیکیشن در مانیفست PWA (?view=surahs, ?action=last-read, ?action=search)
   useEffect(() => {
@@ -317,10 +285,10 @@ export default function App() {
   useEffect(() => {
     if (settings.darkMode) {
       document.documentElement.classList.add('dark');
-      document.body.style.backgroundColor = '#0b1120';
+      document.body.style.backgroundColor = '#0b1f1d';
     } else {
       document.documentElement.classList.remove('dark');
-      document.body.style.backgroundColor = '#faf8f5';
+      document.body.style.backgroundColor = '#f7f3e8';
     }
   }, [settings.darkMode]);
 
@@ -355,6 +323,8 @@ export default function App() {
   useEffect(() => {
     setPageHistory((prev) => {
       if (prev[prev.length - 1] === activePage) return prev;
+      const existingIndex = prev.lastIndexOf(activePage);
+      if (existingIndex >= 0) return prev.slice(0, existingIndex + 1);
       return [...prev, activePage];
     });
   }, [activePage]);
@@ -364,6 +334,8 @@ export default function App() {
   // اولویت ۲: بازگشت به صفحه قبلی (پشته تاریخچه) مانند اینستاگرام
   // اولویت ۳: خروج از برنامه در صفحه خانه با لمس مجدد
   const handleAppBack = useCallback((): boolean => {
+    // ۰. کامپوننت‌های محلی (منوی آیه، منوی سه‌نقطه و...) با preventDefault روی این رویداد Back را مصرف می‌کنند
+    if (!window.dispatchEvent(new CustomEvent('mobin-back', { cancelable: true }))) return true;
     // ۱. بررسی مودال‌های باز
     if (isVerseDetailOpen) {
       setIsVerseDetailOpen(false);
@@ -439,38 +411,74 @@ export default function App() {
     handleAppBack();
   };
 
-  // اتصال به رویداد دکمه فیزیکی Back اندروید و دکمه بازگشت مرورگر وب / PWA
+  // اتصال به دکمه Back اندروید (Capacitor) و دکمه بازگشت مرورگر / PWA / TWA
+  // در PWA هیچ ورودی قبلی در history نیست، پس بدون «ورودی نگهبان» اولین Back کل برنامه را می‌بندد.
+  // راه‌حل: یک ورودی نگهبان جلوی ورودی اصلی می‌گذاریم و بعد از هر Back که داخل برنامه مصرف شد، دوباره می‌گذاریم.
+  const [exitHint, setExitHint] = useState(false);
+  const lastBackPressRef = React.useRef(0);
+  const handleAppBackRef = React.useRef(handleAppBack);
+  handleAppBackRef.current = handleAppBack;
+
   useEffect(() => {
-    let lastBackPressTime = 0;
-
-    const backListenerPromise = CapApp.addListener('backButton', () => {
-      const handled = handleAppBack();
-      if (!handled) {
-        const now = Date.now();
-        if (now - lastBackPressTime < 2000) {
-          CapApp.exitApp();
-        } else {
-          lastBackPressTime = now;
-        }
-      }
-    });
-
-    const handlePopState = () => {
-      handleAppBack();
+    const pushGuard = () => {
+      try {
+        window.history.pushState({ mobinGuard: true }, '', window.location.href);
+      } catch {}
     };
 
+    const askToExit = (): boolean => {
+      // true یعنی «بار دوم در ۲ ثانیه» و باید خارج شد
+      const now = Date.now();
+      if (now - lastBackPressRef.current < 2000) return true;
+      lastBackPressRef.current = now;
+      setExitHint(true);
+      setTimeout(() => setExitHint(false), 2000);
+      return false;
+    };
+
+    // ورودی پایه + ورودی نگهبان
+    try {
+      window.history.replaceState({ mobinBase: true }, '', window.location.href);
+    } catch {}
+    pushGuard();
+
+    const handlePopState = () => {
+      if (handleAppBackRef.current()) {
+        pushGuard();
+        return;
+      }
+      // در صفحه خانه و بدون پنل باز
+      if (askToExit()) {
+        // در PWA با ورودی خالی، این Back برنامه را می‌بندد
+        window.history.back();
+      } else {
+        pushGuard();
+      }
+    };
     window.addEventListener('popstate', handlePopState);
+
+    // اندروید بومی (Capacitor): رویداد backButton جدا و بدون history
+    const backListenerPromise = CapApp.addListener('backButton', () => {
+      if (!handleAppBackRef.current() && askToExit()) {
+        CapApp.exitApp();
+      }
+    });
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
       backListenerPromise.then((h) => h?.remove?.()).catch(() => {});
     };
-  }, [handleAppBack]);
+  }, []);
 
   // اسکرول به ابتدای صفحه در زمان بازگشت به صفحه اصلی
   useEffect(() => {
     if (activePage === 'home') {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      try {
+        if (window.location.pathname.startsWith('/quran')) {
+          window.history.replaceState(window.history.state, '', '/');
+        }
+      } catch {}
     }
   }, [activePage]);
 
@@ -481,7 +489,7 @@ export default function App() {
       try {
         const targetPath = `/quran/${surahId}/${verseNumber}`;
         if (window.location.pathname !== targetPath) {
-          window.history.pushState(null, '', targetPath);
+          window.history.replaceState(window.history.state, '', targetPath);
         }
       } catch {}
       setResumeScrollVerse(verseNumber);
@@ -514,8 +522,6 @@ export default function App() {
     };
 
     handleUrlRoute();
-    window.addEventListener('popstate', handleUrlRoute);
-    return () => window.removeEventListener('popstate', handleUrlRoute);
   }, [surahs]);
 
   // ذخیرهٔ آیهٔ واقعی در حال مشاهده (P3-T1) و همگام‌سازی صفحهٔ مصحف با موقعیت مطالعه
@@ -661,7 +667,7 @@ export default function App() {
     <div
       id="app-root"
       className={`min-h-screen min-h-dvh w-full max-w-full overflow-x-clip flex flex-col font-['Vazirmatn'] transition-colors duration-200 ${
-        settings.darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#faf8f5] text-slate-800'
+        settings.darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#f7f3e8] text-slate-800'
       }`}
       dir="rtl"
     >
@@ -693,6 +699,7 @@ export default function App() {
           isAutoScrollActive={isAutoScrollActive}
           onToggleAutoScroll={() => setIsAutoScrollActive((prev) => !prev)}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenMenu={() => setIsMoreMenuOpen(true)}
         />
       )}
 
@@ -716,7 +723,10 @@ export default function App() {
           }}
           onNavigateToJuz={handleNavigateToJuz}
           onNavigateToMushafPage={(pageNum) => handleNavigateToMushafPage(pageNum, false)}
-          onOpenSurahSelector={() => setIsSurahModalOpen(true)}
+          onOpenSurahSelector={(tab) => {
+            setSurahModalInitialTab(tab === 'juz' ? 'juz' : 'surahs');
+            setIsSurahModalOpen(true);
+          }}
           onOpenMushafPage={() => {
             setViewMode('mushaf-page');
             setActivePage('reader');
@@ -733,6 +743,7 @@ export default function App() {
           onOpenOfflineDownloads={handleOpenOffline}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onOpenAbout={() => setIsAboutModalOpen(true)}
+          onOpenMenu={() => setIsMoreMenuOpen(true)}
           onToggleDarkMode={handleToggleDarkMode}
           onPlayVerseAudio={(sId, vNum) => {
             const s = surahs.find((x) => x.id === sId);
@@ -774,7 +785,7 @@ export default function App() {
           />
         </Suspense>
       ) : activePage === 'stories' ? (
-        <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-28 animate-fadeIn select-none" dir="rtl">
+        <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-12 animate-fadeIn select-none" dir="rtl">
           {/* سربرگ اختصاصی و فاخر صفحه داستان‌ها */}
           <div className="flex items-center justify-between gap-3 mb-6 pb-3 border-b border-stone-200/80 dark:border-slate-800">
             <div className="flex items-center gap-3">
@@ -912,7 +923,7 @@ export default function App() {
           }}
           allSurahs={surahs.map((s) => ({ id: s.id, nameArabic: s.nameArabic }))}
           darkMode={settings.darkMode}
-          hasBottomNav={true}
+          hasBottomNav={false}
         />
       )}
 
@@ -1008,7 +1019,11 @@ export default function App() {
         {isSurahModalOpen && (
           <SurahSelectorModal
             isOpen={isSurahModalOpen}
-            onClose={() => setIsSurahModalOpen(false)}
+            onClose={() => {
+              setIsSurahModalOpen(false);
+              setSurahModalInitialTab('surahs');
+            }}
+            initialTab={surahModalInitialTab}
             surahs={surahs}
             currentSurahId={currentSurah.id}
             onSelectSurah={handleSelectSurah}
@@ -1041,17 +1056,25 @@ export default function App() {
         )}
       </Suspense>
 
-      {/* بنر اعلان اذان و پخش صوتی اوقات شرعی */}
-      <AzanAlertBanner />
-
       {/* بنر به‌روزرسانی نسخه جدید با تأیید کاربر (P2-T2) */}
+      {exitHint && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] px-4 py-2.5 rounded-2xl bg-teal-800 text-amber-200 text-xs font-bold shadow-lg border border-amber-300/40"
+        >
+          برای خروج یک بار دیگر بازگشت را بزنید
+        </div>
+      )}
+
       <PWAUpdateBanner isAudioPlaying={isAudioPlayerOpen && activePlayingVerseNumber !== null} />
 
       {/* نشانگر وضعیت آفلاین در صورت قطع اتصال شبکه */}
       <OfflineIndicator />
 
-      {/* منوی ناوبری دسترسی سریع پایین صفحه */}
-      <BottomNavigation
+      {/* منوی کشویی اصلی (جایگزین نوار پایین و منوی امکانات) */}
+      <AppDrawer
+        isOpen={isMoreMenuOpen}
+        onClose={() => setIsMoreMenuOpen(false)}
         activePage={activePage}
         onNavigateHome={() => setActivePage('home')}
         onNavigateReader={() => {
@@ -1063,27 +1086,13 @@ export default function App() {
         }}
         onNavigateAI={() => handleOpenAI(null)}
         onNavigateMemorization={handleOpenMemorization}
-        onOpenMoreMenu={() => setIsMoreMenuOpen(true)}
-        darkMode={settings.darkMode}
-      />
-
-      {/* مودال منوی امکانات و ابزارهای قرآنی */}
-      <MoreMenuModal
-        isOpen={isMoreMenuOpen}
-        onClose={() => setIsMoreMenuOpen(false)}
-        onOpenSurahList={() => setIsSurahModalOpen(true)}
         onOpenKhatm={() => setIsKhatmModalOpen(true)}
         onOpenBookmarks={() => setIsBookmarksModalOpen(true)}
-        onOpenSearch={() => setIsSearchModalOpen(true)}
+        onOpenStories={handleOpenStories}
         onOpenOffline={handleOpenOffline}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenAbout={() => setIsAboutModalOpen(true)}
         onToggleDarkMode={handleToggleDarkMode}
-        onOpenStories={handleOpenStories}
-        onOpenMushafPage={() => {
-          setViewMode('mushaf-page');
-          setActivePage('reader');
-        }}
         darkMode={settings.darkMode}
       />
     </div>

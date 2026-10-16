@@ -364,7 +364,7 @@ ${agentApproachText}
       let generated = await generateWithFallback({
         system,
         user,
-        maxTokens: 800,
+        maxTokens: 1200,
       });
       let output = aiResponseSchema.safeParse(extractJsonObject(generated.content));
 
@@ -372,7 +372,7 @@ ${agentApproachText}
         generated = await generateWithFallback({
           system,
           user: `پاسخ قبلی با قرارداد خروجی سازگار نبود. این خطاها را اصلاح کن و فقط JSON معتبر برگردان: ${output.error.issues.map((issue) => `${issue.path.join('.') || 'response'} (${issue.code})`).join(', ')}\nپاسخ قبلی:\n${generated.content}`,
-          maxTokens: 800,
+          maxTokens: 1200,
         });
         output = aiResponseSchema.safeParse(extractJsonObject(generated.content));
       }

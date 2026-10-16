@@ -244,7 +244,7 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
         className={`w-full max-w-lg rounded-3xl shadow-2xl border transition-all overflow-hidden ${
           darkMode
             ? 'bg-slate-900 border-slate-800 text-slate-100'
-            : 'bg-[#faf8f5] border-stone-200 text-slate-800'
+            : 'bg-[#f7f3e8] border-stone-200 text-slate-800'
         }`}
         onClick={(e) => e.stopPropagation()}
         dir="rtl"

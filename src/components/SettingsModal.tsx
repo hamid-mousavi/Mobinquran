@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Type, Eye, Palette, Maximize2, Minimize2, AlignJustify, Check, HardDrive, ShieldCheck, ShieldAlert, Smartphone, Info } from 'lucide-react';
+import { X, Eye, Palette, Maximize2, Minimize2, AlignJustify, Check, HardDrive, ShieldCheck, ShieldAlert, Smartphone } from 'lucide-react';
 import { AppSettings, Translator, ArabicFont, LineHeight } from '../types';
 import { getArabicFontFamily, ARABIC_FONT_OPTIONS } from '../utils/fontHelper';
 import { getStorageStatus, requestStoragePersistence, StorageStatus } from '../services/pwaManager';
-import { PWAInstallButton } from './PWAInstallButton';
 import { toPersianDigits } from '../utils/textNormalization';
 import { useModalA11y } from '../hooks/useModalA11y';
 
@@ -64,35 +63,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div
       id="modal-settings-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn"
+      className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/50 sm:p-4 animate-fadeIn"
       onClick={onClose}
     >
       <div
         ref={modalRef}
         id="modal-settings-content"
-        className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden transition-all ${
-          darkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-800'
+        role="dialog"
+        aria-modal="true"
+        aria-label="تنظیمات نمایش و قلم قرآن"
+        className={`w-full max-w-md max-h-[92vh] flex flex-col rounded-t-3xl sm:rounded-3xl border-t-2 sm:border-2 border-amber-600 shadow-2xl overflow-hidden transition-all ${
+          darkMode ? 'bg-slate-900 text-slate-100' : 'bg-stone-50 text-slate-800'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* سربرگ */}
-        <div className={`p-4 border-b flex items-center justify-between ${darkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50'}`}>
-          <div className="flex items-center gap-2 font-bold text-base">
-            <Type className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+        <div className={`shrink-0 px-5 pt-3 pb-3 border-b flex items-center justify-between ${darkMode ? 'border-slate-800 bg-slate-900' : 'border-amber-300/60 bg-stone-50'}`}>
+          <div className="flex items-center gap-3 font-extrabold text-base">
+            <span className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 flex items-center justify-center text-[15px] font-black">Aa</span>
             <span>تنظیمات نمایش و قلم قرآن</span>
           </div>
           <button
             id="btn-close-settings-modal"
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10"
+            className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer" aria-label="بستن"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-4 sm:p-5 space-y-5 max-h-[75vh] overflow-y-auto">
+        <div className="flex-1 min-h-0 p-4 sm:p-5 space-y-5 overflow-y-auto">
           {/* حالت تمام‌صفحه / خلوت معنوی */}
-          <div className="flex items-center justify-between p-3 rounded-xl border border-teal-600/30 bg-teal-500/5">
+          <div className="flex items-center justify-between p-3 rounded-xl border border-teal-200 dark:border-teal-800/60 bg-teal-50 dark:bg-teal-950/30">
             <div>
               <div className="font-semibold text-sm flex items-center gap-1.5">
                 {isFullscreen ? <Minimize2 className="w-4 h-4 text-teal-600" /> : <Maximize2 className="w-4 h-4 text-teal-600" />}
@@ -102,7 +104,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <button
               onClick={toggleFullscreen}
-              className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition-all"
+              className="min-h-[44px] px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
             >
               {isFullscreen ? 'خروج' : 'فعال‌سازی'}
             </button>
@@ -132,7 +134,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className={`p-3 rounded-xl text-center border leading-relaxed transition-all ${
                 darkMode
                   ? 'bg-slate-800 border-slate-700 text-amber-200'
-                  : 'bg-amber-50/50 border-amber-200 text-teal-900'
+                  : 'bg-amber-50 border-amber-300 text-teal-900'
               }`}
               style={{
                 fontSize: `${settings.arabicFontSize}px`,
@@ -160,10 +162,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <button
                     key={lh.id}
                     onClick={() => onUpdateSettings({ lineHeight: lh.id as LineHeight })}
-                    className={`p-2 rounded-xl border text-xs font-semibold transition-all ${
+                    className={`min-h-[44px] p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                       isSelected
                         ? 'border-teal-600 bg-teal-600/10 text-teal-600 dark:text-teal-400'
-                        : 'border-slate-200 dark:border-slate-700'
+                        : 'border-amber-300/70 dark:border-slate-700 bg-white/60 dark:bg-transparent'
                     }`}
                   >
                     {lh.title}
@@ -194,7 +196,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className={`p-3 rounded-xl border text-right transition-all flex items-start justify-between gap-2 ${
                       isSelected
                         ? 'border-teal-600 bg-teal-600/10 text-teal-900 dark:text-teal-300 ring-1 ring-teal-500/30'
-                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                        : 'border-amber-300/70 dark:border-slate-700 bg-white/60 dark:bg-transparent hover:bg-white dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     <div>
@@ -233,10 +235,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   key={tr.id}
                   onClick={() => onUpdateSettings({ activeTranslator: tr.id as Translator })}
-                  className={`p-2 rounded-xl border text-xs font-semibold transition-all ${
+                  className={`min-h-[44px] p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                     settings.activeTranslator === tr.id
                       ? 'border-teal-600 bg-teal-600/10 text-teal-600 dark:text-teal-400'
-                      : 'border-slate-200 dark:border-slate-700'
+                      : 'border-amber-300/70 dark:border-slate-700 bg-white/60 dark:bg-transparent'
                   }`}
                 >
                   {tr.title}
@@ -246,7 +248,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* سوییچ نمایش ترجمه */}
-          <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="flex items-center justify-between p-3 rounded-xl border border-amber-300/70 dark:border-slate-800 bg-white/60 dark:bg-transparent">
             <div>
               <div className="font-semibold text-sm">نمایش ترجمه زیر آیات</div>
               <div className="text-xs text-slate-400">امکان مطالعه بدون ترجمه (فقط متن عربی)</div>
@@ -293,7 +295,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <HardDrive className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                 <span>فضای آفلاین و ماندگاری حافظه</span>
               </label>
-              <PWAInstallButton />
             </div>
 
             {storageStatus && (
@@ -333,39 +334,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* درباره قرآن مبین، پشتیبانی و ثبت نظر در مایکت */}
-          {onOpenAbout && (
-            <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenAbout();
-                }}
-                className="w-full flex items-center justify-between p-3 rounded-xl border border-stone-200/80 dark:border-slate-800 bg-stone-50/80 dark:bg-slate-800/40 hover:bg-stone-100 dark:hover:bg-slate-800 transition-all text-right active:scale-[0.99]"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                    <Info className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-slate-800 dark:text-slate-200">درباره برنامه، پشتیبانی و مایکت</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">ثبت نظر در مایکت، حریم خصوصی و ارتباط با توسعه‌دهنده</div>
-                  </div>
-                </div>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold">
-                  نسخه ۱.۰
-                </span>
-              </button>
-            </div>
-          )}
         </div>
 
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 text-center">
+        <div
+          className="shrink-0 px-5 pt-3 border-t border-amber-300/60 dark:border-slate-800 bg-stone-50 dark:bg-slate-900"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
+        >
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md transition-all"
+            className="w-full min-h-[50px] rounded-2xl bg-teal-800 hover:bg-teal-900 text-white font-extrabold text-[15px] shadow-md transition-all cursor-pointer active:scale-[0.99]"
           >
             تأیید و ذخیره
           </button>
