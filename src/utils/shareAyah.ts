@@ -124,58 +124,68 @@ function downloadBlob(blob: Blob, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-export async function shareAyah(verse: Verse, translation: string, surah: Surah): Promise<void> {
-  if (!translation) translation = verse.translationMakarem || '';
-  const text = buildAyahText(verse, translation, surah);
+export interface ShareAyahRequest {
+  verse: Verse;
+  translation: string;
+  surah: Surah;
+}
 
-  const canvasPromise = (async () => {
+/**
+ * نقطهٔ ورود اشتراک‌گذاری: به‌جای دانلود/اشتراک خودکار، از کاربر می‌پرسد «تصویر یا متن».
+ * پنجرهٔ انتخاب (ShareChoiceSheet) در App نصب شده و این رویداد را می‌شنود.
+ */
+export async function shareAyah(verse: Verse, translation: string, surah: Surah): Promise<void> {
+  window.dispatchEvent(
+    new CustomEvent<ShareAyahRequest>('mobin-share-ayah', {
+      detail: { verse, translation: translation || verse.translationMakarem || '', surah },
+    })
+  );
+}
+
+/** اشتراک به‌صورت متن: برگه اشتراک سیستم، و در نبودش کپی در کلیپ‌بورد */
+export async function shareAyahAsText(verse: Verse, translation: string, surah: Surah): Promise<'shared' | 'copied' | 'failed'> {
+  const text = buildAyahText(verse, translation, surah);
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ text, title: `${APP_NAME} — آیه ${verse.verseNumber}` });
+      return 'shared';
+    } catch (e) {
+      // لغو توسط کاربر یعنی هیچ کار دیگری انجام نشود
+      if ((e as { name?: string })?.name === 'AbortError') return 'failed';
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    return 'copied';
+  } catch {
+    return 'failed';
+  }
+}
+
+/** اشتراک به‌صورت تصویر کارت: اشتراک فایل، و اگر مرورگر نپذیرد دانلود تصویر */
+export async function shareAyahAsImage(verse: Verse, translation: string, surah: Surah): Promise<'shared' | 'downloaded' | 'failed'> {
+  try {
     await ensureFontLoaded(`52px ${ARABIC_FONT}`);
     await ensureFontLoaded(`40px ${PERSIAN_FONT}`);
     const isDark = document.documentElement.classList.contains('dark');
     const card = drawCard(verse, translation, surah, isDark);
-    return await new Promise<Blob>((resolve, reject) => {
-      card.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('toBlob failed'))), 'image/png');
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      card.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png');
     });
-  })();
-
-  try {
-    const nav = navigator as Navigator & {
-      canShare?: (data: { files?: File[] }) => boolean;
-    };
-    if (typeof navigator.share === 'function') {
+    const fileName = `ayah-${verse.surahId}-${verse.verseNumber}.png`;
+    const file = new File([blob], fileName, { type: 'image/png' });
+    const nav = navigator as Navigator & { canShare?: (data: { files?: File[] }) => boolean };
+    if (typeof navigator.share === 'function' && nav.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ text, title: `${APP_NAME} — آیه ${verse.verseNumber}` });
-        return;
-      } catch {
-        // کاربر اشتراک را لغو کرد یا قابلیت تصویرپذیری ندارد؛ ادامه برای کارت
-      }
-      try {
-        const imgBlob = await canvasPromise;
-        const file = new File([imgBlob], `ayah-${verse.surahId}-${verse.verseNumber}.png`, {
-          type: 'image/png',
-        });
-        if (nav.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], text });
-          return;
-        }
-      } catch {
-        // ادامه به دانلود
+        await navigator.share({ files: [file], title: `${APP_NAME} — آیه ${verse.verseNumber}` });
+        return 'shared';
+      } catch (e) {
+        if ((e as { name?: string })?.name === 'AbortError') return 'failed';
       }
     }
-    // fallback: کپی متن و دانلود کارت
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // بدون کلیپ‌بورد
-    }
-    const imgBlob = await canvasPromise;
-    downloadBlob(imgBlob, `ayah-${verse.surahId}-${verse.verseNumber}.png`);
+    downloadBlob(blob, fileName);
+    return 'downloaded';
   } catch {
-    // در صورت هر خطایی، دست‌کم متن کپی می‌شود
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // هیچ
-    }
+    return 'failed';
   }
 }

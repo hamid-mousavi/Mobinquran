@@ -177,7 +177,7 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
   const [memoStats, setMemoStats] = useState<MemorizationStats>(getMemorizationStats);
   const [khatmPlan, setKhatmPlan] = useState<KhatmPlan | null>(null);
   const [khatmSegments, setKhatmSegments] = useState<KhatmSegment[]>([]);
-  const [activeFocusTab, setActiveFocusTab] = useState<'verse' | 'khatm' | 'memorization'>('verse');
+  const [activeFocusTab, setActiveFocusTab] = useState<'verse' | 'story'>('verse');
   const [storyShuffleOffset, setStoryShuffleOffset] = useState(0);
   const [isStoryShortsOpen, setIsStoryShortsOpen] = useState(false);
   const [storyQuizQuestions, setStoryQuizQuestions] = useState<QuizQuestionItem[]>([]);
@@ -699,7 +699,10 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
       {quickSurahs.length > 0 && (
         <section id="home-quick-surahs" aria-label="سوره‌های اخیر و پرمصرف" className="space-y-2.5">
           <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900 dark:text-slate-100">
-            <StarBadge size={18}>{''}</StarBadge>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a8802c" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+              <rect x="5" y="5" width="14" height="14" />
+              <rect x="5" y="5" width="14" height="14" transform="rotate(45 12 12)" />
+            </svg>
             اخیر و پرمصرف
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
@@ -740,79 +743,45 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
 
       {/* بخش تب‌های روزانه: آیه روز / ختم قرآن / حفظ قرآن */}
       <div className="rounded-2xl sm:rounded-3xl border-2 border-amber-600/70 dark:border-amber-500/40 bg-amber-50/60 dark:bg-slate-900 p-4 sm:p-6 space-y-4">
-        {/* هدر دسته‌بندی با طراحی مینیمال */}
-        <div className="flex items-center justify-between border-b border-stone-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-1.5 sm:gap-2.5">
+        {/* تب‌ها: آیهٔ منتخب | داستان روز (ختم و حفظ از این کارت حذف شدند) */}
+        <div className="flex items-center justify-between border-b border-amber-300/50 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-1.5 sm:gap-2.5" role="tablist" aria-label="محتوای روزانه">
             <button
+              role="tab"
+              aria-selected={activeFocusTab === 'verse'}
               onClick={() => setActiveFocusTab('verse')}
-              className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              className={`min-h-[44px] px-4 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                 activeFocusTab === 'verse'
-                  ? 'bg-teal-600 text-white shadow-xs'
+                  ? 'bg-teal-800 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800'
               }`}
             >
               آیهٔ منتخب امروز
             </button>
-
             <button
-              onClick={() => setActiveFocusTab('khatm')}
-              className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                activeFocusTab === 'khatm'
-                  ? 'bg-teal-600 text-white shadow-xs'
+              role="tab"
+              aria-selected={activeFocusTab === 'story'}
+              onClick={() => setActiveFocusTab('story')}
+              className={`min-h-[44px] px-4 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                activeFocusTab === 'story'
+                  ? 'bg-teal-800 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800'
               }`}
             >
-              <span>برنامه ختم</span>
-              {khatmProgressPercent > 0 && (
-                <span className="text-[11px] opacity-90 font-mono font-bold">
-                  ({toPersianDigits(khatmProgressPercent)}٪)
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveFocusTab('memorization')}
-              className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                activeFocusTab === 'memorization'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              پیشرفت حفظ
+              داستان روز
             </button>
           </div>
 
-          {activeFocusTab === 'verse' && (
-            <button
-              onClick={handleShuffleVerse}
-              className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
-              title="آیه تصادفی دیگر"
-              aria-label="تغییر آیه تصادفی"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-          )}
-
-          {activeFocusTab === 'khatm' && (
-            <button
-              onClick={onOpenKhatm}
-              className="text-xs text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 font-bold"
-            >
-              <span>تنظیمات ختم</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-          )}
-
-          {activeFocusTab === 'memorization' && (
-            <button
-              onClick={onOpenMemorization}
-              className="text-xs text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 font-bold"
-            >
-              <span>بخش حفظ</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            onClick={() => (activeFocusTab === 'verse' ? handleShuffleVerse() : setStoryShuffleOffset((prev) => prev + 1))}
+            className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors cursor-pointer"
+            title={activeFocusTab === 'verse' ? 'آیه تصادفی دیگر' : 'داستان قرآنی دیگر'}
+            aria-label={activeFocusTab === 'verse' ? 'تغییر آیه تصادفی' : 'داستان دیگر'}
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
         </div>
+
 
         {/* محتوای تب ۱: آیه منتخب روز */}
         {activeFocusTab === 'verse' && (
@@ -859,154 +828,15 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
           </div>
         )}
 
-        {/* محتوای تب ۲: برنامه ختم قرآن */}
-        {activeFocusTab === 'khatm' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1.5">
-                <TrendingUp className="w-4 h-4 text-teal-500" />
-                <span>
-                  {toPersianDigits(khatmCompletedCount)} صفحه تلاوت شده از {toPersianDigits(khatmTotalPages)} صفحه کل
-                </span>
-              </span>
-              <span className="font-extrabold text-teal-600 dark:text-teal-400 text-sm">
-                {toPersianDigits(khatmProgressPercent)}٪
+        {/* محتوای تب ۲: داستان روز قرآنی */}
+        {activeFocusTab === 'story' && (
+          <div id="home-daily-story" className="space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base sm:text-xl font-black text-slate-900 dark:text-white">{todayStory.title}</h2>
+              <span className="shrink-0 text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold border border-amber-500/20">
+                سوره {todayStory.surahName}
               </span>
             </div>
-
-            <div className="w-full h-2.5 bg-stone-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-teal-600 rounded-full transition-all duration-500"
-                style={{ width: `${Math.max(1, khatmProgressPercent)}%` }}
-              />
-            </div>
-
-            {khatmTodaySegment && (
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-slate-800/60 border border-stone-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-                <div className="space-y-0.5">
-                  <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                    {isKhatmTodayCompleted ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                        <span>سهمیه امروز خوانده شد</span>
-                      </>
-                    ) : (
-                      <>
-                        <Clock className="w-4 h-4 text-amber-500" />
-                        <span>سهمیه امروز (روز {toPersianDigits(khatmCurrentDay)})</span>
-                      </>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                    صفحه {toPersianDigits(khatmTodaySegment.startPage)} تا {toPersianDigits(khatmTodaySegment.endPage)}
-                    {khatmTodaySegment.label ? ` • ${toPersianDigits(khatmTodaySegment.label)}` : ''}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <button
-                    onClick={() => onNavigateToMushafPage(khatmTodaySegment.startPage)}
-                    className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all"
-                  >
-                    تلاوت سهمیه (ص {toPersianDigits(khatmTodaySegment.startPage)})
-                  </button>
-
-                  {!isKhatmTodayCompleted && (
-                    <button
-                      onClick={handleMarkTodayKhatmCompleted}
-                      className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-stone-300 dark:border-slate-700 hover:bg-stone-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-all"
-                    >
-                      ثبت انجام
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* محتوای تب ۳: پیشرفت حفظ قرآن */}
-        {activeFocusTab === 'memorization' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1.5">
-                <GraduationCap className="w-4 h-4 text-teal-500" />
-                <span>
-                  {toPersianDigits(memoStats.totalMemorized)} آیه تثبیت شده
-                </span>
-              </span>
-              <span className="font-extrabold text-teal-600 dark:text-teal-400 text-sm">
-                {toPersianDigits(memoStats.percentage)}٪
-              </span>
-            </div>
-
-            <div className="w-full h-2.5 bg-stone-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-teal-600 rounded-full transition-all duration-500"
-                style={{ width: `${Math.max(1, memoStats.percentage)}%` }}
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-              <div className="p-2 rounded-lg bg-stone-50 dark:bg-slate-800/60 border border-stone-200/60 dark:border-slate-800">
-                <div className="text-[10px] text-slate-400">آیات نشان‌شده</div>
-                <div className="text-xs font-bold text-teal-700 dark:text-teal-300 mt-0.5">
-                  {toPersianDigits(memoStats.totalMemorized)}
-                </div>
-              </div>
-
-              <div className="p-2 rounded-lg bg-stone-50 dark:bg-slate-800/60 border border-stone-200/60 dark:border-slate-800">
-                <div className="text-[10px] text-slate-400">جلسات اخیر</div>
-                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5">
-                  {toPersianDigits(memoStats.recentSessions.length)} جلسه
-                </div>
-              </div>
-
-              <div className="p-2 rounded-lg bg-stone-50 dark:bg-slate-800/60 border border-stone-200/60 dark:border-slate-800">
-                <div className="text-[10px] text-slate-400">هدف تثبیت</div>
-                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5">
-                  جزء ۳۰
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* بخش اختصاصی داستان روز قرآنی با دسترسی سریع به آزمون شورتز و مطالعه کامل */}
-      <section id="home-daily-story" className="rounded-3xl border border-amber-500/30 dark:border-amber-500/25 bg-gradient-to-br from-amber-500/5 via-white to-amber-50/50 dark:from-slate-900 dark:via-slate-900 dark:to-amber-950/20 p-5 sm:p-6 shadow-sm space-y-4 relative overflow-hidden">
-        {/* هدر داستان روز */}
-        <div className="flex items-center justify-between border-b border-amber-200/60 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shadow-xs shrink-0">
-              <Sparkles className="w-5 h-5 text-amber-500" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-amber-600 dark:text-amber-400 tracking-wider">
-                  داستان روز قرآنی
-                </span>
-                <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold border border-amber-500/20">
-                  سوره {todayStory.surahName}
-                </span>
-              </div>
-              <h2 className="text-base sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
-                {todayStory.title}
-              </h2>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setStoryShuffleOffset((prev) => prev + 1)}
-            className="p-2 sm:px-3 sm:py-1.5 rounded-xl border border-amber-300/60 dark:border-slate-700 bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-slate-700 transition-all active:scale-95 text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0"
-            title="مشاهده داستان قرآنی دیگر"
-            aria-label="داستان دیگر"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">داستان دیگر</span>
-          </button>
-        </div>
-
         {/* اطلاعات سوره و شخصیت‌ها */}
         <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
           <span className="font-semibold text-slate-500 dark:text-slate-400">
@@ -1078,7 +908,66 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
         </div>
-      </section>
+          </div>
+        )}
+
+      </div>
+
+      {/* ختم قرآن: ردیف فشرده زیر کارت روزانه */}
+      {khatmPlan && khatmTodaySegment ? (
+        <section
+          id="home-khatm-row"
+          className="rounded-2xl border border-indigo-200/80 dark:border-indigo-900/50 bg-indigo-50/70 dark:bg-indigo-950/20 p-3.5 space-y-2.5"
+        >
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onOpenKhatm}
+              className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 cursor-pointer"
+              aria-label="برنامه ختم قرآن"
+            >
+              <TrendingUp className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
+                ختم قرآن · {toPersianDigits(khatmProgressPercent)}٪
+              </div>
+              <div className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+                {isKhatmTodayCompleted
+                  ? 'سهمیه امروز خوانده شد'
+                  : `امروز: صفحه ${toPersianDigits(khatmTodaySegment.startPage)} تا ${toPersianDigits(khatmTodaySegment.endPage)}`}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => (isKhatmTodayCompleted ? onOpenKhatm() : onNavigateToMushafPage(khatmTodaySegment.startPage))}
+              className="min-h-[44px] px-4 rounded-xl bg-indigo-600 text-white text-xs font-bold cursor-pointer active:scale-[0.97] transition-transform"
+            >
+              {isKhatmTodayCompleted ? 'جزئیات' : 'تلاوت'}
+            </button>
+          </div>
+          <div className="w-full h-1.5 bg-indigo-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full bg-indigo-600 rounded-full transition-all duration-500" style={{ width: `${Math.max(1, khatmProgressPercent)}%` }} />
+          </div>
+        </section>
+      ) : (
+        <button
+          type="button"
+          id="home-khatm-row"
+          onClick={onOpenKhatm}
+          className="w-full min-h-[56px] flex items-center gap-3 px-4 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/50 bg-indigo-50/70 dark:bg-indigo-950/20 text-right cursor-pointer active:scale-[0.99] transition-transform"
+        >
+          <span className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5" />
+          </span>
+          <span className="flex-1">
+            <span className="block text-sm font-extrabold text-slate-900 dark:text-slate-100">ختم قرآن</span>
+            <span className="block text-[11px] text-slate-600 dark:text-slate-400">برنامهٔ روزانه بسازید و پیشرفتتان را پایش کنید</span>
+          </span>
+          <ChevronLeft className="w-4 h-4 text-slate-400 shrink-0" />
+        </button>
+      )}
+
 
       {/* بخش درباره قرآن مبین، پشتیبانی و ثبت نظر در مایکت */}
       {onOpenAbout && (

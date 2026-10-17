@@ -10,6 +10,7 @@ import { QuranHomePage } from './components/QuranHomePage';
 import { SplashScreen } from './components/SplashScreen';
 import { BookOpen, ChevronRight } from 'lucide-react';
 import { AppDrawer } from './components/AppDrawer';
+import { ShareChoiceSheet } from './components/ShareChoiceSheet';
 import { QuranService } from './services/quranService';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
 import { ALL_SURAHS, getJuzStartInfo } from './data/surahs';
@@ -1057,6 +1058,8 @@ export default function App() {
       </Suspense>
 
       {/* بنر به‌روزرسانی نسخه جدید با تأیید کاربر (P2-T2) */}
+      <ShareChoiceSheet />
+
       {exitHint && (
         <div
           role="status"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { ChevronRight, ChevronLeft, Volume2, Sparkles, BookOpen, Bookmark, Loader2, Share2, Copy, X } from 'lucide-react';
 import { Surah, Verse, AppSettings } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
@@ -7,6 +7,8 @@ import { QuranService } from '../services/quranService';
 import { QuranicSurahBanner } from './QuranicOrnament';
 import { AyahEndMarker } from './QuranReader';
 import { toPersianDigits } from '../utils/textNormalization';
+import { loadMushafPage } from '../services/mushafLayoutService';
+import type { MushafPageData } from '../types/mushafLayout';
 
 interface MushafPageViewProps {
   initialPageNumber: number;
@@ -65,6 +67,66 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
   const [isPartNavOpen, setIsPartNavOpen] = useState(false);
 
   const pageContainerRef = useRef<HTMLDivElement>(null);
+
+  // چیدمان خط‌به‌خط مصحف مدینه (۱۵ سطر): هر سطر دقیقاً عرض صفحه را پر می‌کند
+  const [layoutPage, setLayoutPage] = useState<MushafPageData | null>(null);
+  const linesRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ fontSize: number; centered: number[] }>({ fontSize: 22, centered: [] });
+
+  useEffect(() => {
+    let cancelled = false;
+    setLayoutPage(null);
+    loadMushafPage(currentPage).then((page) => {
+      if (!cancelled) setLayoutPage(page);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage]);
+
+  // اندازهٔ فونت را طوری تنظیم می‌کنیم که پهن‌ترین سطر دقیقاً در عرض صفحه جا شود؛
+  // فاصلهٔ بین کلمات (نه حروف) کشیده می‌شود تا اعراب و اتصال حروف هرگز به‌هم نریزد.
+  useLayoutEffect(() => {
+    const root = linesRef.current;
+    if (!root || !layoutPage) return;
+    const measure = () => {
+      const width = root.clientWidth;
+      if (!width) return;
+      const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-mline="text"]'));
+      if (rows.length === 0) return;
+      const currentSize = parseFloat(getComputedStyle(root).fontSize) || 22;
+      const MIN_GAP_EM = 0.32;
+      const naturals = rows.map((row) => {
+        const kids = Array.from(row.children) as HTMLElement[];
+        const sum = kids.reduce((acc, el) => acc + el.getBoundingClientRect().width, 0);
+        return sum + Math.max(0, kids.length - 1) * MIN_GAP_EM * currentSize;
+      });
+      const widest = Math.max(...naturals, 1);
+      const next = Math.max(13, Math.min(36, (currentSize * width) / widest * 0.99));
+      const centered = rows
+        .map((row, i) => (naturals[i] < widest * 0.7 ? Number(row.dataset.line) : -1))
+        .filter((n) => n >= 0);
+      setFit((prev) =>
+        Math.abs(prev.fontSize - next) < 0.2 && prev.centered.join() === centered.join()
+          ? prev
+          : { fontSize: next, centered }
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(root);
+    document.fonts?.ready.then(measure).catch(() => {});
+    return () => ro.disconnect();
+  }, [layoutPage, settings.arabicFont]);
+
+  // با تغییر صفحه، به ابتدای صفحه برگرد (کاربر پایین صفحه روی «صفحه بعد» زده است)
+  const previousPageRef = useRef(currentPage);
+  useEffect(() => {
+    if (previousPageRef.current !== currentPage) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+      previousPageRef.current = currentPage;
+    }
+  }, [currentPage]);
 
   useEffect(() => {
     if (initialPageNumber && initialPageNumber !== currentPage) {
@@ -152,6 +214,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     group.verses.push(v);
   });
 
+  const verseByKey = new Map<string, Verse>(verses.map((v) => [`${v.surahId}:${v.verseNumber}`, v]));
   const currentJuz = verses[0]?.juzNumber || 1;
   const currentHizbQuarter = verses[0]?.hizbQuarter;
 
@@ -323,7 +386,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         ref={pageContainerRef}
         tabIndex={0}
         onKeyDown={handleContainerKeyDown}
-        className={`relative p-5 sm:p-8 rounded-3xl border-2 transition-all duration-300 shadow-md outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
+        className={`relative px-3 py-5 sm:px-8 sm:py-8 rounded-3xl border-2 transition-all duration-300 shadow-md outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
           darkMode
             ? 'bg-slate-900 border-amber-500/20 text-slate-100'
             : 'bg-[#fbf8ef] border-[#d4b982]/60 text-slate-900 shadow-stone-200'
@@ -346,6 +409,97 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         ) : verses.length === 0 ? (
           <div className="py-24 text-center text-sm text-slate-500 dark:text-slate-400">
             آیات این صفحه در دسترس نیست. لطفاً یکبار به اینترنت متصل شوید تا بستهٔ داده نصب شود.
+          </div>
+        ) : layoutPage ? (
+          <div
+            ref={linesRef}
+            dir="rtl"
+            className="text-slate-800 dark:text-slate-100"
+            style={{ fontFamily: getArabicFontFamily(settings.arabicFont), fontSize: `${fit.fontSize}px` }}
+          >
+            {layoutPage.lines.map((line) => {
+              const first = line.words[0];
+              if (first?.type === 'surah_header') {
+                const meta = surahs.find((sr) => sr.id === first.sura);
+                return (
+                  <div key={line.line} data-mline="head" className="py-1" style={{ fontSize: '16px' }}>
+                    {meta ? <QuranicSurahBanner surah={meta} darkMode={darkMode} /> : null}
+                  </div>
+                );
+              }
+              if (first?.type === 'bismillah') {
+                return (
+                  <div
+                    key={line.line}
+                    data-mline="bismillah"
+                    className={`text-center select-none ${darkMode ? 'text-amber-300/90' : 'text-amber-800'}`}
+                    style={{ lineHeight: 2.2 }}
+                  >
+                    {first.text}
+                  </div>
+                );
+              }
+              const isCentered = fit.centered.includes(line.line);
+              return (
+                <div
+                  key={line.line}
+                  data-mline="text"
+                  data-line={line.line}
+                  className="flex items-center whitespace-nowrap"
+                  style={{ justifyContent: isCentered ? 'center' : 'space-between', gap: '0.32em', lineHeight: 2.2 }}
+                >
+                  {line.words.map((w, idx) => {
+                    if (w.type === 'quarter') {
+                      return (
+                        <span key={idx} className="text-amber-600 select-none" aria-hidden="true" style={{ fontSize: '0.7em' }}>
+                          ۞
+                        </span>
+                      );
+                    }
+                    const verse = w.verse ? verseByKey.get(w.verse) : undefined;
+                    const isSel = !!verse && selectedVerse?.id === verse.id;
+                    const hit = {
+                      onClick: verse ? () => setSelectedVerse(isSel ? null : verse) : undefined,
+                    };
+                    if (w.type === 'end') {
+                      const num = w.verse ? Number(w.verse.split(':')[1]) : 0;
+                      return (
+                        <span key={idx} {...hit} className="inline-flex items-center cursor-pointer" style={{ lineHeight: 1 }}>
+                          <span
+                            className="relative inline-flex items-center justify-center"
+                            style={{ width: '1.2em', height: '1.2em' }}
+                            aria-label={`آیه ${toPersianDigits(num)}`}
+                          >
+                            <svg viewBox="0 0 40 40" className="absolute inset-0 w-full h-full" aria-hidden="true" fill="none" strokeWidth="1.2" stroke={isSel ? '#d97706' : '#a8802c'}>
+                              <circle cx="20" cy="20" r="18" strokeDasharray="3 1.5" />
+                              <circle cx="20" cy="20" r="15" strokeWidth="0.8" opacity="0.85" fill={isSel ? 'rgba(245,158,11,0.25)' : 'none'} />
+                            </svg>
+                            <span
+                              className="relative font-bold tabular-nums text-amber-800 dark:text-amber-300"
+                              style={{ fontSize: num >= 100 ? '0.34em' : '0.42em', fontFamily: "'Vazirmatn', sans-serif" }}
+                            >
+                              {toPersianDigits(num)}
+                            </span>
+                          </span>
+                          {verse && renderSajdaMark(verse)}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span
+                        key={idx}
+                        {...hit}
+                        className={`cursor-pointer rounded-md transition-colors ${
+                          isSel ? 'bg-amber-300/40 dark:bg-amber-500/30' : 'hover:bg-stone-200/50 dark:hover:bg-slate-800/60'
+                        }`}
+                      >
+                        {w.text}
+                      </span>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="space-y-6">
@@ -377,7 +531,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
 
                   {/* متن پیوسته آیات صفحه */}
                   <div
-                    className="text-justify leading-[2.6] tracking-normal text-slate-800 dark:text-slate-100"
+                    className="text-right leading-[2.6] tracking-normal text-slate-800 dark:text-slate-100"
                     style={{
                       fontFamily: getArabicFontFamily(settings.arabicFont),
                       fontSize: `${settings.arabicFontSize}px`,
@@ -414,6 +568,31 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         <div className="mt-8 pt-4 border-t border-stone-200 dark:border-slate-800 text-center text-xs font-bold text-slate-400">
           — {toPersianDigits(currentPage)} —
         </div>
+      </div>
+
+      {/* ناوبری انتهای صفحه: بدون نیاز به برگشت به بالا */}
+      <div className="flex items-center gap-2" dir="rtl">
+        <button
+          onClick={handlePrevPage}
+          disabled={currentPage <= 1 || isLoading}
+          className="flex-1 min-h-[48px] flex items-center justify-center gap-1.5 rounded-2xl border border-amber-300/70 dark:border-slate-700 bg-stone-50 dark:bg-slate-900 text-sm font-bold text-teal-800 dark:text-teal-300 disabled:opacity-40 cursor-pointer active:scale-[0.98] transition-transform"
+          aria-label="صفحه قبل"
+        >
+          <ChevronRight className="w-5 h-5" />
+          صفحه قبل
+        </button>
+        <div className="min-w-[56px] text-center text-xs font-bold text-slate-500 dark:text-slate-400">
+          {toPersianDigits(currentPage)}
+        </div>
+        <button
+          onClick={handleNextPage}
+          disabled={currentPage >= 604 || isLoading}
+          className="flex-1 min-h-[48px] flex items-center justify-center gap-1.5 rounded-2xl bg-teal-800 text-amber-200 text-sm font-bold disabled:opacity-40 cursor-pointer active:scale-[0.98] transition-transform"
+          aria-label="صفحه بعد"
+        >
+          صفحه بعد
+          <ChevronLeft className="w-5 h-5" />
+        </button>
       </div>
 
       {/* منوی عملیات آیهٔ انتخاب‌شده: پایین صفحه، با تپ روی آیه باز می‌شود */}
@@ -483,7 +662,10 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                   return (
                     <button
                       key={a.label}
-                      onClick={a.run}
+                      onClick={() => {
+                        a.run();
+                        setSelectedVerse(null);
+                      }}
                       className={`min-h-[64px] flex flex-col items-center justify-center gap-1 rounded-2xl border text-xs font-bold cursor-pointer active:scale-[0.97] transition-transform ${
                         a.primary
                           ? 'bg-teal-800 border-teal-800 text-white'
