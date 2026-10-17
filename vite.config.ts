@@ -28,7 +28,7 @@ export default defineConfig(() => {
         injectManifest: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
           // چیدمان مصحف (۵٫۵ مگابایت) فقط هنگام اولین استفاده با CacheFirst ذخیره می‌شود (sw.ts)
-          globIgnores: ['**/data/mushaf-layout-v1.json'],
+          globIgnores: ['**/data/mushaf-layout-v2.json', '**/fonts/qcf4/**'],
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
         },
         devOptions: {

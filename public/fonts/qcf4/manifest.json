@@ -1,0 +1,195 @@
+{
+ "version": 1,
+ "count": 47,
+ "totalBytes": 36767324,
+ "fonts": {
+  "QCF4_Hafs_01": {
+   "file": "QCF4_Hafs_01_W.woff2",
+   "bytes": 946364
+  },
+  "QCF4_Hafs_02": {
+   "file": "QCF4_Hafs_02_W.woff2",
+   "bytes": 870632
+  },
+  "QCF4_Hafs_03": {
+   "file": "QCF4_Hafs_03_W.woff2",
+   "bytes": 911296
+  },
+  "QCF4_Hafs_04": {
+   "file": "QCF4_Hafs_04_W.woff2",
+   "bytes": 826668
+  },
+  "QCF4_Hafs_05": {
+   "file": "QCF4_Hafs_05_W.woff2",
+   "bytes": 793164
+  },
+  "QCF4_Hafs_06": {
+   "file": "QCF4_Hafs_06_W.woff2",
+   "bytes": 804068
+  },
+  "QCF4_Hafs_07": {
+   "file": "QCF4_Hafs_07_W.woff2",
+   "bytes": 798192
+  },
+  "QCF4_Hafs_08": {
+   "file": "QCF4_Hafs_08_W.woff2",
+   "bytes": 787316
+  },
+  "QCF4_Hafs_09": {
+   "file": "QCF4_Hafs_09_W.woff2",
+   "bytes": 795196
+  },
+  "QCF4_Hafs_10": {
+   "file": "QCF4_Hafs_10_W.woff2",
+   "bytes": 816868
+  },
+  "QCF4_Hafs_11": {
+   "file": "QCF4_Hafs_11_W.woff2",
+   "bytes": 827896
+  },
+  "QCF4_Hafs_12": {
+   "file": "QCF4_Hafs_12_W.woff2",
+   "bytes": 922028
+  },
+  "QCF4_Hafs_13": {
+   "file": "QCF4_Hafs_13_W.woff2",
+   "bytes": 881732
+  },
+  "QCF4_Hafs_14": {
+   "file": "QCF4_Hafs_14_W.woff2",
+   "bytes": 803736
+  },
+  "QCF4_Hafs_15": {
+   "file": "QCF4_Hafs_15_W.woff2",
+   "bytes": 864008
+  },
+  "QCF4_Hafs_16": {
+   "file": "QCF4_Hafs_16_W.woff2",
+   "bytes": 779132
+  },
+  "QCF4_Hafs_17": {
+   "file": "QCF4_Hafs_17_W.woff2",
+   "bytes": 818116
+  },
+  "QCF4_Hafs_18": {
+   "file": "QCF4_Hafs_18_W.woff2",
+   "bytes": 785844
+  },
+  "QCF4_Hafs_19": {
+   "file": "QCF4_Hafs_19_W.woff2",
+   "bytes": 796344
+  },
+  "QCF4_Hafs_20": {
+   "file": "QCF4_Hafs_20_W.woff2",
+   "bytes": 823244
+  },
+  "QCF4_Hafs_21": {
+   "file": "QCF4_Hafs_21_W.woff2",
+   "bytes": 762832
+  },
+  "QCF4_Hafs_22": {
+   "file": "QCF4_Hafs_22_W.woff2",
+   "bytes": 785196
+  },
+  "QCF4_Hafs_23": {
+   "file": "QCF4_Hafs_23_W.woff2",
+   "bytes": 748988
+  },
+  "QCF4_Hafs_24": {
+   "file": "QCF4_Hafs_24_W.woff2",
+   "bytes": 726080
+  },
+  "QCF4_Hafs_25": {
+   "file": "QCF4_Hafs_25_W.woff2",
+   "bytes": 777040
+  },
+  "QCF4_Hafs_26": {
+   "file": "QCF4_Hafs_26_W.woff2",
+   "bytes": 771956
+  },
+  "QCF4_Hafs_27": {
+   "file": "QCF4_Hafs_27_W.woff2",
+   "bytes": 751056
+  },
+  "QCF4_Hafs_28": {
+   "file": "QCF4_Hafs_28_W.woff2",
+   "bytes": 763772
+  },
+  "QCF4_Hafs_29": {
+   "file": "QCF4_Hafs_29_W.woff2",
+   "bytes": 765632
+  },
+  "QCF4_Hafs_30": {
+   "file": "QCF4_Hafs_30_W.woff2",
+   "bytes": 771956
+  },
+  "QCF4_Hafs_31": {
+   "file": "QCF4_Hafs_31_W.woff2",
+   "bytes": 807568
+  },
+  "QCF4_Hafs_32": {
+   "file": "QCF4_Hafs_32_W.woff2",
+   "bytes": 750052
+  },
+  "QCF4_Hafs_33": {
+   "file": "QCF4_Hafs_33_W.woff2",
+   "bytes": 791648
+  },
+  "QCF4_Hafs_34": {
+   "file": "QCF4_Hafs_34_W.woff2",
+   "bytes": 800712
+  },
+  "QCF4_Hafs_35": {
+   "file": "QCF4_Hafs_35_W.woff2",
+   "bytes": 757092
+  },
+  "QCF4_Hafs_36": {
+   "file": "QCF4_Hafs_36_W.woff2",
+   "bytes": 762188
+  },
+  "QCF4_Hafs_37": {
+   "file": "QCF4_Hafs_37_W.woff2",
+   "bytes": 762560
+  },
+  "QCF4_Hafs_38": {
+   "file": "QCF4_Hafs_38_W.woff2",
+   "bytes": 783152
+  },
+  "QCF4_Hafs_39": {
+   "file": "QCF4_Hafs_39_W.woff2",
+   "bytes": 767184
+  },
+  "QCF4_Hafs_40": {
+   "file": "QCF4_Hafs_40_W.woff2",
+   "bytes": 768404
+  },
+  "QCF4_Hafs_41": {
+   "file": "QCF4_Hafs_41_W.woff2",
+   "bytes": 773840
+  },
+  "QCF4_Hafs_42": {
+   "file": "QCF4_Hafs_42_W.woff2",
+   "bytes": 808164
+  },
+  "QCF4_Hafs_43": {
+   "file": "QCF4_Hafs_43_W.woff2",
+   "bytes": 765260
+  },
+  "QCF4_Hafs_44": {
+   "file": "QCF4_Hafs_44_W.woff2",
+   "bytes": 727128
+  },
+  "QCF4_Hafs_45": {
+   "file": "QCF4_Hafs_45_W.woff2",
+   "bytes": 708856
+  },
+  "QCF4_Hafs_46": {
+   "file": "QCF4_Hafs_46_W.woff2",
+   "bytes": 368848
+  },
+  "QCF4_Hafs_47": {
+   "file": "QCF4_Hafs_47_W.woff2",
+   "bytes": 588316
+  }
+ }
+}

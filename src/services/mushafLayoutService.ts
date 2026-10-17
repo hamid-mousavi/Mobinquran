@@ -2,7 +2,7 @@ import type { MushafLayoutPack, MushafPageData } from '../types/mushafLayout';
 
 let cachePromise: Promise<MushafLayoutPack | null> | null = null;
 
-const PACK_URL = `${import.meta.env.BASE_URL}data/mushaf-layout-v1.json`;
+const PACK_URL = `${import.meta.env.BASE_URL}data/mushaf-layout-v2.json`;
 
 export function loadMushafLayoutPack(): Promise<MushafLayoutPack | null> {
   if (!cachePromise) {

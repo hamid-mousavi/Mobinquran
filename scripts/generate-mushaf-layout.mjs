@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
 const BASE_URL =
@@ -7,6 +8,9 @@ const TOTAL_PAGES = 604;
 const ALLOWED_TYPES = new Set(['surah_header', 'bismillah', 'word', 'end', 'quarter']);
 
 const argv = process.argv.slice(2);
+// --repo=مسیر پوشهٔ quran-qcf4 روی دیسک (بدون اینترنت)؛ بدون آن از GitHub دانلود می‌شود
+const repoArg = argv.find((a) => a.startsWith('--repo='));
+const repoDir = repoArg ? repoArg.slice('--repo='.length).replace(/^"|"$/g, '') : null;
 const pagesArg = argv.find((a) => a.startsWith('--pages='));
 const pages =
   pagesArg
@@ -21,10 +25,15 @@ console.log(`Fetching ${pages.length} mushaf pages from quran-qcf4 (MIT)...`);
 const pageData = [];
 for (const pageNumber of [...pages].sort((a, b) => a - b)) {
   const zeros = String(pageNumber).padStart(3, '0');
-  const url = `${BASE_URL}${zeros}.json`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`page ${zeros}: HTTP ${res.status}`);
-  const json = await res.json();
+  let json;
+  if (repoDir) {
+    json = JSON.parse(await readFile(join(repoDir, 'pages', `${zeros}.json`), 'utf8'));
+  } else {
+    const url = `${BASE_URL}${zeros}.json`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`page ${zeros}: HTTP ${res.status}`);
+    json = await res.json();
+  }
   if (json.page !== pageNumber) throw new Error(`page ${zeros}: page field mismatch (${json.page})`);
   if (!Array.isArray(json.lines) || json.lines.length === 0) {
     throw new Error(`page ${zeros}: no lines`);
@@ -38,6 +47,9 @@ for (const pageNumber of [...pages].sort((a, b) => a - b)) {
     for (const w of line.words) {
       if (!ALLOWED_TYPES.has(w.type)) {
         throw new Error(`page ${zeros}: unknown word type "${w.type}"`);
+      }
+      if ((w.type === 'word' || w.type === 'end') && (typeof w.char !== 'string' || typeof w.font !== 'string')) {
+        throw new Error(`page ${zeros}: ${w.type} word without char/font (QCF4 glyph)`);
       }
       if (typeof w.text !== 'string' || w.text.length === 0) {
         throw new Error(`page ${zeros}: word without text`);
@@ -67,6 +79,10 @@ const normalized = pageData.map((p) => ({
       ...(w.type !== 'surah_header' && w.type !== 'bismillah' && w.type !== 'quarter'
         ? { verse: w.verse_key }
         : {}),
+      // گلیف QCF4: کاراکتر PUA و نام فونت صفحه (برای رندر دقیق مصحف مدینه)
+      ...((w.type === 'word' || w.type === 'end' || w.type === 'bismillah') && w.char && w.font
+        ? { c: w.char, f: w.font }
+        : {}),
       ...(w.sura ? { sura: w.sura } : {}),
       ...(w.verse_key && w.type === 'word' ? { p: w.position } : {}),
     })),
@@ -89,13 +105,13 @@ const contentPack = {
   pages: normalized,
 };
 
-await mkdir(new URL('../public/data/', import.meta.url), { recursive: true });
+await mkdir(new URL('./raw/', import.meta.url), { recursive: true });
 await writeFile(
-  new URL('../public/data/mushaf-layout-v1.json', import.meta.url),
+  new URL('./raw/mushaf-layout-raw.json', import.meta.url),
   `${JSON.stringify(contentPack)}\n`,
   'utf8'
 );
 console.log(
-  `Wrote ${normalized.length} pages to public/data/mushaf-layout-v1.json`
+  `Wrote ${normalized.length} pages to scripts/raw/mushaf-layout-raw.json (سپس node scripts/fix-mushaf-text.mjs)`
 );
 console.log(`Integrity SHA-256: ${contentPack.integrity.value}`);

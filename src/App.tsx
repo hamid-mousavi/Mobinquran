@@ -535,16 +535,46 @@ export default function App() {
     }
   }, []);
 
+  // در مصحف، صفحه دنبال آیهٔ در حال پخش می‌رود؛ اما اگر کاربر عمداً صفحهٔ دیگری را می‌خواند، دخالت نمی‌کند
+  const lastPlayingPageRef = React.useRef<number | null>(null);
+  useEffect(() => {
+    if (viewMode !== 'mushaf-page' || !isAudioPlayerOpen || activePlayingVerseNumber === null) {
+      lastPlayingPageRef.current = null;
+      return;
+    }
+    const playing = verses.find((v) => v.verseNumber === activePlayingVerseNumber && v.surahId === currentSurah.id);
+    if (!playing?.pageNumber) return;
+    const prev = lastPlayingPageRef.current;
+    if (prev === null || prev === currentMushafPage) {
+      setCurrentMushafPage(playing.pageNumber);
+    }
+    lastPlayingPageRef.current = playing.pageNumber;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePlayingVerseNumber, viewMode, isAudioPlayerOpen, verses]);
+
   // سوئیچ هوشمند و همگام بین نمای آیه‌ای و مصحف صفحه‌ای
   const handleToggleViewMode = async () => {
     if (viewMode === 'verse-by-verse') {
       // تغییر به مصحف صفحه‌ای: رفتن دقیق به صفحه‌ای که آیه در حال مطالعه در آن است
-      const targetPage = lastReadPosition?.pageNumber || currentMushafPage || currentSurah.startPage || 1;
+      // اگر صوت در حال پخش است، صفحهٔ همان آیه باز می‌شود تا هایلایت هماهنگ باشد
+      const playingVerse =
+        isAudioPlayerOpen && activePlayingVerseNumber !== null
+          ? verses.find((v) => v.verseNumber === activePlayingVerseNumber)
+          : undefined;
+      const targetPage =
+        playingVerse?.pageNumber || lastReadPosition?.pageNumber || currentMushafPage || currentSurah.startPage || 1;
       setCurrentMushafPage(targetPage);
       setViewMode('mushaf-page');
     } else {
       // تغییر به نمای آیه‌ای: دریافت آیات صفحهٔ جاری و اسکرول به نخستین آیه آن صفحه
       const targetPage = currentMushafPage || 1;
+      // اگر آیه‌ای در حال پخش است، به همان آیه برگرد (نه اولین آیهٔ صفحه)
+      if (isAudioPlayerOpen && activePlayingVerseNumber !== null) {
+        setResumeScrollVerse(activePlayingVerseNumber);
+        setTimeout(() => requestQuranScrollToVerse(activePlayingVerseNumber), 180);
+        setViewMode('verse-by-verse');
+        return;
+      }
       const pageVerses = await QuranService.getVersesByPage(targetPage);
       if (pageVerses.length > 0) {
         const firstVerse = pageVerses[0];
@@ -633,7 +663,12 @@ export default function App() {
   };
 
   // پخش صوت آیه
-  const handlePlayVerseAudio = (verseNumber: number) => {
+  const handlePlayVerseAudio = (verseNumber: number, surahId?: number) => {
+    // در مصحف ممکن است آیه به سورهٔ دیگری از همان صفحه تعلق داشته باشد؛ پلیر به سورهٔ جاری وابسته است
+    if (surahId && surahId !== currentSurah.id) {
+      const target = surahs.find((s) => s.id === surahId);
+      if (target) setCurrentSurah(target);
+    }
     setActivePlayingVerseNumber(verseNumber);
     setIsAudioPlayerOpen(true);
     recordUserActivity('listen');
@@ -889,11 +924,18 @@ export default function App() {
             handleOpenAI(verse);
           }}
           onPlayVerseAudio={handlePlayVerseAudio}
+          activeVerseKey={
+            isAudioPlayerOpen && activePlayingVerseNumber !== null
+              ? `${currentSurah.id}:${activePlayingVerseNumber}`
+              : null
+          }
           onPageChange={(p, surahId, verseNumber) => {
             setCurrentMushafPage(p);
             if (surahId) {
               const targetSurah = surahs.find((s) => s.id === surahId);
-              if (targetSurah && targetSurah.id !== currentSurah.id) {
+              // هنگام پخش صوت، سورهٔ پلیر با ورق زدن صفحه عوض نمی‌شود
+              const audioActive = isAudioPlayerOpen && activePlayingVerseNumber !== null;
+              if (targetSurah && targetSurah.id !== currentSurah.id && !audioActive) {
                 setCurrentSurah(targetSurah);
               }
               const vNum = verseNumber || 1;

@@ -61,7 +61,7 @@ describe('Server Security & Hardening (Phase 1)', () => {
 
     it('rate limits excessive audio proxy requests', async () => {
       // Simulate multiple requests exceeding the limit
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 120; i++) {
         await request(app).get('/api/audio/proxy?url=https://attacker.com/fake.mp3');
       }
 

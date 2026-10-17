@@ -27,7 +27,11 @@ import {
   resolveAudioSource,
   getWorkingSourceIndex,
   setWorkingSourceIndex,
+  getProxiedAudioUrl,
+  shouldUseProxy,
+  markProxyWorking,
   RECITER_NAMES,
+  type AudioSource,
 } from '../services/audioSources';
 import {
   getCachedAudioBlobUrl,
@@ -256,6 +260,17 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const preloadAudioRef = useRef<HTMLAudioElement | null>(null);
+  // مسیر پخش: مستقیم یا پروکسی سرور (برای شبکه‌هایی که دامنهٔ منبع صوت در آن‌ها فیلتر/کند است)
+  const forceRouteRef = useRef<'direct' | 'proxy' | null>(null);
+  const lastRouteKeyRef = useRef('');
+  const currentRouteRef = useRef<{ viaProxy: boolean; host: AudioSource['host'] | null; sourceIndex: number | null }>({
+    viaProxy: false,
+    host: null,
+    sourceIndex: null,
+  });
+  const triedRoutesRef = useRef<{ key: string; routes: Set<string> }>({ key: '', routes: new Set() });
+  const handleAudioErrorRef = useRef<() => void>(() => {});
+  const [retryNonce, setRetryNonce] = useState(0);
   const isPlayingRef = useRef(isPlaying);
   const activeBlobUrlRef = useRef<string | null>(null);
   const currentRawUrlRef = useRef<string | null>(null);
@@ -349,8 +364,16 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     reciterId: ReciterId,
     surahId: number,
     verseNumber: number,
-    targetSourceIndex: number
-  ): Promise<{ url: string; isOffline: boolean; sourceIndex: number; reciterId: ReciterId }> => {
+    targetSourceIndex: number,
+    forcedRoute: 'direct' | 'proxy' | null = null
+  ): Promise<{
+    url: string;
+    isOffline: boolean;
+    sourceIndex: number;
+    reciterId: ReciterId;
+    viaProxy?: boolean;
+    host?: AudioSource['host'] | null;
+  }> => {
     // ۱. بررسی فوری کش آفلاین برای قاری انتخابی کاربر
     const cached = await getCachedAudioBlobUrl(reciterId, surahId, verseNumber);
     if (cached) {
@@ -363,11 +386,17 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     // ۲. در صورت آنلاین بودن، پخش آنلاین مستقیم قاری انتخابی کاربر (بدون پرش یا بازگشت به قاری دانلودشده قبلی)
     if (isOnline) {
       const resolved = resolveAudioSource(reciterId, surahId, verseNumber, targetSourceIndex);
+      if (!resolved) {
+        return { url: '', isOffline: false, sourceIndex: targetSourceIndex, reciterId };
+      }
+      const viaProxy = forcedRoute ? forcedRoute === 'proxy' : shouldUseProxy(resolved.source.host);
       return {
-        url: resolved?.url || '',
+        url: viaProxy ? getProxiedAudioUrl(resolved.url) : resolved.url,
         isOffline: false,
-        sourceIndex: resolved?.sourceIndex ?? targetSourceIndex,
+        sourceIndex: resolved.sourceIndex,
         reciterId,
+        viaProxy,
+        host: resolved.source.host,
       };
     }
 
@@ -378,15 +407,29 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   // بارگذاری فایل صوتی هنگام تغییر آیه، قاری یا سوره
   useEffect(() => {
     let isCancelled = false;
-    setPlaybackError(null);
+    let watchdog: number | undefined;
+    let detachReady: (() => void) | null = null;
+
+    // مسیر اجباری فقط برای همین آیه معتبر است؛ با عوض‌شدن آیه/قاری ریست می‌شود
+    const routeKey = `${currentSurah.id}:${currentPlayingVerseNumber}:${selectedReciterId}`;
+    if (lastRouteKeyRef.current !== routeKey) {
+      lastRouteKeyRef.current = routeKey;
+      forceRouteRef.current = null;
+    }
+    const forcedRoute = forceRouteRef.current;
+    forceRouteRef.current = null;
+
+    // پیام «در حال امتحان مسیر جایگزین» را پاک نکن؛ فقط خطاهای قبلی پاک شوند
+    if (!forcedRoute) setPlaybackError(null);
     setIsLoadingAudio(true);
 
     resolvePlayableUrl(
       selectedReciterId,
       currentSurah.id,
       currentPlayingVerseNumber,
-      sourceIndex
-    ).then(({ url: playableUrl, sourceIndex: matchedIndex }) => {
+      sourceIndex,
+      forcedRoute
+    ).then(({ url: playableUrl, sourceIndex: matchedIndex, viaProxy, host }) => {
       if (isCancelled || !audioRef.current) return;
 
       if (!playableUrl) {
@@ -402,6 +445,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       }
 
       currentRawUrlRef.current = playableUrl;
+      currentRouteRef.current = { viaProxy: !!viaProxy, host: host ?? null, sourceIndex: matchedIndex };
 
       if (matchedIndex !== sourceIndex) {
         setWorkingSourceIndex(selectedReciterId, matchedIndex);
@@ -416,6 +460,28 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
       audioRef.current.src = playableUrl;
       audioRef.current.playbackRate = playbackRate;
+
+      // نگهبان زمان: در شبکه‌های فیلترشده اتصال اغلب خطا نمی‌دهد و فقط معطل می‌ماند
+      if (!playableUrl.startsWith('blob:')) {
+        const el = audioRef.current;
+        const onReady = () => {
+          window.clearTimeout(watchdog);
+          // اگر پخش با پروکسی موفق شد، برای آیه‌های بعدی هم همین مسیر انتخاب می‌شود
+          if (viaProxy && host) markProxyWorking(host);
+        };
+        el.addEventListener('loadeddata', onReady, { once: true });
+        el.addEventListener('canplay', onReady, { once: true });
+        detachReady = () => {
+          el.removeEventListener('loadeddata', onReady);
+          el.removeEventListener('canplay', onReady);
+        };
+        watchdog = window.setTimeout(() => {
+          if (isCancelled) return;
+          if (audioRef.current && audioRef.current.readyState < 2) {
+            handleAudioErrorRef.current();
+          }
+        }, viaProxy ? 15000 : 7000);
+      }
 
       // رهاسازی با تاخیر آدرس قبلی جهت جلوگیری از خطای ناگهانی پخش
       if (oldBlob && oldBlob !== playableUrl) {
@@ -435,7 +501,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
             console.warn('Audio playback error:', err);
             setIsLoadingAudio(false);
             if (audioRef.current?.error) {
-              handleAudioError();
+              handleAudioErrorRef.current();
             }
           });
         }
@@ -463,8 +529,11 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
     return () => {
       isCancelled = true;
+      window.clearTimeout(watchdog);
+      detachReady?.();
     };
-  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId]);
+    // sourceIndex و retryNonce عمداً در وابستگی‌ها هستند؛ بدون آن‌ها سرور/مسیر جایگزین هرگز بارگذاری نمی‌شد
+  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, sourceIndex, retryNonce]);
 
   // اعمال سرعت پخش
   useEffect(() => {
@@ -609,9 +678,31 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     const sources = getSourcesForReciter(selectedReciterId);
     const reciterName = RECITER_NAMES[selectedReciterId] || selectedReciterId;
 
-    // ۲. در صورت آنلاین بودن، امتحان سرور جایگزین برای همین قاری
-    if (isOnline && sourceIndex < sources.length - 1) {
-      const nextSourceIdx = sourceIndex + 1;
+    // ۲. ابتدا مسیر دیگرِ همین منبع (مستقیم ↔ پروکسی سرور برنامه)، سپس منبع بعدی
+    const route = currentRouteRef.current;
+    const baseIdx = Math.min(route.sourceIndex ?? sourceIndex, sources.length - 1);
+    const triedKey = `${currentSurah.id}:${currentPlayingVerseNumber}:${selectedReciterId}:${baseIdx}`;
+    if (triedRoutesRef.current.key !== triedKey) {
+      triedRoutesRef.current = { key: triedKey, routes: new Set() };
+    }
+    triedRoutesRef.current.routes.add(route.viaProxy ? 'proxy' : 'direct');
+    const otherRoute: 'direct' | 'proxy' = route.viaProxy ? 'direct' : 'proxy';
+    const srcAttr = audioRef.current?.src || '';
+    if (isOnline && srcAttr && !srcAttr.startsWith('blob:') && !triedRoutesRef.current.routes.has(otherRoute)) {
+      forceRouteRef.current = otherRoute;
+      setIsLoadingAudio(true);
+      setPlaybackError(
+        otherRoute === 'proxy'
+          ? 'اتصال مستقیم به منبع صوت برقرار نشد؛ در حال امتحان مسیر جایگزین از طریق سرور برنامه…'
+          : 'در حال امتحان مسیر مستقیم…'
+      );
+      setRetryNonce((n) => n + 1);
+      return;
+    }
+
+    if (isOnline && baseIdx < sources.length - 1) {
+      const nextSourceIdx = baseIdx + 1;
+      forceRouteRef.current = null;
       setSourceIndex(nextSourceIdx);
       setWorkingSourceIndex(selectedReciterId, nextSourceIdx);
       setPlaybackError(`خطا در سرور فعلی؛ در حال امتحان سرور جایگزین (${sources[nextSourceIdx].name})...`);
@@ -633,19 +724,14 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
     const mediaCode = audioRef.current?.error ? (audioRef.current.error as MediaError).code : null;
     const kind = classifyAudioError(mediaCode, navigator.onLine);
-    const currentSource = sources[Math.min(sourceIndex, sources.length - 1)];
-    const url = getAudioSourceUrl(
-      selectedReciterId,
-      currentSurah.id,
-      currentPlayingVerseNumber,
-      Math.min(sourceIndex, sources.length - 1)
-    );
+    const currentSource = sources[baseIdx];
+    const url = getAudioSourceUrl(selectedReciterId, currentSurah.id, currentPlayingVerseNumber, baseIdx);
 
     logAudioError({
       surahId: currentSurah.id,
       verseNumber: currentPlayingVerseNumber,
       reciterId: selectedReciterId,
-      sourceIndex,
+      sourceIndex: baseIdx,
       sourceName: currentSource.name,
       kind,
       message: describeAudioError(kind),
@@ -653,8 +739,11 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     });
 
     setIsPlaying(false);
-    setPlaybackError(`خطا در پخش صوت آیه ${toPersianDigits(currentPlayingVerseNumber)}؛ لطفاً اتصال اینترنت را بررسی یا تلاش مجدد را بزنید.`);
+    setPlaybackError(
+      `پخش صوت آیه ${toPersianDigits(currentPlayingVerseNumber)} از هیچ‌کدام از منابع ممکن نشد؛ اتصال اینترنت را بررسی کنید (اگر فیلترشکن روشن است، خاموش یا عوض کنید) و «تلاش مجدد» را بزنید.`
+    );
   };
+  handleAudioErrorRef.current = handleAudioError;
 
   // فیلتر کردن لیست سوره‌ها در صف پخش
   const filteredSurahs = (allSurahs || []).filter((s) => {
@@ -719,17 +808,14 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               <button
                 onClick={() => {
                   setPlaybackError(null);
+                  forceRouteRef.current = null;
+                  triedRoutesRef.current = { key: '', routes: new Set() };
+                  isPlayingRef.current = true;
+                  setIsPlaying(true);
                   setSourceIndex(0);
                   setIsLoadingAudio(true);
-                  if (audioRef.current) {
-                    audioRef.current.load();
-                    audioRef.current.play().then(() => {
-                      setIsPlaying(true);
-                      setIsLoadingAudio(false);
-                    }).catch(() => {
-                      setIsLoadingAudio(false);
-                    });
-                  }
+                  // بارگذاری دوباره از اول (همان مسیرِ مستقیم/پروکسی و منابع به ترتیب)
+                  setRetryNonce((n) => n + 1);
                 }}
                 className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold transition-colors cursor-pointer"
               >
@@ -909,6 +995,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
           onPlaying={() => {
             setIsLoadingAudio(false);
             setIsPlaying(true);
+            setPlaybackError(null);
           }}
           className="hidden"
         />

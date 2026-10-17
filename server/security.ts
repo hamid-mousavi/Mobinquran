@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 
-const AUDIO_PROXY_LIMIT = 60; // Max 60 audio proxy requests per minute per IP
+const AUDIO_PROXY_LIMIT = 120; // حداکثر ۱۲۰ درخواست در دقیقه برای هر IP (پخش + پیش‌بارگذاری آیه بعدی؛ شبکه‌های اشتراکی موبایل)
 const audioProxyLimits = new Map<string, { count: number; resetAt: number }>();
 
 export function getClientIp(req: Request): string {

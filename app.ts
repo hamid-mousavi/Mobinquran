@@ -146,6 +146,7 @@ export function createApp() {
       'islamic.network',
       'cdn.islamic.network',
       'huggingface.co',
+      'hf.co', // ریدایرکت‌های Hugging Face به *.hf.co (مثل cas-bridge.xethub.hf.co)
       'qurancdn.com',
       'verses.quran.com',
       'quranicaudio.com',
@@ -159,6 +160,7 @@ export function createApp() {
     ];
 
     const controller = new AbortController();
+    let upstreamTimedOut = false;
     req.on('close', () => {
       controller.abort();
     });
@@ -179,14 +181,25 @@ export function createApp() {
           return res.status(403).send('Audio host not permitted');
         }
 
-        const response = await fetch(currentUrl, {
-          redirect: 'manual',
-          signal: controller.signal,
-          headers: {
-            'User-Agent': 'QuranMobinApp/2.0 (AudioProxy)',
-            ...(req.headers.range ? { Range: req.headers.range } : {}),
-          },
-        });
+        // اگر منبع بالادستی در مرحلهٔ اتصال/دریافت هدر معطل کند، پس از ۱۲ ثانیه قطع می‌کنیم
+        // (تایمر بعد از دریافت هدر پاک می‌شود تا استریم‌های طولانی قطع نشوند)
+        const connectTimer = setTimeout(() => {
+          upstreamTimedOut = true;
+          controller.abort();
+        }, 12_000);
+        let response: Response;
+        try {
+          response = await fetch(currentUrl, {
+            redirect: 'manual',
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'QuranMobinApp/2.0 (AudioProxy)',
+              ...(req.headers.range ? { Range: req.headers.range } : {}),
+            },
+          });
+        } finally {
+          clearTimeout(connectTimer);
+        }
 
         if (response.status >= 300 && response.status < 400) {
           const location = response.headers.get('location');
@@ -209,9 +222,16 @@ export function createApp() {
         return res.status(audioRes.status).send('Failed to fetch audio stream');
       }
 
-      const contentType = (audioRes.headers.get('content-type') || '').toLowerCase();
+      let contentType = (audioRes.headers.get('content-type') || '').toLowerCase();
+      // برخی CDNها (مثل Hugging Face) mp3 را با octet-stream برمی‌گردانند؛ فقط برای فایل‌های .mp3 می‌پذیریم
+      const looksLikeMp3 = new URL(currentUrl).pathname.toLowerCase().endsWith('.mp3');
       if (!contentType.startsWith('audio/')) {
-        return res.status(415).send('Unsupported media type: only audio/* streams are accepted');
+        const isBinary = contentType.startsWith('application/octet-stream') || contentType.startsWith('binary/octet-stream');
+        if (looksLikeMp3 && isBinary) {
+          contentType = 'audio/mpeg';
+        } else {
+          return res.status(415).send('Unsupported media type: only audio/* streams are accepted');
+        }
       }
 
       res.status(audioRes.status);
@@ -227,6 +247,9 @@ export function createApp() {
 
       Readable.fromWeb(audioRes.body as any).pipe(res);
     } catch (err: any) {
+      if (upstreamTimedOut && !res.headersSent) {
+        return res.status(504).send('Audio upstream timeout');
+      }
       if (controller.signal.aborted || req.destroyed) {
         return;
       }

@@ -5,7 +5,7 @@ import type { MushafLayoutPack } from '../types/mushafLayout';
 
 const pack = JSON.parse(
   readFileSync(
-    fileURLToPath(new URL('../../public/data/mushaf-layout-v1.json', import.meta.url)),
+    fileURLToPath(new URL('../../public/data/mushaf-layout-v2.json', import.meta.url)),
     'utf8'
   )
 ) as MushafLayoutPack;
@@ -66,5 +66,32 @@ describe('mushaf-layout pack (P3-T3, quran-qcf4 MIT data)', () => {
     const pages = pack.pages;
     const hash = createHash('sha256').update(JSON.stringify(pages)).digest('hex');
     expect(pack.integrity.value).toBe(hash);
+  });
+
+  it('uses Uthmani spelling matching verse-by-verse text (no plain-alef "إِلَاهَ")', () => {
+    const words = pack.pages.flatMap((pg) => pg.lines.flatMap((l) => l.words));
+    const ayatKursi = words.filter((w) => w.type === 'word' && w.verse === '2:255').map((w) => w.text);
+    expect(ayatKursi.some((t) => t.includes('إِلَٰهَ'))).toBe(true);
+    expect(words.some((w) => w.text.includes('إِلَاهَ'))).toBe(false);
+    expect(words.some((w) => w.type === 'surah_header' && w.text.includes('االب'))).toBe(false);
+  });
+
+  it('keeps waqf marks attached to the preceding word', () => {
+    const words = pack.pages.flatMap((pg) => pg.lines.flatMap((l) => l.words));
+    expect(words.some((w) => w.type === 'word' && /[\u06D6-\u06DC]/.test(w.text))).toBe(true);
+  });
+
+  it('keeps glyph fields (c/f) when present, with consistent font names', () => {
+    const words = pack.pages.flatMap((pg) => pg.lines.flatMap((l) => l.words));
+    const glyph = words.filter((w) => w.c !== undefined || w.f !== undefined);
+    // بسته‌ی بدون گلیف (قبل از اجرای generate) مجاز است؛ اگر گلیف دارد باید کامل باشد
+    for (const w of glyph) {
+      expect(typeof w.c).toBe('string');
+      expect(w.f).toMatch(/^QCF4_Hafs_\d{2}$/);
+    }
+    if (glyph.length > 0) {
+      const bare = words.filter((w) => (w.type === 'word' || w.type === 'end') && !w.c);
+      expect(bare.length).toBe(0);
+    }
   });
 });

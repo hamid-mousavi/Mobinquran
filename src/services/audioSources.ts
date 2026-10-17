@@ -553,3 +553,45 @@ export const getProxiedAudioUrl = (url: string): string => {
   return getApiUrl(`/api/audio/proxy?url=${encodeURIComponent(url)}`);
 };
 
+
+// ─────────────────────────────────────────────────────────────
+// مسیر پخش: مستقیم یا از طریق پروکسی سرور (برای زمانی که دامنهٔ منبع صوت فیلتر یا کند است)
+// ─────────────────────────────────────────────────────────────
+const PROXY_PREF_KEY = 'mobin_audio_proxy_hosts';
+const PROXY_PREF_TTL_MS = 12 * 60 * 60 * 1000; // ۱۲ ساعت؛ بعد از آن دوباره مسیر مستقیم امتحان می‌شود
+
+const readProxyPrefs = (): Record<string, number> => {
+  try {
+    const raw = localStorage.getItem(PROXY_PREF_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    const now = Date.now();
+    return Object.fromEntries(Object.entries(parsed).filter(([, ts]) => typeof ts === 'number' && now - ts < PROXY_PREF_TTL_MS));
+  } catch {
+    return {};
+  }
+};
+
+/** آیا برای این میزبان قبلاً مسیر مستقیم جواب نداده و پروکسی جواب داده است؟ */
+export const shouldUseProxy = (host: AudioSource['host']): boolean => host in readProxyPrefs();
+
+export const markProxyWorking = (host: AudioSource['host']): void => {
+  try {
+    const prefs = readProxyPrefs();
+    if (host in prefs && Date.now() - prefs[host] < PROXY_PREF_TTL_MS / 2) return; // نوشتن‌های بی‌مورد را کم کن
+    prefs[host] = Date.now();
+    localStorage.setItem(PROXY_PREF_KEY, JSON.stringify(prefs));
+  } catch {
+    /* noop */
+  }
+};
+
+export const clearProxyPreference = (host: AudioSource['host']): void => {
+  try {
+    const prefs = readProxyPrefs();
+    delete prefs[host];
+    localStorage.setItem(PROXY_PREF_KEY, JSON.stringify(prefs));
+  } catch {
+    /* noop */
+  }
+};

@@ -31,6 +31,15 @@ registerRoute(navigationRoute);
 // /api → NetworkOnly (سرور بک‌اند؛ هرگز کش نمی‌شود)
 registerRoute(/^\/api\/.*/i, new NetworkOnly());
 
+// فونت‌های مصحف QCF4 (۴۷ فایل): فقط با دانلود کاربر در همین کش ذخیره می‌شوند و هرگز حذف خودکار ندارند
+registerRoute(
+  /\/fonts\/qcf4\/.*\.woff2$/i,
+  new CacheFirst({
+    cacheName: 'quran-qcf4-v1',
+    plugins: [new CacheableResponsePlugin({ statuses: [200] })],
+  })
+);
+
 // فونت‌های خودمیزبان → CacheFirst 365 روز
 registerRoute(
   /\/fonts\/.*\.woff2$/i,

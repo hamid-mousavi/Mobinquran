@@ -9,6 +9,15 @@ import { AyahEndMarker } from './QuranReader';
 import { toPersianDigits } from '../utils/textNormalization';
 import { loadMushafPage } from '../services/mushafLayoutService';
 import type { MushafPageData } from '../types/mushafLayout';
+import {
+  ensureQcf4Font,
+  isFullyDownloaded,
+  isQcf4Supported,
+  loadQcf4Manifest,
+  onQcf4Change,
+  wasPromptDismissed,
+} from '../services/qcf4FontService';
+import { Qcf4DownloadSheet } from './Qcf4DownloadSheet';
 
 interface MushafPageViewProps {
   initialPageNumber: number;
@@ -19,7 +28,9 @@ interface MushafPageViewProps {
   onToggleBookmark: (verseNumber: number) => void;
   onOpenVerseDetail: (verse: Verse) => void;
   onOpenAIForVerse: (verse: Verse) => void;
-  onPlayVerseAudio: (verseNumber: number) => void;
+  onPlayVerseAudio: (verseNumber: number, surahId?: number) => void;
+  /** کلید آیه‌ی در حال پخش (مثل «2:255») برای هایلایت هماهنگ با پلیر */
+  activeVerseKey?: string | null;
   onPageChange: (newPage: number, surahId?: number, verseNumber?: number) => void;
 }
 
@@ -45,6 +56,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
   onOpenVerseDetail,
   onOpenAIForVerse,
   onPlayVerseAudio,
+  activeVerseKey = null,
   onPageChange,
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(initialPageNumber || 1);
@@ -71,7 +83,11 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
   // چیدمان خط‌به‌خط مصحف مدینه (۱۵ سطر): هر سطر دقیقاً عرض صفحه را پر می‌کند
   const [layoutPage, setLayoutPage] = useState<MushafPageData | null>(null);
   const linesRef = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState<{ fontSize: number; centered: number[] }>({ fontSize: 22, centered: [] });
+  const [fit, setFit] = useState<{ fontSize: number; centered: number[]; scales: Record<number, number> }>({
+    fontSize: 22,
+    centered: [],
+    scales: {},
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -84,11 +100,56 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     };
   }, [currentPage]);
 
-  // اندازهٔ فونت را طوری تنظیم می‌کنیم که پهن‌ترین سطر دقیقاً در عرض صفحه جا شود؛
+  // فونت‌های QCF4: رندر گلیفی فقط وقتی همه‌ی فونت‌های این صفحه آماده باشند؛ در غیر این‌صورت نمایش ساده
+  const [qcfReady, setQcfReady] = useState(false);
+  const [qcfOffer, setQcfOffer] = useState(false); // فونت‌ها موجودند ولی هنوز دانلود نشده‌اند
+  const [showQcfSheet, setShowQcfSheet] = useState(false);
+  const hasGlyphData = !!layoutPage?.lines.some((l) => l.words.some((w) => w.c && w.f));
+
+  useEffect(() => {
+    setQcfReady(false);
+    if (!layoutPage || !hasGlyphData || !isQcf4Supported()) return;
+    const fonts = Array.from(
+      new Set(layoutPage.lines.flatMap((l) => l.words.map((w) => w.f).filter((f): f is string => !!f)))
+    );
+    let cancelled = false;
+    const check = async () => {
+      const ok = await Promise.all(fonts.map((f) => ensureQcf4Font(f)));
+      if (!cancelled) setQcfReady(ok.every(Boolean));
+    };
+    void check();
+    const off = onQcf4Change(() => void check());
+    return () => {
+      cancelled = true;
+      off();
+    };
+  }, [layoutPage, hasGlyphData]);
+
+  // اگر بستهٔ گلیف و فونت‌ها در دسترس باشند ولی دانلود نشده باشند، پیشنهاد دانلود (با حجم) نشان می‌دهیم
+  useEffect(() => {
+    if (!hasGlyphData || !isQcf4Supported()) return;
+    let cancelled = false;
+    (async () => {
+      const manifest = await loadQcf4Manifest();
+      if (cancelled || !manifest) return;
+      const done = await isFullyDownloaded();
+      if (cancelled) return;
+      setQcfOffer(!done);
+      if (!done && !wasPromptDismissed()) setShowQcfSheet(true);
+      if (done) setShowQcfSheet(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hasGlyphData, qcfReady]);
+
+  // اندازهٔ فونت پایه طوری تنظیم می‌شود که پهن‌ترین سطر دقیقاً در عرض صفحه جا شود.
+  // سطرهای کوتاه‌تر تا ۱۰٪ بزرگ‌تر می‌شوند (به‌جای کشیده‌شدن فاصله‌ها) و باقی‌مانده بین کلمه‌ها پخش می‌شود؛
   // فاصلهٔ بین کلمات (نه حروف) کشیده می‌شود تا اعراب و اتصال حروف هرگز به‌هم نریزد.
   useLayoutEffect(() => {
     const root = linesRef.current;
     if (!root || !layoutPage) return;
+    const MAX_LINE_SCALE = 1.1;
     const measure = () => {
       const width = root.clientWidth;
       if (!width) return;
@@ -97,28 +158,48 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
       const currentSize = parseFloat(getComputedStyle(root).fontSize) || 22;
       const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
       const MIN_GAP_EM = isMobile ? 0.16 : 0.28;
+      // عرض طبیعی هر سطر در مقیاس ۱ (اثر مقیاس فعلی سطر حذف می‌شود)
       const naturals = rows.map((row) => {
+        const applied = Number(row.dataset.scale) || 1;
         const kids = Array.from(row.children) as HTMLElement[];
-        const sum = kids.reduce((acc, el) => acc + el.getBoundingClientRect().width, 0);
+        const sum = kids.reduce((acc, el) => acc + el.getBoundingClientRect().width, 0) / applied;
         return sum + Math.max(0, kids.length - 1) * MIN_GAP_EM * currentSize;
       });
       const widest = Math.max(...naturals, 1);
       const next = Math.max(8.5, Math.min(36, (currentSize * width) / widest * 0.985));
-      const centered = rows
-        .map((row, i) => (naturals[i] < widest * 0.7 ? Number(row.dataset.line) : -1))
-        .filter((n) => n >= 0);
-      setFit((prev) =>
-        Math.abs(prev.fontSize - next) < 0.2 && prev.centered.join() === centered.join()
+      const centered: number[] = [];
+      const scales: Record<number, number> = {};
+      rows.forEach((row, i) => {
+        const lineNo = Number(row.dataset.line);
+        if (naturals[i] < widest * 0.7) {
+          centered.push(lineNo);
+          scales[lineNo] = 1;
+        } else {
+          scales[lineNo] = Math.min(MAX_LINE_SCALE, Math.max(1, widest / naturals[i]));
+        }
+      });
+      setFit((prev) => {
+        const sameScales = Object.keys(scales).every((k) => Math.abs((prev.scales[Number(k)] ?? 1) - scales[Number(k)]) < 0.01);
+        return Math.abs(prev.fontSize - next) < 0.2 && prev.centered.join() === centered.join() && sameScales
           ? prev
-          : { fontSize: next, centered }
-      );
+          : { fontSize: next, centered, scales };
+      });
     };
     measure();
+    // بعد از اعمال اندازه‌ی جدید و بعد از لود کامل فونت دوباره اندازه‌گیری می‌کنیم
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(measure);
+    });
     const ro = new ResizeObserver(measure);
     ro.observe(root);
     document.fonts?.ready.then(measure).catch(() => {});
-    return () => ro.disconnect();
-  }, [layoutPage, settings.arabicFont]);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      ro.disconnect();
+    };
+  }, [layoutPage, settings.arabicFont, qcfReady]);
 
   // با تغییر صفحه، به ابتدای صفحه برگرد (کاربر پایین صفحه روی «صفحه بعد» زده است)
   const previousPageRef = useRef(currentPage);
@@ -157,6 +238,22 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
+
+  // آیهٔ در حال پخش را در دید نگه می‌دارد (فقط اگر بیرون از ناحیهٔ قابل‌دید باشد)
+  useEffect(() => {
+    if (!activeVerseKey || isLoading) return;
+    const t = window.setTimeout(() => {
+      const el = pageContainerRef.current?.querySelector<HTMLElement>(`[data-verse="${activeVerseKey}"]`)
+        ?? document.querySelector<HTMLElement>(`#mushaf-page-container [data-verse="${activeVerseKey}"]`);
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const margin = 120; // فضای هدر و پلیر شناور
+      if (r.top < margin || r.bottom > window.innerHeight - margin) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [activeVerseKey, isLoading, layoutPage, currentPage]);
 
   const handlePrevPage = () => {
     if (currentPage > 1) {
@@ -400,6 +497,15 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-600/40 pointer-events-none" />
         <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-600/40 pointer-events-none" />
 
+        {qcfOffer && !qcfReady && !isLoading && (
+          <button
+            onClick={() => setShowQcfSheet(true)}
+            className="w-full mb-2 min-h-[40px] rounded-xl border border-amber-500/50 bg-amber-50 dark:bg-slate-800 text-xs font-bold text-amber-800 dark:text-amber-300 cursor-pointer"
+          >
+            دانلود فونت مصحف برای نمایش دقیق صفحه
+          </button>
+        )}
+
         {isLoading ? (
           <div className="py-24 text-center space-y-3">
             <Loader2 className="w-8 h-8 mx-auto animate-spin text-teal-600 dark:text-teal-400" />
@@ -436,7 +542,11 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                     className={`text-center select-none w-full max-w-full overflow-hidden ${darkMode ? 'text-amber-300/90' : 'text-amber-800'}`}
                     style={{ lineHeight: 2.2 }}
                   >
-                    {first.text}
+                    {qcfReady && first.c && first.f ? (
+                      <span style={{ fontFamily: `'${first.f}'` }}>{first.c}</span>
+                    ) : (
+                      first.text
+                    )}
                   </div>
                 );
               }
@@ -447,8 +557,10 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                   key={line.line}
                   data-mline="text"
                   data-line={line.line}
+                  data-scale={fit.scales[line.line] ?? 1}
                   className="flex items-center w-full max-w-full overflow-hidden whitespace-nowrap"
                   style={{
+                    fontSize: `${fit.scales[line.line] ?? 1}em`,
                     justifyContent: isCentered ? 'center' : 'space-between',
                     gap: isMobile ? '0.16em' : '0.28em',
                     lineHeight: 2.15,
@@ -464,13 +576,41 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                     }
                     const verse = w.verse ? verseByKey.get(w.verse) : undefined;
                     const isSel = !!verse && selectedVerse?.id === verse.id;
+                    const isPlaying = !!w.verse && w.verse === activeVerseKey;
                     const hit = {
                       onClick: verse ? () => setSelectedVerse(isSel ? null : verse) : undefined,
                     };
+                    if (qcfReady && w.c && w.f && (w.type === 'end' || w.type === 'word')) {
+                      return (
+                        <span
+                          key={idx}
+                          {...hit}
+                          data-verse={w.verse}
+                          className={`cursor-pointer rounded-md transition-colors ${
+                            isPlaying
+                              ? 'bg-teal-400/35 dark:bg-teal-400/25'
+                              : isSel
+                                ? 'bg-amber-300/40 dark:bg-amber-500/30'
+                                : 'hover:bg-stone-200/50 dark:hover:bg-slate-800/60'
+                          }`}
+                          style={{ fontFamily: `'${w.f}'`, lineHeight: 1.9 }}
+                        >
+                          {w.c}
+                        </span>
+                      );
+                    }
                     if (w.type === 'end') {
                       const num = w.verse ? Number(w.verse.split(':')[1]) : 0;
                       return (
-                        <span key={idx} {...hit} className="inline-flex items-center cursor-pointer" style={{ lineHeight: 1 }}>
+                        <span
+                          key={idx}
+                          {...hit}
+                          data-verse={w.verse}
+                          className={`inline-flex items-center cursor-pointer rounded-full transition-colors ${
+                            isPlaying ? 'bg-teal-400/40 dark:bg-teal-400/30' : ''
+                          }`}
+                          style={{ lineHeight: 1 }}
+                        >
                           <span
                             className="relative inline-flex items-center justify-center"
                             style={{ width: '1.2em', height: '1.2em' }}
@@ -495,8 +635,13 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                       <span
                         key={idx}
                         {...hit}
+                        data-verse={w.verse}
                         className={`cursor-pointer rounded-md transition-colors ${
-                          isSel ? 'bg-amber-300/40 dark:bg-amber-500/30' : 'hover:bg-stone-200/50 dark:hover:bg-slate-800/60'
+                          isPlaying
+                            ? 'bg-teal-400/35 dark:bg-teal-400/25 text-teal-950 dark:text-teal-100'
+                            : isSel
+                              ? 'bg-amber-300/40 dark:bg-amber-500/30'
+                              : 'hover:bg-stone-200/50 dark:hover:bg-slate-800/60'
                         }`}
                       >
                         {w.text}
@@ -546,14 +691,18 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                   >
                     {group.verses.map((v) => {
                       const isSelected = selectedVerse?.id === v.id;
+                      const isPlayingVerse = activeVerseKey === `${v.surahId}:${v.verseNumber}`;
                       return (
                         <span
                           key={v.id}
+                          data-verse={`${v.surahId}:${v.verseNumber}`}
                           onClick={() => setSelectedVerse(isSelected ? null : v)}
                           className={`inline cursor-pointer px-1 py-0.5 rounded-lg transition-all ${
-                            isSelected
-                              ? 'bg-amber-300/40 dark:bg-amber-500/30 text-amber-950 dark:text-amber-200 ring-1 ring-amber-500/40'
-                              : 'hover:bg-stone-200/50 dark:hover:bg-slate-800/60'
+                            isPlayingVerse
+                              ? 'bg-teal-400/35 dark:bg-teal-400/25 ring-1 ring-teal-500/40'
+                              : isSelected
+                                ? 'bg-amber-300/40 dark:bg-amber-500/30 text-amber-950 dark:text-amber-200 ring-1 ring-amber-500/40'
+                                : 'hover:bg-stone-200/50 dark:hover:bg-slate-800/60'
                           }`}
                           title={`سوره ${group.surah.nameArabic} - آیه ${v.verseNumber} (کلیک جهت مشاهده ترجمه و تفاسیر)`}
                         >
@@ -618,7 +767,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         const isBookmarked = bookmarkedVerseIds.has(selectedVerse.verseNumber);
         const actions = [
           { label: 'تدبّر هوشمند', icon: Sparkles, primary: true, run: () => onOpenAIForVerse(selectedVerse) },
-          { label: 'پخش', icon: Volume2, run: () => onPlayVerseAudio(selectedVerse.verseNumber) },
+          { label: 'پخش', icon: Volume2, run: () => onPlayVerseAudio(selectedVerse.verseNumber, selectedVerse.surahId) },
           { label: isBookmarked ? 'حذف نشانک' : 'نشانک', icon: Bookmark, active: isBookmarked, run: () => onToggleBookmark(selectedVerse.verseNumber) },
           { label: 'تفسیر', icon: BookOpen, run: () => onOpenVerseDetail(selectedVerse) },
           {
@@ -706,6 +855,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           </>
         );
       })()}
+      {showQcfSheet && <Qcf4DownloadSheet darkMode={darkMode} onClose={() => setShowQcfSheet(false)} />}
     </div>
   );
 };

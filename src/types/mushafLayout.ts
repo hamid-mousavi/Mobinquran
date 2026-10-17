@@ -4,6 +4,9 @@ export interface MushafWord {
   verse?: string;
   sura?: number;
   p?: number;
+  /** کاراکتر PUA گلیف QCF4 و نام فونت (فقط در بستهٔ دارای گلیف) */
+  c?: string;
+  f?: string;
 }
 
 export interface MushafLine {
