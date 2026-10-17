@@ -15,10 +15,12 @@ import {
   MessageSquare,
   Send,
   HelpCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { QuranLogo } from './QuranicOrnament';
 import { toPersianDigits } from '../utils/textNormalization';
 import { useModalA11y } from '../hooks/useModalA11y';
+import { checkForUpdates } from '../services/pwaManager';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -44,6 +46,30 @@ export const AboutModal: React.FC<AboutModalProps> = ({
   const supportEmail = 'hamid63.ms@gmail.com';
   const myketAppUrl = `https://myket.ir/app/${packageName}`;
   const myketCommentIntent = `myket://comment?id=${packageName}`;
+
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateCheckMsg, setUpdateCheckMsg] = useState<string | null>(null);
+
+  const handleCheckUpdate = async () => {
+    setIsCheckingUpdate(true);
+    setUpdateCheckMsg(null);
+    try {
+      const hasUpdate = await checkForUpdates();
+      if (hasUpdate) {
+        window.dispatchEvent(new CustomEvent('mobin-sw-update'));
+        setUpdateCheckMsg('نسخه جدید یافت شد و اعلان بروزرسانی فعال گردید.');
+      } else {
+        setUpdateCheckMsg('شما از آخرین نسخه برنامه استفاده می‌کنید.');
+        setTimeout(() => setUpdateCheckMsg(null), 4000);
+      }
+    } catch {
+      setUpdateCheckMsg('خطا در بررسی بروزرسانی؛ اتصال شبکه را بررسی کنید.');
+      setTimeout(() => setUpdateCheckMsg(null), 4000);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
 
   if (!isOpen) return null;
 
@@ -125,17 +151,33 @@ export const AboutModal: React.FC<AboutModalProps> = ({
               className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-2xl shadow-md border border-amber-400/40"
             />
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-slate-100">
                   قرآن مبین
                 </h2>
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/20">
                   نسخه {toPersianDigits(appVersion)}
                 </span>
+                <button
+                  type="button"
+                  onClick={handleCheckUpdate}
+                  disabled={isCheckingUpdate}
+                  title="بررسی نسخه‌ی جدید"
+                  className="px-2 py-0.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold text-[10px] border border-amber-400/30 flex items-center gap-1 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                  <span>{isCheckingUpdate ? 'در حال بررسی...' : 'بررسی بروزرسانی'}</span>
+                </button>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 با عنایت موکب حضرت فاطمه‌الزهرا (سلام‌الله‌علیها)
               </p>
+              {updateCheckMsg && (
+                <p className="text-[11px] font-bold text-teal-600 dark:text-teal-400 mt-1 animate-in fade-in">
+                  {updateCheckMsg}
+                </p>
+              )}
+
             </div>
           </div>
 

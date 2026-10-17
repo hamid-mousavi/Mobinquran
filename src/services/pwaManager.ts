@@ -55,9 +55,90 @@ export function initServiceWorker() {
         console.warn('[PWA] ServiceWorker registration error:', error);
       },
     });
+    // بررسی ثبت اولیه و کارگرهای در انتظار قبلی
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      if (reg) {
+        if (reg.waiting) {
+          console.log('[PWA] Found waiting worker on startup.');
+          isUpdateAvailable = true;
+          refreshListeners.forEach((listener) => {
+            try {
+              listener();
+            } catch (e) {
+              console.error('[PWA] Error in refresh listener:', e);
+            }
+          });
+        }
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('[PWA] New worker installed and ready.');
+                isUpdateAvailable = true;
+                refreshListeners.forEach((listener) => {
+                  try {
+                    listener();
+                  } catch (e) {
+                    console.error('[PWA] Error in refresh listener:', e);
+                  }
+                });
+              }
+            });
+          }
+        });
+      }
+    }).catch(() => {});
+
+    // بررسی دوره‌ای وجود نسخه جدید هر ۱۵ دقیقه
+    setInterval(() => {
+      checkForUpdates();
+    }, 15 * 60 * 1000);
+
+    // بررسی وجود نسخه جدید هنگام بازگشت کاربر به برگه
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        checkForUpdates();
+      }
+    });
+
+    // بررسی مجدد هنگام اتصال مجدد شبکه
+    window.addEventListener('online', () => {
+      checkForUpdates();
+    });
+
   } catch (err) {
     console.warn('[PWA] registerSW initialization failed:', err);
   }
+}
+
+/**
+ * بررسی دستی یا برنامه‌ریزی‌شده برای دریافت به‌روزرسانی جدید
+ */
+export async function checkForUpdates(): Promise<boolean> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || Capacitor.isNativePlatform()) {
+    return false;
+  }
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (registration) {
+      await registration.update();
+      if (registration.waiting) {
+        isUpdateAvailable = true;
+        refreshListeners.forEach((listener) => {
+          try {
+            listener();
+          } catch (e) {
+            console.error('[PWA] Error in refresh listener:', e);
+          }
+        });
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn('[PWA] Check for updates failed:', err);
+  }
+  return isUpdateAvailable;
 }
 
 /**
@@ -66,10 +147,19 @@ export function initServiceWorker() {
 export async function applyAppUpdate(): Promise<void> {
   if (updateSWFunction) {
     await updateSWFunction(true);
+  } else if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg?.waiting) {
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+    setTimeout(() => {
+      window.location.reload();
+    }, 150);
   } else {
     window.location.reload();
   }
 }
+
 
 export function onServiceWorkerUpdate(callback: RefreshCallback): () => void {
   refreshListeners.add(callback);

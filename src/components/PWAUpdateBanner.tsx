@@ -16,7 +16,18 @@ export const PWAUpdateBanner: React.FC<PWAUpdateBannerProps> = ({ isAudioPlaying
       setShowBanner(true);
       setIsDismissed(false);
     });
-    return () => unsubscribe();
+
+    const handleCustomUpdate = () => {
+      setShowBanner(true);
+      setIsDismissed(false);
+    };
+
+    window.addEventListener('mobin-sw-update', handleCustomUpdate);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('mobin-sw-update', handleCustomUpdate);
+    };
   }, []);
 
   if (!showBanner || isDismissed) {
@@ -36,8 +47,11 @@ export const PWAUpdateBanner: React.FC<PWAUpdateBannerProps> = ({ isAudioPlaying
     <div
       role="alert"
       dir="rtl"
-      className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-50 animate-in fade-in slide-in-from-bottom-4 duration-300"
+      className={`fixed left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-[70] transition-all duration-300 ${
+        isAudioPlaying ? 'bottom-28 sm:bottom-24' : 'bottom-4'
+      }`}
     >
+
       <div className="bg-gradient-to-r from-teal-900 to-slate-900 text-white p-3.5 sm:p-4 rounded-2xl shadow-2xl border border-teal-500/30 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="p-2 bg-teal-500/20 text-teal-300 rounded-xl shrink-0">

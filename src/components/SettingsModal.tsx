@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Eye, Palette, Maximize2, Minimize2, AlignJustify, Check, HardDrive, ShieldCheck, ShieldAlert, Smartphone } from 'lucide-react';
+import { X, Eye, Palette, Maximize2, Minimize2, AlignJustify, Check, HardDrive, ShieldCheck, ShieldAlert, Smartphone, RefreshCw } from 'lucide-react';
 import { AppSettings, Translator, ArabicFont, LineHeight } from '../types';
 import { getArabicFontFamily, ARABIC_FONT_OPTIONS } from '../utils/fontHelper';
-import { getStorageStatus, requestStoragePersistence, StorageStatus } from '../services/pwaManager';
+import { getStorageStatus, requestStoragePersistence, checkForUpdates, StorageStatus } from '../services/pwaManager';
 import { toPersianDigits } from '../utils/textNormalization';
 import { useModalA11y } from '../hooks/useModalA11y';
 
@@ -42,12 +42,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [isOpen]);
 
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateCheckMsg, setUpdateCheckMsg] = useState<string | null>(null);
+
   const handleRequestPersistence = async () => {
     setRequestingPersist(true);
     await requestStoragePersistence();
     const updated = await getStorageStatus();
     setStorageStatus(updated);
     setRequestingPersist(false);
+  };
+
+  const handleCheckUpdate = async () => {
+    setIsCheckingUpdate(true);
+    setUpdateCheckMsg(null);
+    try {
+      const hasUpdate = await checkForUpdates();
+      if (hasUpdate) {
+        window.dispatchEvent(new CustomEvent('mobin-sw-update'));
+        setUpdateCheckMsg('نسخه جدید یافت شد و بنر بروزرسانی در پایین صفحه فعال گردید.');
+      } else {
+        setUpdateCheckMsg('شما از آخرین نسخه برنامه استفاده می‌کنید.');
+        setTimeout(() => setUpdateCheckMsg(null), 4000);
+      }
+    } catch {
+      setUpdateCheckMsg('خطا در بررسی بروزرسانی؛ اتصال اینترنت را بررسی کنید.');
+      setTimeout(() => setUpdateCheckMsg(null), 4000);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
   };
 
   const toggleFullscreen = () => {
@@ -322,7 +345,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* بررسی نسخه‌ی جدید برنامه و دریافت به‌روزرسانی */}
+          <div className="space-y-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+            <div className={`p-3 rounded-xl border text-xs space-y-2 ${
+              darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <RefreshCw className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 block">به‌روزرسانی برنامه</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">بررسی خودکار و دستی آخرین نسخه</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCheckUpdate}
+                  disabled={isCheckingUpdate}
+                  className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                  <span>{isCheckingUpdate ? 'در حال بررسی...' : 'بررسی بروزرسانی'}</span>
+                </button>
+              </div>
+
+              {updateCheckMsg && (
+                <div className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 pt-1.5 border-t border-slate-200/50 dark:border-slate-700/50 animate-in fade-in">
+                  {updateCheckMsg}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
 
         <div
           className="shrink-0 px-5 pt-3 border-t border-amber-300/60 dark:border-slate-800 bg-stone-50 dark:bg-slate-900"

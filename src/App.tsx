@@ -4,6 +4,7 @@ import { QuranReader } from './components/QuranReader';
 import { MushafPageView } from './components/MushafPageView';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { PWAUpdateBanner } from './components/PWAUpdateBanner';
+import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { AutoScrollControls } from './components/AutoScrollControls';
 import { QuranHomePage } from './components/QuranHomePage';
@@ -686,6 +687,9 @@ export default function App() {
           darkMode={settings.darkMode}
         />
       )}
+
+      {/* بنر نصب اپلیکیشن برای مرورگرهای وب و گوشی (PWA) */}
+      <PWAInstallBanner darkMode={settings.darkMode} />
 
       {/* هدر بالایی با ابزارهای ناوبری، حالت مصحف، ختم قرآن، جستجو و هوش مصنوعی (تنها در صفحه قرائت) */}
       {activePage === 'reader' && (
