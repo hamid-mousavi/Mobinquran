@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { PWAInstallModal } from './PWAInstallModal';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { QuranLogo } from './QuranicOrnament';
 
 type PageId = 'home' | 'reader' | 'ai' | 'memorization' | 'offline' | 'stories';
 
@@ -119,25 +120,25 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({
               paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)',
             }}
           >
-            {/* سربرگ */}
-            <div className="flex items-center gap-3 px-1 pb-2">
-              <div className="w-11 h-11 rounded-2xl bg-teal-800 flex items-center justify-center shrink-0">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#e8d9a8" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="5" y="5" width="14" height="14" />
-                  <rect x="5" y="5" width="14" height="14" transform="rotate(45 12 12)" />
-                  <circle cx="12" cy="12" r="2.2" />
-                </svg>
+            {/* سربرگ منو: دقیقاً همان لوگوی اصلی برنامه در صفحه اصلی */}
+            <div className="flex items-center justify-between gap-3 px-1.5 py-2 mb-1 rounded-2xl bg-stone-100/80 dark:bg-slate-800/60 border border-amber-300/40 dark:border-slate-700/60">
+              <div className="flex items-center gap-3 min-w-0">
+                <QuranLogo size="md" darkMode={darkMode} />
+                <div className="min-w-0 text-right">
+                  <div className="font-black text-base text-slate-900 dark:text-slate-100 leading-tight">قرآن مبین</div>
+                  <div className="text-[11px] text-teal-700 dark:text-teal-400 font-medium truncate">قرائت، ترجمه و تدبّر</div>
+                </div>
               </div>
-              <div className="flex-1 min-w-0 font-black text-lg">قرآن مبین</div>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="بستن منو"
-                className="w-11 h-11 flex items-center justify-center rounded-xl text-slate-500 hover:bg-stone-200 dark:hover:bg-slate-800 cursor-pointer"
+                className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 hover:bg-stone-200 dark:hover:bg-slate-700 active:scale-95 transition-all cursor-pointer shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
             <Divider />
 
             {/* ناوبری اصلی */}

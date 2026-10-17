@@ -105,10 +105,35 @@ body,
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122;
 }
 
-/* فونت رسمی عثمان طه مجمع ملک فهد (KFGQPC Hafs Smart) */
+/* فونت اصیل عثمان طه استفاده‌شده در وب‌سایت رسمی Quran.com (UthmanicHafs) */
+@font-face {
+  font-family: 'UthmanicHafs';
+  src: local('KFGQPC HAFS Uthmanic Script'),
+       local('UthmanicHafs'),
+       url('/fonts/UthmanicHafs1Ver18.woff2') format('woff2'),
+       url('/fonts/uthman-taha.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'UthmanTaha';
-  src: url('/fonts/uthman-taha.woff2') format('woff2');
+  src: local('KFGQPC HAFS Uthmanic Script'),
+       local('UthmanicHafs'),
+       url('/fonts/UthmanicHafs1Ver18.woff2') format('woff2'),
+       url('/fonts/uthman-taha.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* فونت فامیلی ساده بر پایه رسم‌الخط حفص (hafs) */
+@font-face {
+  font-family: 'hafs';
+  src: local('KFGQPC HAFS Uthmanic Script'),
+       local('Hafs'),
+       url('/fonts/kfgqpc-hafs.woff2') format('woff2');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -123,6 +148,15 @@ body,
   font-display: swap;
 }
 
+/* فونت مصحف ایران (نسخ اصیل و خوانای مصحف ایرانی) */
+@font-face {
+  font-family: 'IranMushaf';
+  src: url('/fonts/amiri-quran.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* فونت امیری مصحفی سنتی (Amiri Quran - خودمیزبان) */
 @font-face {
   font-family: 'Amiri Quran';
@@ -131,6 +165,25 @@ body,
   font-style: normal;
   font-display: swap;
 }
+
+/* فونت قرآنی استاندارد شهرزاد (Scheherazade New) */
+@font-face {
+  font-family: 'Scheherazade New';
+  src: url('/fonts/scheherazade-new.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* فونت قرآنی قلم مجید (Al Qalam Quran Majeed) */
+@font-face {
+  font-family: 'AlQalamQuran';
+  src: url('/fonts/alqalam-quran.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 
 /* زمینهٔ سراسری هماهنگ با تم (روشن: کرم، شب: سبز-مشکی) */
 body {
@@ -188,3 +241,16 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.25) rgba(255, 255, 255, 0.05);
   -webkit-overflow-scrolling: touch;
 }
+
+/* تضمین انطباق کامل و دقیق نمای مصحف در تمامی نمایشگرهای موبایل بدون بیرون‌زدگی افقی */
+#mushaf-page-container {
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+[data-mline="text"] {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+

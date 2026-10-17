@@ -459,7 +459,21 @@ ${agentApproachText}
       const surahMap = new Map<number, any[]>();
 
       for (const v of rawVerses) {
-        const textArabic = v.textArabic || '';
+        let textArabic = v.textArabic || '';
+        if (v.surahId > 1 && v.surahId !== 9 && v.verseNumber === 1) {
+          textArabic = textArabic
+            .replace(/^[\uFEFF\u200B\s]*ب[\u0651\u0650\u064E\u064F\u0652\s]*س[\u0652\s]*م[\u0650\s]+[\u0600-\u06FF\s]+?[ٱا]لرَّحِيمِ\s*/u, '')
+            .replace(/^[\uFEFF\u200B\s]*بِسْمِ\s+[\u0600-\u06FF\s]+?ٱلرَّحِيمِ\s*/u, '')
+            .replace(/^[\uFEFF\u200B\s]*بِسْمِ\s+[\u0600-\u06FF\s]+?الرَّحِيمِ\s*/u, '')
+            .replace(/^[\uFEFF\u200B\s]*بسم\s+الله\s+الرحمن\s+الرحيم\s*/u, '')
+            .trim();
+        }
+        textArabic = textArabic
+          .replace(/إِبْرَٰهِۦم/g, 'إِبْرَٰهِيم')
+          .replace(/لِإِبْرَٰهِۦم/g, 'لِإِبْرَٰهِيم')
+          .replace(/ٱلنَّبِيِّۦنَ/g, 'ٱلنَّبِيِّينَ')
+          .replace(/وَٱلنَّبِيِّۦنَ/g, 'وَٱلنَّبِيِّينَ');
+
         const translationMakarem = v.translationMakarem || '';
         const translationFooladvand = v.translationFooladvand || '';
         const translationAnsarian = v.translationAnsarian || '';

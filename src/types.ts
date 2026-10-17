@@ -114,12 +114,11 @@ export interface AudioErrorLogEntry {
 }
 
 export type ArabicFont =
-  | 'uthman-taha'
-  | 'kfgqpc-hafs'
-  | 'amiri-quran'
+  | 'ir-mushaf'
   | 'scheherazade'
-  | 'amiri'
-  | 'system';
+  | 'alqalam'
+  | 'uthman-taha'
+  | 'simple';
 
 export type LineHeight = 'normal' | 'relaxed' | 'loose';
 

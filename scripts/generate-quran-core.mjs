@@ -13,10 +13,23 @@ const BASE_URL = 'https://api.alquran.cloud/v1/quran/';
 function removeRepeatedBismillah(text, surahId, verseNumber) {
   if (surahId <= 1 || surahId === 9 || verseNumber !== 1) return text.trim();
   return text
+    .replace(/^[\uFEFF\u200B\s]*ب[\u0651\u0650\u064E\u064F\u0652\s]*س[\u0652\s]*م[\u0650\s]+[\u0600-\u06FF\s]+?[ٱا]لرَّحِيمِ\s*/u, '')
     .replace(/^[\uFEFF\u200B\s]*بِسْمِ\s+[\u0600-\u06FF\s]+?ٱلرَّحِيمِ\s*/u, '')
     .replace(/^[\uFEFF\u200B\s]*بِسْمِ\s+[\u0600-\u06FF\s]+?الرَّحِيمِ\s*/u, '')
     .replace(/^[\uFEFF\u200B\s]*بسم\s+الله\s+الرحمن\s+الرحيم\s*/u, '')
     .trim();
+}
+
+/**
+ * یکسان‌سازی رسم‌الخط و جایگزینی حروف کوچک با حروف کامل در کلمات مبهم (مانند ابراهیم)
+ */
+function normalizeQuranArabic(text) {
+  if (!text) return '';
+  return text
+    .replace(/إِبْرَٰهِۦم/g, 'إِبْرَٰهِيم')
+    .replace(/لِإِبْرَٰهِۦم/g, 'لِإِبْرَٰهِيم')
+    .replace(/ٱلنَّبِيِّۦنَ/g, 'ٱلنَّبِيِّينَ')
+    .replace(/وَٱلنَّبِيِّۦنَ/g, 'وَٱلنَّبِيِّينَ');
 }
 
 /**
@@ -81,7 +94,7 @@ const verses = uthmani.surahs.flatMap((surah, surahIndex) =>
       ruku: ayah.ruku || 1,
       manzil: ayah.manzil || 1,
       sajda: sajdaInfo,
-      textArabic: removeRepeatedBismillah(ayah.text || '', surah.number, ayah.numberInSurah),
+      textArabic: normalizeQuranArabic(removeRepeatedBismillah(ayah.text || '', surah.number, ayah.numberInSurah)),
       textSimple: cleanNoBismillah,
       translationMakarem: normalizePersianText(makarem.surahs[surahIndex]?.ayahs[verseIndex]?.text || ''),
       translationFooladvand: normalizePersianText(fooladvand.surahs[surahIndex]?.ayahs[verseIndex]?.text || ''),
@@ -104,8 +117,8 @@ if (sajdaVerses.length !== 15 || obligatorySajda.length !== 4) {
 
 const contentPack = {
   id: 'quran-core',
-  version: 'alquran-cloud-core-v2',
-  schemaVersion: 2,
+  version: 'alquran-cloud-core-v3',
+  schemaVersion: 3,
   sourceName: 'Al Quran Cloud',
   sourceUrl: 'https://alquran.cloud/',
   datasetVersion: EDITIONS.join(' + '),

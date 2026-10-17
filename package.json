@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "generate:quran-core": "node scripts/generate-quran-core.mjs",
     "eval:ai": "node scripts/ai-eval.mjs",
+    "validate:quran": "node scripts/validate-quran-integrity.mjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "vitest run",

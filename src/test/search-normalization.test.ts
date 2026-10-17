@@ -43,7 +43,7 @@ describe('Search Normalization and Evidence Table Tests (Phase 1)', () => {
   const verses = pack.verses;
 
   it('package includes textSimple for all 6236 verses', () => {
-    expect(pack.schemaVersion).toBe(2);
+    expect(pack.schemaVersion).toBeGreaterThanOrEqual(2);
     expect(pack.integrity.value).toBeDefined();
     for (const v of verses) {
       expect(v.textSimple).toBeDefined();

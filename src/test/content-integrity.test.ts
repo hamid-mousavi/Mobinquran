@@ -48,6 +48,31 @@ describe('Phase 2 — Content Integrity & Local Quran Source', () => {
     expect(res.body.results[0]).toHaveProperty('verseNumber');
   });
 
+  it('serves surah 95 and surah 97 without redundant Bismillah in verse 1', async () => {
+    const res95 = await request(app).get('/api/quran/surah/95');
+    expect(res95.status).toBe(200);
+    const v95 = res95.body.verses[0];
+    expect(v95.verseNumber).toBe(1);
+    expect(v95.textArabic).toBe('وَٱلتِّينِ وَٱلزَّيْتُونِ');
+    expect(v95.textArabic.includes('بِسْمِ')).toBe(false);
+
+    const res97 = await request(app).get('/api/quran/surah/97');
+    expect(res97.status).toBe(200);
+    const v97 = res97.body.verses[0];
+    expect(v97.verseNumber).toBe(1);
+    expect(v97.textArabic).toBe('إِنَّآ أَنزَلْنَٰهُ فِى لَيْلَةِ ٱلْقَدْرِ');
+    expect(v97.textArabic.includes('بِسْمِ')).toBe(false);
+  });
+
+  it('serves verses mentioning Ibrahim with normalized readable spelling without broken small-yeh', async () => {
+    const res = await request(app).get('/api/quran/surah/2');
+    expect(res.status).toBe(200);
+    const v124 = res.body.verses.find((v: any) => v.verseNumber === 124);
+    expect(v124).toBeDefined();
+    expect(v124.textArabic).toContain('إِبْرَٰهِيمَ');
+    expect(v124.textArabic.includes('إِبْرَٰهِۦم')).toBe(false);
+  });
+
   it('confirms deprecated /api/ai/tadabbur dead route is completely removed', async () => {
     const res = await request(app).post('/api/ai/tadabbur').send({});
     // Should be 404 Not Found since it is removed

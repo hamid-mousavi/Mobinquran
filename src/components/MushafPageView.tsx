@@ -95,14 +95,15 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
       const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-mline="text"]'));
       if (rows.length === 0) return;
       const currentSize = parseFloat(getComputedStyle(root).fontSize) || 22;
-      const MIN_GAP_EM = 0.32;
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+      const MIN_GAP_EM = isMobile ? 0.16 : 0.28;
       const naturals = rows.map((row) => {
         const kids = Array.from(row.children) as HTMLElement[];
         const sum = kids.reduce((acc, el) => acc + el.getBoundingClientRect().width, 0);
         return sum + Math.max(0, kids.length - 1) * MIN_GAP_EM * currentSize;
       });
       const widest = Math.max(...naturals, 1);
-      const next = Math.max(13, Math.min(36, (currentSize * width) / widest * 0.99));
+      const next = Math.max(8.5, Math.min(36, (currentSize * width) / widest * 0.985));
       const centered = rows
         .map((row, i) => (naturals[i] < widest * 0.7 ? Number(row.dataset.line) : -1))
         .filter((n) => n >= 0);
@@ -233,10 +234,10 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
   };
 
   return (
-    <div id="mushaf-page-container" className="max-w-3xl mx-auto px-2 sm:px-4 py-4 space-y-4">
+    <div id="mushaf-page-container" className="w-full max-w-3xl mx-auto px-1 sm:px-4 py-2 sm:py-4 space-y-3 sm:space-y-4 overflow-x-hidden box-border">
       {/* نوار بالایی مصحف (شماره جزء، ربع حزب، سوره، و ناوبری صفحات) */}
       <div
-        className={`flex items-center justify-between px-4 py-2.5 rounded-2xl border transition-all ${
+        className={`flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl border transition-all w-full max-w-full overflow-hidden ${
           darkMode
             ? 'bg-slate-900 border-slate-800 text-slate-200'
             : 'bg-white border-stone-200 text-slate-800 shadow-xs'
@@ -245,21 +246,21 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         <button
           onClick={handlePrevPage}
           disabled={currentPage <= 1 || isLoading}
-          className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 disabled:opacity-40 transition-all"
+          className="flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 disabled:opacity-40 transition-all shrink-0 cursor-pointer"
           title="صفحه قبل"
           aria-label="صفحه قبل"
         >
-          <ChevronRight className="w-4 h-4" />
-          <span className="hidden sm:inline">صفحه قبل</span>
+          <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="hidden xs:inline">صفحه قبل</span>
         </button>
 
         {/* سربرگ صفحه مصحف */}
-        <div className="flex items-center gap-3 text-xs sm:text-sm font-bold text-center">
-          <span className="text-teal-700 dark:text-teal-400">جزء {toPersianDigits(currentJuz)}</span>
+        <div className="flex items-center justify-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold text-center min-w-0 flex-1 px-1">
+          <span className="text-teal-700 dark:text-teal-400 shrink-0">جزء {toPersianDigits(currentJuz)}</span>
           {currentHizbQuarter ? (
             <>
-              <span className="opacity-30">•</span>
-              <span className="text-slate-500 dark:text-slate-400">ربع {toPersianDigits(currentHizbQuarter)}</span>
+              <span className="opacity-30 hidden sm:inline">•</span>
+              <span className="text-slate-500 dark:text-slate-400 hidden sm:inline shrink-0">حزب {toPersianDigits(currentHizbQuarter)}</span>
             </>
           ) : null}
           <span className="opacity-30">•</span>
@@ -272,7 +273,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 value={jumpPageInput}
                 onChange={(e) => setJumpPageInput(e.target.value)}
                 autoFocus
-                className="w-16 px-1.5 py-0.5 rounded border text-center font-bold text-xs bg-white dark:bg-slate-800"
+                className="w-12 sm:w-16 px-1 py-0.5 rounded border text-center font-bold text-xs bg-white dark:bg-slate-800"
               />
               <button
                 type="submit"
@@ -287,14 +288,14 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 setJumpPageInput(String(currentPage));
                 setIsJumpInputOpen(true);
               }}
-              className="px-2 py-0.5 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800 text-amber-600 dark:text-amber-400"
+              className="px-1.5 py-0.5 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800 text-amber-600 dark:text-amber-400 shrink-0 cursor-pointer"
               title="کلیک جهت پرش به صفحه دلخواه"
             >
-              صفحه {toPersianDigits(currentPage)} از ۶۰۴ ✎
+              ص {toPersianDigits(currentPage)}<span className="hidden sm:inline"> از ۶۰۴</span> ✎
             </button>
           )}
           <span className="opacity-30">•</span>
-          <span className="text-slate-600 dark:text-slate-300">
+          <span className="text-slate-600 dark:text-slate-300 truncate max-w-[80px] xs:max-w-[120px] sm:max-w-[200px]" title={surahsOnThisPage.map((s) => s.surah.nameArabic).join('، ')}>
             {surahsOnThisPage.map((s) => s.surah.nameArabic).join('، ')}
           </span>
         </div>
@@ -302,12 +303,12 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         <button
           onClick={handleNextPage}
           disabled={currentPage >= 604 || isLoading}
-          className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 disabled:opacity-40 transition-all"
+          className="flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 disabled:opacity-40 transition-all shrink-0 cursor-pointer"
           title="صفحه بعد"
           aria-label="صفحه بعد"
         >
-          <span className="hidden sm:inline">صفحه بعد</span>
-          <ChevronLeft className="w-4 h-4" />
+          <span className="hidden xs:inline">صفحه بعد</span>
+          <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
       </div>
 
@@ -386,12 +387,12 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         ref={pageContainerRef}
         tabIndex={0}
         onKeyDown={handleContainerKeyDown}
-        className={`relative px-3 py-5 sm:px-8 sm:py-8 rounded-3xl border-2 transition-all duration-300 shadow-md outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
+        className={`relative w-full max-w-full px-1.5 py-3 sm:px-8 sm:py-8 rounded-2xl sm:rounded-3xl border sm:border-2 transition-all duration-300 shadow-md outline-none focus-visible:ring-2 focus-visible:ring-teal-500 overflow-x-hidden box-border ${
           darkMode
             ? 'bg-slate-900 border-amber-500/20 text-slate-100'
             : 'bg-[#fbf8ef] border-[#d4b982]/60 text-slate-900 shadow-stone-200'
         }`}
-        aria-label="نمای صفحه مصحف — برای صفخهٔ قبل و بعد از کلیدهای جهتنما استفاده کنید"
+        aria-label="نمای صفحه مصحف — برای صفحهٔ قبل و بعد از کلیدهای جهت‌نما استفاده کنید"
       >
         {/* کادر تذهیب گوشه‌های صفحه مصحف */}
         <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-amber-600/40 pointer-events-none" />
@@ -414,7 +415,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           <div
             ref={linesRef}
             dir="rtl"
-            className="text-slate-800 dark:text-slate-100"
+            className="w-full max-w-full overflow-x-hidden text-slate-800 dark:text-slate-100"
             style={{ fontFamily: getArabicFontFamily(settings.arabicFont), fontSize: `${fit.fontSize}px` }}
           >
             {layoutPage.lines.map((line) => {
@@ -422,7 +423,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
               if (first?.type === 'surah_header') {
                 const meta = surahs.find((sr) => sr.id === first.sura);
                 return (
-                  <div key={line.line} data-mline="head" className="py-1" style={{ fontSize: '16px' }}>
+                  <div key={line.line} data-mline="head" className="py-1 w-full max-w-full overflow-hidden" style={{ fontSize: '16px' }}>
                     {meta ? <QuranicSurahBanner surah={meta} darkMode={darkMode} /> : null}
                   </div>
                 );
@@ -432,7 +433,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                   <div
                     key={line.line}
                     data-mline="bismillah"
-                    className={`text-center select-none ${darkMode ? 'text-amber-300/90' : 'text-amber-800'}`}
+                    className={`text-center select-none w-full max-w-full overflow-hidden ${darkMode ? 'text-amber-300/90' : 'text-amber-800'}`}
                     style={{ lineHeight: 2.2 }}
                   >
                     {first.text}
@@ -440,13 +441,18 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 );
               }
               const isCentered = fit.centered.includes(line.line);
+              const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
               return (
                 <div
                   key={line.line}
                   data-mline="text"
                   data-line={line.line}
-                  className="flex items-center whitespace-nowrap"
-                  style={{ justifyContent: isCentered ? 'center' : 'space-between', gap: '0.32em', lineHeight: 2.2 }}
+                  className="flex items-center w-full max-w-full overflow-hidden whitespace-nowrap"
+                  style={{
+                    justifyContent: isCentered ? 'center' : 'space-between',
+                    gap: isMobile ? '0.16em' : '0.28em',
+                    lineHeight: 2.15,
+                  }}
                 >
                   {line.words.map((w, idx) => {
                     if (w.type === 'quarter') {

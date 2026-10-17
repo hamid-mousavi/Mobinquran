@@ -177,40 +177,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* نوع فونت عربی */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Palette className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                <span>قلم (فونت) رسم‌الخط قرآنی</span>
-              </span>
-              <span className="text-[11px] text-teal-600 dark:text-teal-400 font-normal">
-                شامل فونت‌های رسمی مجمع ملک فهد
-              </span>
+            <label className="text-sm font-semibold flex items-center gap-2">
+              <Palette className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <span>قلم (فونت) رسم‌الخط قرآنی</span>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {ARABIC_FONT_OPTIONS.map((font) => {
-                const isSelected = (settings.arabicFont || 'uthman-taha') === font.id;
+                const isSelected = (settings.arabicFont || 'ir-mushaf') === font.id;
                 return (
                   <button
                     key={font.id}
                     onClick={() => onUpdateSettings({ arabicFont: font.id as ArabicFont })}
-                    className={`p-3 rounded-xl border text-right transition-all flex items-start justify-between gap-2 ${
+                    className={`min-h-[50px] px-3.5 py-3 rounded-xl border text-right transition-all flex items-center justify-between gap-2 cursor-pointer ${
                       isSelected
                         ? 'border-teal-600 bg-teal-600/10 text-teal-900 dark:text-teal-300 ring-1 ring-teal-500/30'
                         : 'border-amber-300/70 dark:border-slate-700 bg-white/60 dark:bg-transparent hover:bg-white dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    <div>
-                      <div className="text-sm font-bold flex items-center gap-1.5">
-                        <span style={{ fontFamily: getArabicFontFamily(font.id) }}>
-                          {font.name}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                        {font.subtitle}
-                      </div>
-                    </div>
+                    <span className="text-base font-bold" style={{ fontFamily: getArabicFontFamily(font.id) }}>
+                      {font.name}
+                    </span>
                     {isSelected && (
-                      <div className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                      <div className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                         <Check className="w-3 h-3 stroke-[3]" />
                       </div>
                     )}

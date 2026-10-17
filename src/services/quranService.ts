@@ -42,8 +42,8 @@ export const QuranService = {
       const existingMeta = await this.getContentMetadata();
       const currentStatus = await this.getOfflineContentStatus();
 
-      // اگر نسخه ۲ با ۶۲۳۶ آیه موجود باشد نیازی به دانلود مجدد نیست
-      if (currentStatus.isComplete && existingMeta?.schemaVersion === 2) {
+      // اگر نسخه ۳ با ۶۲۳۶ آیه موجود باشد نیازی به دانلود مجدد نیست
+      if (currentStatus.isComplete && existingMeta?.schemaVersion === 3) {
         return true;
       }
 
@@ -61,7 +61,7 @@ export const QuranService = {
           sourceName: `${contentPack.sourceName} (بستهٔ جامع داخلی)`,
           sourceUrl: contentPack.sourceUrl,
           datasetVersion: contentPack.version,
-          schemaVersion: contentPack.schemaVersion || 2,
+          schemaVersion: contentPack.schemaVersion || 3,
           integrityHash: contentPack.integrity?.value,
           licenseStatus: contentPack.licenseStatus,
           lastSyncedAt: new Date(contentPack.generatedAt).getTime() || Date.now(),
