@@ -13,33 +13,85 @@ export interface StorageStatus {
 type RefreshCallback = () => void;
 type OfflineReadyCallback = () => void;
 
-let updateSWFunction: ((reloadPage?: boolean) => Promise<void>) | null = null;
 const refreshListeners: Set<RefreshCallback> = new Set();
 const offlineReadyListeners: Set<OfflineReadyCallback> = new Set();
+const watchedRegistrations = new WeakSet<ServiceWorkerRegistration>();
 let isUpdateAvailable = false;
+let swInitialized = false;
+
+function supportsSW(): boolean {
+  return typeof window !== 'undefined' && 'serviceWorker' in navigator && !Capacitor.isNativePlatform();
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function notifyUpdateAvailable() {
+  isUpdateAvailable = true;
+  refreshListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (e) {
+      console.error('[PWA] Error in refresh listener:', e);
+    }
+  });
+}
+
+/** منتظر می‌ماند تا Worker در حال نصب به وضعیت installed برسد (یا مهلت تمام شود) */
+function waitForInstalled(worker: ServiceWorker, timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (worker.state !== 'installing') {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(done, timeoutMs);
+    function done() {
+      clearTimeout(timer);
+      worker.removeEventListener('statechange', onChange);
+      resolve();
+    }
+    function onChange() {
+      if (worker.state !== 'installing') done();
+    }
+    worker.addEventListener('statechange', onChange);
+  });
+}
+
+/** فقط یک بار برای هر registration شنونده می‌گذارد؛ منبع واحد تشخیص نسخه جدید */
+function watchRegistration(reg: ServiceWorkerRegistration) {
+  if (watchedRegistrations.has(reg)) return;
+  watchedRegistrations.add(reg);
+
+  if (reg.waiting && navigator.serviceWorker.controller) {
+    notifyUpdateAvailable();
+  }
+  reg.addEventListener('updatefound', () => {
+    const worker = reg.installing;
+    if (!worker) return;
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+        notifyUpdateAvailable();
+      }
+    });
+  });
+}
 
 /**
  * مدیریت چرخه عمر Service Worker بدون رفرش ناخواسته یا وقفه در قرائت و صوت
  */
 export function initServiceWorker() {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || Capacitor.isNativePlatform()) {
+  if (!supportsSW() || swInitialized) {
     return;
   }
+  swInitialized = true;
 
   try {
-    updateSWFunction = registerSW({
+    registerSW({
       immediate: true,
       onNeedRefresh() {
         console.log('[PWA] New version detected.');
-        isUpdateAvailable = true;
-        // اطلاع به شنوندگان جهت نمایش بنر بروزرسانی توسط کاربر
-        refreshListeners.forEach((listener) => {
-          try {
-            listener();
-          } catch (e) {
-            console.error('[PWA] Error in refresh listener:', e);
-          }
-        });
+        notifyUpdateAvailable();
       },
       onOfflineReady() {
         console.log('[PWA] Content cached and ready for offline use.');
@@ -51,115 +103,142 @@ export function initServiceWorker() {
           }
         });
       },
+      onRegisteredSW(_url, registration) {
+        if (registration) watchRegistration(registration);
+      },
       onRegisterError(error) {
         console.warn('[PWA] ServiceWorker registration error:', error);
       },
     });
-    // بررسی ثبت اولیه و کارگرهای در انتظار قبلی
+
     navigator.serviceWorker.getRegistration().then((reg) => {
-      if (reg) {
-        if (reg.waiting) {
-          console.log('[PWA] Found waiting worker on startup.');
-          isUpdateAvailable = true;
-          refreshListeners.forEach((listener) => {
-            try {
-              listener();
-            } catch (e) {
-              console.error('[PWA] Error in refresh listener:', e);
-            }
-          });
-        }
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New worker installed and ready.');
-                isUpdateAvailable = true;
-                refreshListeners.forEach((listener) => {
-                  try {
-                    listener();
-                  } catch (e) {
-                    console.error('[PWA] Error in refresh listener:', e);
-                  }
-                });
-              }
-            });
-          }
-        });
-      }
+      if (reg) watchRegistration(reg);
     }).catch(() => {});
 
     // بررسی دوره‌ای وجود نسخه جدید هر ۱۵ دقیقه
     setInterval(() => {
-      checkForUpdates();
+      void checkForUpdates();
     }, 15 * 60 * 1000);
 
-    // بررسی وجود نسخه جدید هنگام بازگشت کاربر به برگه
+    // بررسی نسخه جدید هنگام بازگشت کاربر به برنامه (در TWA/PWA برنامه معمولاً بسته نمی‌شود، فقط به پس‌زمینه می‌رود)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        checkForUpdates();
+        void checkForUpdates();
       }
     });
 
-    // بررسی مجدد هنگام اتصال مجدد شبکه
     window.addEventListener('online', () => {
-      checkForUpdates();
+      void checkForUpdates();
     });
 
+    // بررسی اولیه کمی بعد از شروع برنامه
+    setTimeout(() => {
+      void checkForUpdates();
+    }, 5000);
   } catch (err) {
     console.warn('[PWA] registerSW initialization failed:', err);
   }
 }
 
 /**
- * بررسی دستی یا برنامه‌ریزی‌شده برای دریافت به‌روزرسانی جدید
+ * بررسی دستی یا برنامه‌ریزی‌شده برای دریافت به‌روزرسانی جدید.
+ * اگر نسخه جدید در حال نصب باشد، تا پایان نصب صبر می‌کند (قبلاً زود false برمی‌گشت).
  */
 export async function checkForUpdates(): Promise<boolean> {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || Capacitor.isNativePlatform()) {
+  if (!supportsSW()) {
     return false;
   }
   try {
     const registration = await navigator.serviceWorker.getRegistration();
-    if (registration) {
-      await registration.update();
-      if (registration.waiting) {
-        isUpdateAvailable = true;
-        refreshListeners.forEach((listener) => {
-          try {
-            listener();
-          } catch (e) {
-            console.error('[PWA] Error in refresh listener:', e);
-          }
-        });
-        return true;
-      }
+    if (!registration) return isUpdateAvailable;
+    watchRegistration(registration);
+
+    await registration.update();
+    if (!registration.waiting && registration.installing) {
+      await waitForInstalled(registration.installing, 20000);
     }
+    if (registration.waiting && navigator.serviceWorker.controller) {
+      notifyUpdateAvailable();
+      return true;
+    }
+    // نسخه‌ی جدیدی در انتظار نیست؛ پرچم قدیمی نباید بنر بی‌اثر نشان بدهد
+    isUpdateAvailable = false;
+    return false;
   } catch (err) {
     console.warn('[PWA] Check for updates failed:', err);
+    return isUpdateAvailable;
   }
-  return isUpdateAvailable;
+}
+
+/** حذف Service Worker و کش پوسته‌ی برنامه (کش صوت و داده‌ی قرآن حفظ می‌شود) */
+async function purgeAppShell(): Promise<void> {
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map((r) => r.unregister()));
+  } catch (e) {
+    console.warn('[PWA] unregister failed:', e);
+  }
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k.includes('precache')).map((k) => caches.delete(k)));
+    }
+  } catch (e) {
+    console.warn('[PWA] cache purge failed:', e);
+  }
 }
 
 /**
- * اعمال نسخه جدید بعد از تأیید کاربر (یا خلوت بودن صوت/چت)
+ * اعمال نسخه جدید بعد از تأیید کاربر.
+ * - اگر Worker منتظر باشد: SKIP_WAITING و رفرش با controllerchange (با مهلت ۳ ثانیه‌ای اطمینان)
+ * - اگر Worker منتظری نباشد (وضعیت کهنه): پوسته‌ی کش‌شده پاک می‌شود و صفحه از شبکه بارگذاری می‌شود
+ * در هر حالت در نهایت صفحه رفرش می‌شود و دکمه برای همیشه در حالت «در حال نصب» نمی‌ماند.
  */
 export async function applyAppUpdate(): Promise<void> {
-  if (updateSWFunction) {
-    await updateSWFunction(true);
-  } else if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (reg?.waiting) {
-      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-    }
-    setTimeout(() => {
-      window.location.reload();
-    }, 150);
-  } else {
+  if (!supportsSW()) {
     window.location.reload();
+    return;
   }
-}
 
+  let reloaded = false;
+  const reloadOnce = () => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
+  };
+
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.addEventListener('controllerchange', reloadOnce);
+
+      let waiting = reg.waiting;
+      if (!waiting) {
+        try {
+          await reg.update();
+        } catch {
+          // شبکه در دسترس نیست؛ ادامه با حالت جایگزین
+        }
+        if (!reg.waiting && reg.installing) {
+          await waitForInstalled(reg.installing, 15000);
+        }
+        waiting = reg.waiting;
+      }
+
+      if (waiting) {
+        waiting.postMessage({ type: 'SKIP_WAITING' });
+        await sleep(3000);
+        reloadOnce();
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('[PWA] applyAppUpdate failed, falling back to hard refresh:', err);
+  }
+
+  await purgeAppShell();
+  reloadOnce();
+}
 
 export function onServiceWorkerUpdate(callback: RefreshCallback): () => void {
   refreshListeners.add(callback);

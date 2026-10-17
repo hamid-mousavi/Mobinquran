@@ -1231,7 +1231,11 @@ ${generated.content}`,
       const verses = [];
       const surahMap = /* @__PURE__ */ new Map();
       for (const v of rawVerses) {
-        const textArabic = v.textArabic || "";
+        let textArabic = v.textArabic || "";
+        if (v.surahId > 1 && v.surahId !== 9 && v.verseNumber === 1) {
+          textArabic = textArabic.replace(/^[\uFEFF\u200B\s]*ب[\u0651\u0650\u064E\u064F\u0652\s]*س[\u0652\s]*م[\u0650\s]+[\u0600-\u06FF\s]+?[ٱا]لرَّحِيمِ\s*/u, "").replace(/^[\uFEFF\u200B\s]*بِسْمِ\s+[\u0600-\u06FF\s]+?ٱلرَّحِيمِ\s*/u, "").replace(/^[\uFEFF\u200B\s]*بِسْمِ\s+[\u0600-\u06FF\s]+?الرَّحِيمِ\s*/u, "").replace(/^[\uFEFF\u200B\s]*بسم\s+الله\s+الرحمن\s+الرحيم\s*/u, "").trim();
+        }
+        textArabic = textArabic.replace(/إِبْرَٰهِۦم/g, "\u0625\u0650\u0628\u0652\u0631\u064E\u0670\u0647\u0650\u064A\u0645").replace(/لِإِبْرَٰهِۦم/g, "\u0644\u0650\u0625\u0650\u0628\u0652\u0631\u064E\u0670\u0647\u0650\u064A\u0645").replace(/ٱلنَّبِيِّۦنَ/g, "\u0671\u0644\u0646\u0651\u064E\u0628\u0650\u064A\u0651\u0650\u064A\u0646\u064E").replace(/وَٱلنَّبِيِّۦنَ/g, "\u0648\u064E\u0671\u0644\u0646\u0651\u064E\u0628\u0650\u064A\u0651\u0650\u064A\u0646\u064E");
         const translationMakarem = v.translationMakarem || "";
         const translationFooladvand = v.translationFooladvand || "";
         const translationAnsarian = v.translationAnsarian || "";

@@ -36,9 +36,12 @@ export const PWAUpdateBanner: React.FC<PWAUpdateBannerProps> = ({ isAudioPlaying
 
   const handleUpdate = async () => {
     setIsUpdating(true);
+    // اگر به هر دلیل رفرش انجام نشد، دکمه برای همیشه در حالت «در حال نصب» نماند
+    const safety = setTimeout(() => setIsUpdating(false), 25000);
     try {
       await applyAppUpdate();
     } catch {
+      clearTimeout(safety);
       window.location.reload();
     }
   };
@@ -47,7 +50,8 @@ export const PWAUpdateBanner: React.FC<PWAUpdateBannerProps> = ({ isAudioPlaying
     <div
       role="alert"
       dir="rtl"
-      className={`fixed left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-[70] transition-all duration-300 ${
+      style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      className={`fixed left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-[250] transition-all duration-300 ${
         isAudioPlaying ? 'bottom-28 sm:bottom-24' : 'bottom-4'
       }`}
     >
