@@ -38,6 +38,8 @@ import {
 import { toPersianDigits } from '../utils/textNormalization';
 import { getVerseReflection, saveVerseReflection } from '../services/aiReflectionStorage';
 import { getOrCreateDeviceId } from '../utils/deviceId';
+import { useAiQuota } from '../hooks/useAiQuota';
+import { applyQuotaUpdate, markQuotaExhausted, refreshAiQuota } from '../services/aiQuotaStore';
 import { apiFetch } from '../services/apiClient';
 
 interface AIPageProps {
@@ -76,29 +78,14 @@ export const AIPage: React.FC<AIPageProps> = ({
   const [reflectionText, setReflectionText] = useState('');
   const [savedReflection, setSavedReflection] = useState('');
   const [reflectionStatus, setReflectionStatus] = useState('');
-  const [aiQuota, setAiQuota] = useState<{ dailyLimit: number; used: number; remaining: number } | null>(null);
+  // سهمیهٔ گفتگو از حافظهٔ مشترک (جدا از سهمیهٔ داوری تلاوت)
+  const quotaStatus = useAiQuota();
+  const aiQuota = quotaStatus?.chat
+    ? { dailyLimit: quotaStatus.chat.limit, used: quotaStatus.chat.used, remaining: quotaStatus.chat.remaining }
+    : null;
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const fetchAiQuota = async () => {
-    try {
-      const deviceId = getOrCreateDeviceId();
-      const res = await apiFetch(`/api/ai/status?deviceId=${encodeURIComponent(deviceId)}`, {
-        headers: { 'X-Device-ID': deviceId },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (typeof data.dailyLimit === 'number') {
-          setAiQuota({
-            dailyLimit: data.dailyLimit,
-            used: data.used || 0,
-            remaining: typeof data.remaining === 'number' ? data.remaining : Math.max(0, data.dailyLimit - (data.used || 0)),
-          });
-        }
-      }
-    } catch {}
-  };
 
   const reloadHistory = () => {
     setHistoryList(getAiHistory());
@@ -106,7 +93,6 @@ export const AIPage: React.FC<AIPageProps> = ({
 
   useEffect(() => {
     reloadHistory();
-    fetchAiQuota();
   }, []);
 
   useEffect(() => {
@@ -241,6 +227,7 @@ export const AIPage: React.FC<AIPageProps> = ({
 
       if (response.ok) {
         const json = await response.json();
+        applyQuotaUpdate('chat', json?.quota); // شمارندهٔ سهمیه بدون درخواست اضافه به‌روز می‌شود
         const parsed = aiResponseSchema.safeParse(json);
         const data = (parsed.success ? parsed.data : json) as any;
 
@@ -267,6 +254,7 @@ export const AIPage: React.FC<AIPageProps> = ({
           not_found: 'مسیر سرویس هوش مصنوعی روی سرور یافت نشد (کد 404).',
         };
         const code = typeof errorPayload?.code === 'string' ? errorPayload.code : '';
+        if (code === 'daily_limit_reached') markQuotaExhausted('chat');
         assistantText = errorMessages[code]
           || (typeof errorPayload?.error === 'string'
             ? errorPayload.error
@@ -329,7 +317,7 @@ export const AIPage: React.FC<AIPageProps> = ({
       setMessages([...updatedMessages, errorMsg]);
     } finally {
       setIsLoading(false);
-      fetchAiQuota();
+      void refreshAiQuota(true); // پس از خطا/برگشت سهمیه، مقدار دقیق از سرور
     }
   };
 

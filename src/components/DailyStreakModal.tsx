@@ -18,13 +18,15 @@ import {
   StreakData,
   WeekDayStatus,
   ReviewAyahItem,
-  advanceAyahReview,
+  gradeAyahReview,
   removeAyahFromReview,
   recordUserActivity,
   getActivities,
   getAllReviewAyahs,
-  seedSampleReviewAyahs,
   addAyahToReview,
+  getReviewSummary,
+  setReviewLimit,
+  enrollMemorizedAyahs,
 } from '../services/activityTracker';
 import { toPersianDigits } from '../utils/textNormalization';
 import {
@@ -35,6 +37,7 @@ import {
   PERSIAN_WEEKDAY_SHORT,
 } from '../utils/date';
 import { ALL_SURAHS } from '../data/surahs';
+import { ReviewSession } from './ReviewSession';
 
 interface DailyStreakModalProps {
   isOpen: boolean;
@@ -59,6 +62,8 @@ export const DailyStreakModal: React.FC<DailyStreakModalProps> = ({
   const [selectedSurahId, setSelectedSurahId] = useState<number>(1);
   const [verseNumberInput, setVerseNumberInput] = useState<number>(1);
   const [addFeedback, setAddFeedback] = useState<string | null>(null);
+  const [enrollFeedback, setEnrollFeedback] = useState<string | null>(null);
+  const [sessionItems, setSessionItems] = useState<ReviewAyahItem[] | null>(null);
 
   // وضعیت ناوبری ماه‌های تقویم شمسی
   const todayPersian = getPersianDateParts();
@@ -70,6 +75,7 @@ export const DailyStreakModal: React.FC<DailyStreakModalProps> = ({
   const activities = getActivities();
   const todayKey = localDateKey();
   const allReviewItems = getAllReviewAyahs();
+  const reviewSummary = getReviewSummary();
 
   // داده‌های ماه شمسی جاری جهت رندر شبکه روزها
   const monthData = getPersianMonthData(viewYear, viewMonth);
@@ -469,6 +475,51 @@ export const DailyStreakModal: React.FC<DailyStreakModalProps> = ({
                 ))}
               </div>
 
+              {/* سقف مرور روزانه */}
+              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-300 px-1">
+                <label htmlFor="review-daily-limit" className="font-bold">
+                  سقف مرور روزانه
+                </label>
+                <select
+                  id="review-daily-limit"
+                  value={reviewSummary.dailyLimit}
+                  onChange={(e) => setReviewLimit(Number(e.target.value))}
+                  className="rounded-lg border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px] font-bold cursor-pointer"
+                >
+                  {[10, 20, 30, 50].map((n) => (
+                    <option key={n} value={n}>
+                      {toPersianDigits(n)} آیه
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ورود آیه‌های حفظ‌شده‌ی خارج از مرور */}
+              {reviewSummary.memorizedNotInReview > 0 && (
+                <div className="p-3 rounded-2xl bg-teal-50/70 dark:bg-teal-950/20 border border-teal-500/25 text-[11px] space-y-2">
+                  <p className="text-slate-700 dark:text-slate-200 leading-relaxed">
+                    {toPersianDigits(reviewSummary.memorizedNotInReview)} آیهٔ حفظ‌شده هنوز وارد مرور نشده است. با افزودن، به‌تدریج و
+                    به اندازهٔ سقف روزانه در برنامهٔ مرور پخش می‌شوند.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const n = enrollMemorizedAyahs();
+                      setEnrollFeedback(`${toPersianDigits(n)} آیه به برنامهٔ مرور اضافه شد.`);
+                      setTimeout(() => setEnrollFeedback(null), 3500);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] cursor-pointer active:scale-95 transition-all"
+                  >
+                    افزودن به برنامهٔ مرور
+                  </button>
+                </div>
+              )}
+              {enrollFeedback && (
+                <div role="status" className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 px-1">
+                  {enrollFeedback}
+                </div>
+              )}
+
               {/* لیست آیات نوبت مرور امروز */}
               <div className="space-y-2.5 pt-1">
                 <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300 font-bold px-1">
@@ -480,6 +531,22 @@ export const DailyStreakModal: React.FC<DailyStreakModalProps> = ({
                     {toPersianDigits(dueReviewAyahs.length)} آیه
                   </span>
                 </div>
+
+                {reviewSummary.deferred > 0 && (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 px-1">
+                    {toPersianDigits(reviewSummary.deferred)} آیهٔ دیگر هم موعدش رسیده، ولی به‌خاطر سقف روزانه به روزهای بعد موکول شد.
+                  </p>
+                )}
+
+                {dueReviewAyahs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSessionItems([...dueReviewAyahs])}
+                    className="w-full px-4 py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm cursor-pointer active:scale-[0.99] transition-all shadow-xs"
+                  >
+                    شروع مرور امروز ({toPersianDigits(dueReviewAyahs.length)} آیه)
+                  </button>
+                )}
 
                 {dueReviewAyahs.length > 0 ? (
                   <div className="space-y-2">
@@ -499,6 +566,16 @@ export const DailyStreakModal: React.FC<DailyStreakModalProps> = ({
                             <span className="text-[10px] text-slate-400">
                               (در جعبه {toPersianDigits(item.box)})
                             </span>
+                            {item.isLeech && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-300 text-[10px] font-bold">
+                                نیاز به توجه ویژه
+                              </span>
+                            )}
+                            {(item.overdueDays ?? 0) > 0 && (
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                {toPersianDigits(item.overdueDays ?? 0)} روز تأخیر
+                              </span>
+                            )}
                           </div>
                           <p className="text-[11px] text-slate-400 mt-1">
                             آیه را در ذهن مرور کرده یا با صوت گوش دهید و وضعیت تسلط خود را ثبت کنید:
@@ -521,7 +598,7 @@ export const DailyStreakModal: React.FC<DailyStreakModalProps> = ({
 
                           <button
                             type="button"
-                            onClick={() => advanceAyahReview(item.id, true)}
+                            onClick={() => gradeAyahReview(item.id, 'good')}
                             className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
                             title="مسلط هستم (انتقال به جعبه بعدی)"
                           >
@@ -531,8 +608,17 @@ export const DailyStreakModal: React.FC<DailyStreakModalProps> = ({
 
                           <button
                             type="button"
-                            onClick={() => advanceAyahReview(item.id, false)}
+                            onClick={() => gradeAyahReview(item.id, 'hard')}
                             className="px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-slate-700 hover:bg-amber-50 text-slate-600 dark:text-slate-400 font-bold text-[11px] transition-all cursor-pointer active:scale-95"
+                            title="سخت بود (همین جعبه، مرور زودتر)"
+                          >
+                            <span>سخت بود</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => gradeAyahReview(item.id, 'again')}
+                            className="px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-slate-700 hover:bg-rose-50 text-slate-600 dark:text-slate-400 font-bold text-[11px] transition-all cursor-pointer active:scale-95"
                             title="نیاز به تکرار مجدد (برگشت به جعبه ۱)"
                           >
                             <span>نیاز به تکرار</span>
@@ -551,16 +637,8 @@ export const DailyStreakModal: React.FC<DailyStreakModalProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <div className="p-4 rounded-2xl bg-stone-50 dark:bg-slate-800/40 border border-stone-200/80 dark:border-slate-800 text-center text-xs text-slate-400 space-y-2">
+                  <div className="p-4 rounded-2xl bg-stone-50 dark:bg-slate-800/40 border border-stone-200/80 dark:border-slate-800 text-center text-xs text-slate-400">
                     <p>هیچ آیه‌ای برای نوبت مرور امروز نمانده است یا هنوز آیه‌ای به لایتنر اضافه نکرده‌اید.</p>
-                    <button
-                      type="button"
-                      onClick={() => seedSampleReviewAyahs()}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-all shadow-xs cursor-pointer active:scale-95"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>افزودن نمونه آیات پرکاربرد جهت تمرین</span>
-                    </button>
                   </div>
                 )}
               </div>
@@ -637,6 +715,10 @@ export const DailyStreakModal: React.FC<DailyStreakModalProps> = ({
           </button>
         </div>
       </div>
+
+      {sessionItems && (
+        <ReviewSession items={sessionItems} darkMode={darkMode} onExit={() => setSessionItems(null)} />
+      )}
     </div>
   );
 };

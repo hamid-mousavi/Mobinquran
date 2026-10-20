@@ -2,9 +2,26 @@
  * سرویس ذخیره‌سازی و پیگیری پیشرفت حفظ قرآن کریم در حافظه محلی کاربر
  */
 
-const STORAGE_KEY_MEMORIZED_VERSES = 'mobin_memorized_verses_v1';
+import { ALL_SURAHS } from '../data/surahs';
+import { computeJuzProgress, computeJuzTotals } from './progress/juzMap';
+import {
+  getAllProgress,
+  getMemorizedCount,
+  getMemorizedCountsBySurah,
+  isMemorized,
+  setRangeMemorized,
+  setVerseMemorized,
+} from './progress/progressStore';
+
 const STORAGE_KEY_SESSIONS = 'mobin_memorization_sessions_v1';
 const TOTAL_QURAN_VERSES = 6236;
+
+// تعداد آیه‌های هر جزء ثابت است؛ یک‌بار محاسبه و نگه‌داری می‌شود
+let juzTotalsCache: number[] | null = null;
+function getJuzTotals(): number[] {
+  if (!juzTotalsCache) juzTotalsCache = computeJuzTotals(ALL_SURAHS.map((x) => x.versesCount));
+  return juzTotalsCache;
+}
 
 export interface MemoSessionRecord {
   id: string;
@@ -26,44 +43,17 @@ export interface MemorizationStats {
   juzProgress: { juz: number; memorized: number; total: number }[];
 }
 
-function getStoredVerseKeys(): Set<string> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_MEMORIZED_VERSES);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw);
-    return new Set(Array.isArray(arr) ? arr : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function saveStoredVerseKeys(keys: Set<string>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY_MEMORIZED_VERSES, JSON.stringify(Array.from(keys)));
-    window.dispatchEvent(new CustomEvent('mobin-memorization-updated'));
-  } catch (err) {
-    console.warn('Failed to save memorized verses to localStorage:', err);
-  }
-}
+// وضعیت «حفظ‌شده» اکنون در ذخیره‌گاه یکپارچهٔ پیشرفت (Dexie) نگهداری می‌شود؛
+// این توابع فقط واسط همگام قبلی را برای کامپوننت‌ها حفظ می‌کنند.
 
 export function isVerseMemorized(surahId: number, verseNumber: number): boolean {
-  const keys = getStoredVerseKeys();
-  return keys.has(`${surahId}:${verseNumber}`);
+  return isMemorized(surahId, verseNumber);
 }
 
 export function toggleVerseMemorized(surahId: number, verseNumber: number): boolean {
-  const keys = getStoredVerseKeys();
-  const key = `${surahId}:${verseNumber}`;
-  let isNowMemorized = false;
-  if (keys.has(key)) {
-    keys.delete(key);
-    isNowMemorized = false;
-  } else {
-    keys.add(key);
-    isNowMemorized = true;
-  }
-  saveStoredVerseKeys(keys);
-  return isNowMemorized;
+  const next = !isMemorized(surahId, verseNumber);
+  setVerseMemorized(surahId, verseNumber, next);
+  return next;
 }
 
 export function markRangeMemorized(
@@ -72,16 +62,7 @@ export function markRangeMemorized(
   endVerse: number,
   memorized = true
 ): void {
-  const keys = getStoredVerseKeys();
-  for (let v = startVerse; v <= endVerse; v++) {
-    const key = `${surahId}:${v}`;
-    if (memorized) {
-      keys.add(key);
-    } else {
-      keys.delete(key);
-    }
-  }
-  saveStoredVerseKeys(keys);
+  setRangeMemorized(surahId, startVerse, endVerse, memorized);
 }
 
 export function recordMemoSession(record: Omit<MemoSessionRecord, 'id' | 'timestamp'>): void {
@@ -125,13 +106,7 @@ export function getSurahMemorizationStats(surahId: number, versesCount: number):
   totalCount: number;
   percentage: number;
 } {
-  const keys = getStoredVerseKeys();
-  let count = 0;
-  for (let v = 1; v <= versesCount; v++) {
-    if (keys.has(`${surahId}:${v}`)) {
-      count++;
-    }
-  }
+  const count = Math.min(versesCount, getMemorizedCountsBySurah().get(surahId) ?? 0);
   return {
     memorizedCount: count,
     totalCount: versesCount,
@@ -144,29 +119,29 @@ export function setAyahMemorizationStatus(
   verseNumber: number,
   status: MemorizationStatus | boolean
 ): void {
-  const keys = getStoredVerseKeys();
-  const key = `${surahId}:${verseNumber}`;
-  const isMemorized = status === true || status === 'memorized';
-  if (isMemorized) {
-    keys.add(key);
-  } else {
-    keys.delete(key);
-  }
-  saveStoredVerseKeys(keys);
+  setVerseMemorized(surahId, verseNumber, status === true || status === 'memorized');
 }
 
 export function getMemorizationStats(): MemorizationStats {
-  const keys = getStoredVerseKeys();
-  const totalMemorized = keys.size;
+  const totalMemorized = getMemorizedCount();
   const percentage = Math.min(100, Math.round((totalMemorized / TOTAL_QURAN_VERSES) * 1000) / 10);
   const recentSessions = getRecentSessions(5);
+
+  const counts = getMemorizedCountsBySurah();
+  let completedSurahsCount = 0;
+  for (const surah of ALL_SURAHS) {
+    if ((counts.get(surah.id) ?? 0) >= surah.versesCount) completedSurahsCount += 1;
+  }
 
   return {
     totalMemorized,
     totalVerses: TOTAL_QURAN_VERSES,
     percentage,
-    completedSurahsCount: 0,
+    completedSurahsCount,
     recentSessions,
-    juzProgress: [],
+    juzProgress: computeJuzProgress(
+      getAllProgress().filter((r) => r.memorized),
+      getJuzTotals()
+    ),
   };
 }

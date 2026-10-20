@@ -151,13 +151,17 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     if (!root || !layoutPage) return;
     const MAX_LINE_SCALE = 1.1;
     const measure = () => {
-      const width = root.clientWidth;
-      if (!width) return;
+      // عرض قابل‌استفاده = عرض ریشه منهای پدینگ (حاشیهٔ ایمن برای بیرون‌زدگی گلیف‌ها)
+      const cs = getComputedStyle(root);
+      const width = root.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+      if (width <= 0) return;
       const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-mline="text"]'));
       if (rows.length === 0) return;
       const currentSize = parseFloat(getComputedStyle(root).fontSize) || 22;
       const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
       const MIN_GAP_EM = isMobile ? 0.16 : 0.28;
+      // در گوشی حاشیهٔ اطمینان بیشتر؛ اندازه‌گیری و رندر نهایی فونت ممکن است کمی اختلاف داشته باشد
+      const SAFETY = isMobile ? 0.97 : 0.985;
       // عرض طبیعی هر سطر در مقیاس ۱ (اثر مقیاس فعلی سطر حذف می‌شود)
       const naturals = rows.map((row) => {
         const applied = Number(row.dataset.scale) || 1;
@@ -166,7 +170,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         return sum + Math.max(0, kids.length - 1) * MIN_GAP_EM * currentSize;
       });
       const widest = Math.max(...naturals, 1);
-      const next = Math.max(8.5, Math.min(36, (currentSize * width) / widest * 0.985));
+      const next = Math.max(8.5, Math.min(36, (currentSize * width) / widest * SAFETY));
       const centered: number[] = [];
       const scales: Record<number, number> = {};
       rows.forEach((row, i) => {
@@ -484,19 +488,13 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         ref={pageContainerRef}
         tabIndex={0}
         onKeyDown={handleContainerKeyDown}
-        className={`relative w-full max-w-full px-1.5 py-3 sm:px-8 sm:py-8 rounded-2xl sm:rounded-3xl border sm:border-2 transition-all duration-300 shadow-md outline-none focus-visible:ring-2 focus-visible:ring-teal-500 overflow-x-hidden box-border ${
+        className={`relative w-full max-w-full px-0 py-2 sm:px-8 sm:py-6 sm:rounded-2xl sm:border transition-colors duration-300 outline-none focus-visible:ring-2 focus-visible:ring-teal-500 overflow-x-hidden box-border ${
           darkMode
-            ? 'bg-slate-900 border-amber-500/20 text-slate-100'
-            : 'bg-[#fbf8ef] border-[#d4b982]/60 text-slate-900 shadow-stone-200'
+            ? 'bg-slate-900 sm:border-slate-800 text-slate-100'
+            : 'bg-[#fbf8ef] sm:border-[#d4b982]/40 text-slate-900'
         }`}
         aria-label="نمای صفحه مصحف — برای صفحهٔ قبل و بعد از کلیدهای جهت‌نما استفاده کنید"
       >
-        {/* کادر تذهیب گوشه‌های صفحه مصحف */}
-        <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-amber-600/40 pointer-events-none" />
-        <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-amber-600/40 pointer-events-none" />
-        <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-600/40 pointer-events-none" />
-        <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-600/40 pointer-events-none" />
-
         {qcfOffer && !qcfReady && !isLoading && (
           <button
             onClick={() => setShowQcfSheet(true)}
@@ -521,7 +519,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           <div
             ref={linesRef}
             dir="rtl"
-            className="w-full max-w-full overflow-x-hidden text-slate-800 dark:text-slate-100"
+            className="w-full max-w-full overflow-x-hidden px-1 text-slate-800 dark:text-slate-100"
             style={{ fontFamily: getArabicFontFamily(settings.arabicFont), fontSize: `${fit.fontSize}px` }}
           >
             {layoutPage.lines.map((line) => {
@@ -530,7 +528,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 const meta = surahs.find((sr) => sr.id === first.sura);
                 return (
                   <div key={line.line} data-mline="head" className="py-1 w-full max-w-full overflow-hidden" style={{ fontSize: '16px' }}>
-                    {meta ? <QuranicSurahBanner surah={meta} darkMode={darkMode} /> : null}
+                    {meta ? <QuranicSurahBanner surah={meta} darkMode={darkMode} variant="mushaf" /> : null}
                   </div>
                 );
               }
@@ -558,7 +556,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                   data-mline="text"
                   data-line={line.line}
                   data-scale={fit.scales[line.line] ?? 1}
-                  className="flex items-center w-full max-w-full overflow-hidden whitespace-nowrap"
+                  className="flex items-center w-full max-w-full overflow-visible whitespace-nowrap"
                   style={{
                     fontSize: `${fit.scales[line.line] ?? 1}em`,
                     justifyContent: isCentered ? 'center' : 'space-between',

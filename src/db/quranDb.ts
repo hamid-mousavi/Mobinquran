@@ -1,6 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import { Surah, Verse, UserBookmark, ReadingState, ContentMetadata, KhatmPlan, AudioDownloadRecord, AudioErrorLogEntry, AppSettingsRecord } from '../types';
 import { ALL_SURAHS } from '../data/surahs';
+import type { AyahProgress } from '../services/progress/progressCore';
 
 export class QuranDatabase extends Dexie {
   surahs!: Table<Surah, number>;
@@ -12,6 +13,7 @@ export class QuranDatabase extends Dexie {
   audioDownloads!: Table<AudioDownloadRecord, string>;
   audioErrorLog!: Table<AudioErrorLogEntry, number>;
   appSettings!: Table<AppSettingsRecord, string>;
+  ayahProgress!: Table<AyahProgress, string>;
 
   constructor() {
     super('QuranMobinDB');
@@ -84,6 +86,20 @@ export class QuranDatabase extends Dexie {
       audioDownloads: 'key, reciterId, surahId, downloadedAt',
       audioErrorLog: '++id, createdAt, reciterId, surahId',
       appSettings: 'key, updatedAt',
+    });
+
+    // Version 8: پیشرفت یکپارچهٔ هر آیه (حفظ + جعبهٔ مرور) — جایگزین دو ساختار جدای localStorage (مرحلهٔ ۰)
+    this.version(8).stores({
+      surahs: 'id, nameArabic, namePersian, revelationType, juzNumber, startPage',
+      verses: 'id, surahId, [surahId+verseNumber], juzNumber, pageNumber, hizbQuarter',
+      bookmarks: '++id, [surahId+verseNumber], surahId, verseNumber, createdAt',
+      readingState: 'id',
+      contentMetadata: 'id, lastSyncedAt, schemaVersion',
+      khatmPlans: 'id, type, isActive',
+      audioDownloads: 'key, reciterId, surahId, downloadedAt',
+      audioErrorLog: '++id, createdAt, reciterId, surahId',
+      appSettings: 'key, updatedAt',
+      ayahProgress: 'key, surahId, nextReviewDate',
     });
   }
 

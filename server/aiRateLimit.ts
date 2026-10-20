@@ -14,6 +14,37 @@ interface Counter {
 
 const memoryCounters = new Map<string, Counter>();
 
+/**
+ * سهمیهٔ جدا برای هر کاربرد: گفتگوی دستیار («chat») و داوری تلاوت («recitation»).
+ * پیش از این هر دو یک شمارنده را مصرف می‌کردند و با تمرین حفظ، سهمیهٔ گفتگو زود تمام می‌شد.
+ */
+export type QuotaBucket = 'chat' | 'recitation' | 'help';
+
+const DEFAULT_LIMITS: Record<QuotaBucket, number> = { chat: 20, recitation: 30, help: 15 };
+const LIMIT_ENV: Record<QuotaBucket, string> = {
+  chat: 'AI_DAILY_LIMIT',
+  recitation: 'AI_RECITATION_DAILY_LIMIT',
+  help: 'AI_HELP_DAILY_LIMIT',
+};
+
+/** سقف روزانه: AI_DAILY_LIMIT (گفتگو)، AI_RECITATION_DAILY_LIMIT (تلاوت) و AI_HELP_DAILY_LIMIT (کمک حفظ) */
+export function dailyLimitFor(bucket: QuotaBucket): number {
+  const raw = env(LIMIT_ENV[bucket]);
+  const n = Number(raw || DEFAULT_LIMITS[bucket]);
+  return Math.max(1, Number.isFinite(n) ? Math.round(n) : DEFAULT_LIMITS[bucket]);
+}
+
+/** کلید ذخیره‌سازی؛ کلید «chat» با نسخهٔ قبلی یکسان است تا شمارنده‌های موجود از بین نروند */
+export function quotaStorageKey(bucket: QuotaBucket, key: string, now: Date = new Date()): string {
+  const day = now.toISOString().slice(0, 10);
+  return bucket === 'chat' ? `quran-ai:${day}:${key}` : `quran-ai:${bucket}:${day}:${key}`;
+}
+
+/** زمان بازنشانی سهمیه (نیمه‌شب UTC بعدی) */
+export function nextQuotaResetAt(): number {
+  return dayWindow().resetAt;
+}
+
 function env(name: string): string {
   return (process.env[name] || '').trim();
 }
@@ -33,8 +64,8 @@ export function hashRateLimitKey(ip: string, deviceId: string): string {
   return crypto.createHash('sha256').update(`${ip}|${deviceId}`).digest('hex');
 }
 
-export async function getDailyQuotaUsage(key: string): Promise<number> {
-  const storageKey = `quran-ai:${new Date().toISOString().slice(0, 10)}:${key}`;
+export async function getDailyQuotaUsage(key: string, bucket: QuotaBucket = 'chat'): Promise<number> {
+  const storageKey = quotaStorageKey(bucket, key);
   const url = env('UPSTASH_REDIS_REST_URL');
   const token = env('UPSTASH_REDIS_REST_TOKEN');
   if (url && token) {
@@ -73,8 +104,8 @@ async function incrementUpstash(key: string, resetAt: number): Promise<number | 
   return Number(result?.[0]?.result || 0);
 }
 
-export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
-  const limit = Math.max(1, Number(env('AI_DAILY_LIMIT') || 20));
+export async function consumeDailyQuota(key: string, bucket: QuotaBucket = 'chat'): Promise<RateLimitResult> {
+  const limit = dailyLimitFor(bucket);
   const { resetAt } = dayWindow();
   const allowMemoryFallback = env('ALLOW_MEMORY_RATE_LIMIT') === 'true';
 
@@ -84,7 +115,7 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
     }
   }
 
-  const storageKey = `quran-ai:${new Date().toISOString().slice(0, 10)}:${key}`;
+  const storageKey = quotaStorageKey(bucket, key);
 
   let used: number;
 
@@ -118,4 +149,28 @@ export async function consumeDailyQuota(key: string): Promise<RateLimitResult> {
   }
 
   return { allowed: used <= limit, used, limit, resetAt };
+}
+
+/**
+ * بازگرداندن یک واحد سهمیه وقتی خطا از سمت ما/ارائه‌دهنده بوده است (نه کاربر)؛
+ * تا قطعی سرویس از سهمیهٔ روزانهٔ کاربر کم نکند. شکست این عملیات بی‌صدا نادیده گرفته می‌شود.
+ */
+export async function refundDailyQuota(key: string, bucket: QuotaBucket = 'chat'): Promise<void> {
+  const storageKey = quotaStorageKey(bucket, key);
+  const url = env('UPSTASH_REDIS_REST_URL');
+  const token = env('UPSTASH_REDIS_REST_TOKEN');
+  if (url && token) {
+    try {
+      const response = await fetch(`${url}/pipeline`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify([['DECR', storageKey]]),
+      });
+      if (response.ok) return;
+    } catch {
+      // به شمارندهٔ حافظه برمی‌گردیم
+    }
+  }
+  const counter = memoryCounters.get(storageKey);
+  if (counter && counter.count > 0) counter.count -= 1;
 }

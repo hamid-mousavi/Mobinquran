@@ -11,6 +11,10 @@ import { toPersianDigits } from '../../utils/textNormalization';
 import { addAyahToReview } from '../../services/activityTracker';
 import { getOrCreateDeviceId } from '../../utils/deviceId';
 import { apiFetch } from '../../services/apiClient';
+import { aiErrorMessage, isBorderlineAccuracy } from '../../utils/aiFeedback';
+import { useAiQuota } from '../../hooks/useAiQuota';
+import { applyQuotaUpdate, markQuotaExhausted } from '../../services/aiQuotaStore';
+import { isExhausted } from '../../utils/aiQuotaStatus';
 import { SmartRecitationFeedbackPanelProps, AiRecitationResult } from './types';
 
 export const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanelProps> = ({
@@ -33,6 +37,10 @@ export const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanel
   const hasTranscribed = Boolean(transcribedText && transcribedText.trim());
   const [aiEvaluation, setAiEvaluation] = useState<AiRecitationResult | null>(null);
   const [isLoadingAi, setIsLoadingAi] = useState<boolean>(false);
+  // سهمیهٔ داوری تلاوت (جدا از سهمیهٔ گفتگو)
+  const quotaStatus = useAiQuota();
+  const recitationQuota = quotaStatus?.recitation ?? null;
+  const quotaExhausted = isExhausted(recitationQuota);
   const [aiError, setAiError] = useState<string | null>(null);
   const [isAddedToLeitner, setIsAddedToLeitner] = useState<boolean>(false);
 
@@ -42,7 +50,7 @@ export const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanel
     setAiError(null);
   }, [transcribedText, targetText]);
 
-  // درخواست ارزیابی تخصصی از Gemini
+  // درخواست داوری تخصصی از هوش مصنوعی (ارائه‌دهنده را سرور انتخاب می‌کند)
   const handleVerifyWithAi = async () => {
     if (!transcribedText || !targetText) return;
     setIsLoadingAi(true);
@@ -64,13 +72,18 @@ export const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanel
       });
 
       if (!resp.ok) {
-        throw new Error('خطا در پاسخ هوش مصنوعی');
+        // پیام دقیق: سهمیهٔ روزانه، شلوغی سرویس، قطعی و ...
+        const body = await resp.json().catch(() => null);
+        if (body?.code === 'daily_limit_reached') markQuotaExhausted('recitation');
+        setAiError(aiErrorMessage(resp.status, body));
+        return;
       }
 
       const data = await resp.json();
+      applyQuotaUpdate('recitation', data?.quota); // پاسخ کش‌شده quota ندارد و سهمیه را تغییر نمی‌دهد
       setAiEvaluation(data);
     } catch {
-      setAiError('عدم امکان داوری با هوش مصنوعی در حال حاضر. از ارزیابی سریع زیر استفاده کنید.');
+      setAiError(aiErrorMessage(0, null));
     } finally {
       setIsLoadingAi(false);
     }
@@ -240,25 +253,43 @@ export const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanel
             <span>{aiEvaluation ? aiEvaluation.verdictMessage : evaluation.message}</span>
           </div>
 
-          {/* دکمه و کارت داوری تخصصی هوش مصنوعی قرآنی Gemini */}
+          {/* دکمه و کارت داوری تخصصی هوش مصنوعی */}
           {targetText && (
             <div className="pt-1">
               {!aiEvaluation ? (
+                <>
                 <button
                   type="button"
                   onClick={handleVerifyWithAi}
-                  disabled={isLoadingAi}
-                  className="w-full py-2 px-3 rounded-xl border border-teal-500/30 bg-teal-50/50 dark:bg-slate-800 hover:bg-teal-100/60 dark:hover:bg-slate-700/80 text-teal-800 dark:text-teal-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50 active:scale-[0.99]"
+                  disabled={isLoadingAi || quotaExhausted}
+                  className={`w-full py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50 active:scale-[0.99] ${
+                    isBorderlineAccuracy(evaluation.accuracy)
+                      ? 'border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/30'
+                      : 'border-teal-500/30 bg-teal-50/50 dark:bg-slate-800 hover:bg-teal-100/60 dark:hover:bg-slate-700/80 text-teal-800 dark:text-teal-300'
+                  }`}
                 >
                   <Sparkles className={`w-3.5 h-3.5 text-teal-600 dark:text-teal-400 ${isLoadingAi ? 'animate-spin' : ''}`} />
-                  <span>{isLoadingAi ? 'در حال داوری با هوش مصنوعی قرآنی Gemini…' : 'داوری تخصصی با هوش مصنوعی (Gemini)'}</span>
+                  <span>{isLoadingAi ? 'در حال داوری با هوش مصنوعی…' : quotaExhausted ? 'سهمیهٔ داوری امروز تمام شد' : 'داوری تخصصی با هوش مصنوعی'}</span>
                 </button>
+                {recitationQuota && (
+                  <p className={`text-[11px] text-center pt-1 ${quotaExhausted ? 'text-rose-500' : 'text-slate-400'}`}>
+                    {quotaExhausted
+                      ? 'سهمیهٔ داوری فردا دوباره فعال می‌شود؛ فعلاً از ارزیابی سریع استفاده کنید.'
+                      : `${toPersianDigits(recitationQuota.remaining)} از ${toPersianDigits(recitationQuota.limit)} داوری دقیق‌تر امروز باقی‌مانده است.`}
+                  </p>
+                )}
+                {!isLoadingAi && !quotaExhausted && isBorderlineAccuracy(evaluation.accuracy) && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 text-center pt-1">
+                    نتیجهٔ ارزیابی سریع مرزی است؛ داوری دقیق‌تر پیشنهاد می‌شود.
+                  </p>
+                )}
+                </>
               ) : (
                 <div className="p-3.5 rounded-2xl bg-gradient-to-r from-teal-500/10 via-emerald-500/10 to-teal-500/10 border border-teal-500/30 space-y-2 text-right animate-fadeIn">
                   <div className="flex items-center justify-between text-xs font-bold">
                     <span className="flex items-center gap-1 text-teal-700 dark:text-teal-300">
                       <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                      <span>داوری استاد هوش مصنوعی قرآنی:</span>
+                      <span>داوری هوش مصنوعی:</span>
                     </span>
                     <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${
                       aiEvaluation.isPass ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200' : 'bg-amber-500/20 text-amber-800 dark:text-amber-200'
@@ -270,6 +301,14 @@ export const SmartRecitationFeedbackPanel: React.FC<SmartRecitationFeedbackPanel
                   <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
                     {aiEvaluation.verdictMessage}
                   </p>
+
+                  {(aiEvaluation.cached || aiEvaluation.quota) && (
+                    <div className="text-[10px] text-slate-400">
+                      {aiEvaluation.cached
+                        ? 'پاسخ ذخیره‌شده؛ سهمیه مصرف نشد.'
+                        : `سهمیهٔ باقی‌مانده امروز: ${toPersianDigits(aiEvaluation.quota?.remaining ?? 0)} از ${toPersianDigits(aiEvaluation.quota?.limit ?? 0)}`}
+                    </div>
+                  )}
 
                   {aiEvaluation.tajweedNote && (
                     <div className="text-[11px] text-teal-800 dark:text-teal-300 font-normal bg-teal-500/10 p-2 rounded-lg">

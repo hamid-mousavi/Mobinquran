@@ -13,6 +13,8 @@ import { BookOpen, ChevronRight } from 'lucide-react';
 import { AppDrawer } from './components/AppDrawer';
 import { ShareChoiceSheet } from './components/ShareChoiceSheet';
 import { QuranService } from './services/quranService';
+import { initProgressStore } from './services/progress/progressStore';
+import { flushPageView, trackPageView } from './services/khatm/pageViewTracker';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
 import { ALL_SURAHS, getJuzStartInfo } from './data/surahs';
 import { Surah, Verse, AppSettings, ViewMode } from './types';
@@ -192,9 +194,11 @@ export default function App() {
 
   // بستهٔ محلی نسخه‌دار متن و ترجمه‌ها را پیش از درخواست شبکه نصب می‌کنیم.
   useEffect(() => {
-    QuranService.ensureBundledCorePackage()
-      .catch(() => false)
-      .finally(() => setIsCorePackageReady(true));
+    // ذخیره‌گاه یکپارچهٔ پیشرفت (حفظ + مرور) پیش از نمایش داده‌ها آماده می‌شود (مرحلهٔ ۰)
+    Promise.all([
+      QuranService.ensureBundledCorePackage().catch(() => false),
+      initProgressStore(),
+    ]).finally(() => setIsCorePackageReady(true));
     // مهاجرت ختم از localStorage قدیمی به Dexie (P3-T9)
     QuranService.importLegacyKhatmPlanIfEmpty().catch(() => {});
   }, []);
@@ -528,11 +532,21 @@ export default function App() {
 
   // ذخیرهٔ آیهٔ واقعی در حال مشاهده (P3-T1) و همگام‌سازی صفحهٔ مصحف با موقعیت مطالعه
   const handleReadingPositionChange = useCallback((verse: Verse) => {
+    if (verse.pageNumber) trackPageView(verse.pageNumber);
     QuranService.saveLastRead(verse.surahId, verse.verseNumber, verse.pageNumber);
     setLastReadPosition({ surahId: verse.surahId, verseNumber: verse.verseNumber, pageNumber: verse.pageNumber });
     if (verse.pageNumber) {
       setCurrentMushafPage(verse.pageNumber);
     }
+  }, []);
+
+  // با رفتن برنامه به پس‌زمینه، صفحهٔ جاری (در صورت توقف کافی) جزو نامزدهای ثبت در ختم می‌شود
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushPageView();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   // در مصحف، صفحه دنبال آیهٔ در حال پخش می‌رود؛ اما اگر کاربر عمداً صفحهٔ دیگری را می‌خواند، دخالت نمی‌کند
@@ -930,6 +944,7 @@ export default function App() {
               : null
           }
           onPageChange={(p, surahId, verseNumber) => {
+            trackPageView(p);
             setCurrentMushafPage(p);
             if (surahId) {
               const targetSurah = surahs.find((s) => s.id === surahId);

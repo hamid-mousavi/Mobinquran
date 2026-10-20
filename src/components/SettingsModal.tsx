@@ -5,6 +5,7 @@ import { getArabicFontFamily, ARABIC_FONT_OPTIONS } from '../utils/fontHelper';
 import { getStorageStatus, requestStoragePersistence, checkForUpdates, StorageStatus } from '../services/pwaManager';
 import { toPersianDigits } from '../utils/textNormalization';
 import { useModalA11y } from '../hooks/useModalA11y';
+import { BackupSection } from './BackupSection';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -345,6 +346,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* پشتیبان‌گیری و بازیابی پیشرفت کاربر */}
+          <BackupSection darkMode={darkMode} />
 
           {/* بررسی نسخه‌ی جدید برنامه و دریافت به‌روزرسانی */}
           <div className="space-y-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">

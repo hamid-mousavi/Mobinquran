@@ -19,6 +19,7 @@ import {
   Layers,
   ChevronDown,
   Mic,
+  Shuffle,
 } from 'lucide-react';
 import { Surah, Verse, AppSettings } from '../types';
 import { ReciterId, RECITER_NAMES, getAudioSourceUrl } from '../services/audioSources';
@@ -34,6 +35,8 @@ const VoiceDiscussionStudio = React.lazy(() =>
   import('./VoiceDiscussionStudio').then((m) => ({ default: m.VoiceDiscussionStudio }))
 );
 import { SurahSelectorModal } from './SurahSelectorModal';
+import { MemorizationSelfTest } from './MemorizationSelfTest';
+import { SimilarAyahQuiz } from './SimilarAyahQuiz';
 import {
   getMemorizationProgress,
   getSurahMemorizationStats,
@@ -65,7 +68,7 @@ interface MemorizationPageProps {
   onBack: () => void;
 }
 
-type MemorizationView = 'menu' | 'practice' | 'quiz' | 'discussion' | 'progress';
+type MemorizationView = 'menu' | 'practice' | 'quiz' | 'discussion' | 'progress' | 'similar';
 
 const MEMO_RECITERS: { id: ReciterId; name: string }[] = (
   Object.keys(RECITER_NAMES) as ReciterId[]
@@ -101,6 +104,8 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
   const [reciterId, setReciterId] = useState<ReciterId>('parhizgar');
   const [session, setSession] = useState<MemoSession | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  // خودآزمایی و سنجش با گزینه‌های مباحثهٔ صوتی (کامپوننت جداگانه)
+  const [selfTestOpen, setSelfTestOpen] = useState(false);
   const [audioError, setAudioError] = useState(false);
 
   // حالت انتخاب محدوده: بر اساس آیات یا صفحات مصحف
@@ -166,6 +171,10 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
 
   const startSession = () => {
     if (ayahNumbers.length === 0) return;
+    if (practiceMode === 'test') {
+      setSelfTestOpen(true);
+      return;
+    }
     const state = createMemoState(practiceMode, range, repeats, gapSec * 1000);
     setSession({ surahId: currentSurah.id, state: { ...state, phase: 'playing' as const }, ayahNumbers });
     setAudioError(false);
@@ -351,6 +360,32 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             <ChevronLeft className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 group-hover:-translate-x-1 transition-transform" />
           </div>
 
+          {/* کارت: تمرین متشابهات */}
+          <div
+            onClick={() => navigateToView('similar')}
+            className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-violet-500/30 bg-gradient-to-br from-violet-500/10 via-white to-white dark:from-violet-950/30 dark:via-slate-900 dark:to-slate-900 shadow-sm hover:shadow-md flex items-center justify-between gap-3 cursor-pointer active:scale-[0.99] transition-all group"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-md shadow-violet-600/20 shrink-0">
+                <Shuffle className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                    تمرین متشابهات
+                  </h2>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-700 dark:text-violet-300 font-bold">
+                    جدید
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                  تفکیک آیه‌های مشابه و جلوگیری از اشتباه
+                </p>
+              </div>
+            </div>
+            <ChevronLeft className="w-5 h-5 text-violet-600 dark:text-violet-400 shrink-0 group-hover:-translate-x-1 transition-transform" />
+          </div>
+
           {/* کارت ۴: کارنامه و پایش وضعیت آیات */}
           <div
             onClick={() => navigateToView('progress')}
@@ -436,6 +471,30 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
               </div>
             </div>
           </div>
+          {/* پیشرفت حفظ به تفکیک جزء */}
+          {overallProgress.juzProgress.length > 0 && (
+            <div className="space-y-2 pt-4 mt-1 border-t border-stone-100 dark:border-slate-800">
+              <div className="text-xs font-bold text-slate-700 dark:text-slate-300">پیشرفت حفظ به تفکیک جزء</div>
+              <div className="grid grid-cols-6 sm:grid-cols-10 gap-1.5" dir="rtl">
+                {overallProgress.juzProgress.map((j) => {
+                  const pct = j.total > 0 ? Math.round((j.memorized / j.total) * 100) : 0;
+                  return (
+                    <div
+                      key={j.juz}
+                      className="rounded-lg border border-stone-200/80 dark:border-slate-700 bg-stone-50 dark:bg-slate-800/60 p-1 text-center space-y-0.5"
+                      title={`جزء ${j.juz}: ${j.memorized} از ${j.total} آیه`}
+                    >
+                      <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{toPersianDigits(j.juz)}</div>
+                      <div className="h-1 rounded-full bg-stone-200 dark:bg-slate-700 overflow-hidden">
+                        <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="text-[9px] text-slate-400">{toPersianDigits(pct)}٪</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* مودال انتخاب سوره در منوی اصلی */}
@@ -499,6 +558,22 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
             onBack={() => navigateToView('menu')}
           />
         </Suspense>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // تمرین متشابهات
+  // -------------------------------------------------------------
+  if (currentView === 'similar') {
+    return (
+      <div className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-5 pb-12 w-full max-w-full overflow-x-hidden min-w-0" dir="rtl">
+        <SimilarAyahQuiz
+          surah={currentSurah}
+          darkMode={darkMode}
+          arabicFontFamily={arabicFontFamily}
+          onBack={() => navigateToView('menu')}
+        />
       </div>
     );
   }
@@ -665,6 +740,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
           <button
             onClick={() => {
               if (session) stopSession();
+              setSelfTestOpen(false);
               navigateToView('menu');
             }}
             className="p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer active:scale-95"
@@ -682,7 +758,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
           </div>
         </div>
 
-        {session ? (
+        {selfTestOpen ? null : session ? (
           <button
             onClick={stopSession}
             className="px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-600 font-bold text-xs hover:bg-rose-500/20 transition-all cursor-pointer"
@@ -701,7 +777,20 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
         )}
       </div>
 
-      {!session ? (
+      {selfTestOpen ? (
+        <MemorizationSelfTest
+          surah={currentSurah}
+          verses={verses}
+          ayahNumbers={ayahNumbers}
+          reciterId={reciterId}
+          darkMode={darkMode}
+          arabicFontFamily={arabicFontFamily}
+          onVerdict={(verseNumber, verdict) =>
+            handleToggleAyahStatus(verseNumber, verdict === 'memorized' ? 'memorized' : 'review_needed')
+          }
+          onExit={() => setSelfTestOpen(false)}
+        />
+      ) : !session ? (
         /* فرم تنظیمات تمرین (ساده، خلوت و خوانا) */
         <QuranicCard darkMode={darkMode} className="p-5 sm:p-7 space-y-6">
           <div className="border-b border-stone-200 dark:border-slate-800 pb-3">
@@ -749,7 +838,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
                   خودآزمایی و سنجش
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                  صوت آیه بدون متن پخش می‌شود؛ سپس متن آشکار می‌شود تا توانایی خود را بسنجید.
+                  تلاوت از حفظ با میکروفون یا ارزیابی خودتان؛ نوبت‌بندی با سیستم، پنهان‌سازی متن و گوش دادن به تلاوت.
                 </p>
               </button>
             </div>
@@ -807,7 +896,8 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
               </div>
             </div>
 
-            {/* تکرار و مکث */}
+            {/* تکرار و مکث (فقط مرور تدریجی) */}
+            {practiceMode === 'review' && (
             <div className="p-4 rounded-2xl bg-stone-50 dark:bg-slate-800/50 border border-stone-200 dark:border-slate-800 space-y-3">
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
@@ -853,6 +943,7 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
                 </div>
               </div>
             </div>
+            )}
           </div>
 
           {/* دکمه شروع تمرین */}
@@ -945,32 +1036,6 @@ export const MemorizationPage: React.FC<MemorizationPageProps> = ({
                 >
                   {currentVerse.translationMakarem || currentVerse.translationFooladvand}
                 </div>
-
-                {/* دکمه‌های ثبت وضعیت پس از خودآزمایی */}
-                {session.state.mode === 'test' && session.state.phase === 'reveal' && (
-                  <div className="pt-4 border-t border-stone-200 dark:border-slate-800 flex items-center justify-center gap-3">
-                    <button
-                      onClick={() => {
-                        handleToggleAyahStatus(currentVerse.verseNumber, 'memorized');
-                        handleAudioEnded();
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-teal-600 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>حفظ کامل بودم</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleToggleAyahStatus(currentVerse.verseNumber, 'review_needed');
-                        handleAudioEnded();
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      <span>نیاز به مرور دارم</span>
-                    </button>
-                  </div>
-                )}
               </>
             ) : (
               <div className="py-12">

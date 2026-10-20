@@ -4,6 +4,19 @@
  */
 
 import { localDateKey, daysSinceStart } from '../utils/date';
+import {
+  addVerseToReview,
+  countMemorizedNotInReview,
+  enrollMemorizedIntoReview,
+  getReviewDailyLimit,
+  getReviewItems,
+  getReviewQueue,
+  gradeReview,
+  removeVerseFromReview,
+  setReviewDailyLimit,
+} from './progress/progressStore';
+import { isLeech, overdueDays } from './progress/progressCore';
+import type { AyahProgress, ReviewGrade } from './progress/progressCore';
 
 export type ActivityType = 'read' | 'listen' | 'memorize' | 'quiz' | 'khatm';
 
@@ -29,11 +42,16 @@ export interface ReviewAyahItem {
   addedAt: number; // timestamp
   box: number; // 1 (1 day), 2 (3 days), 3 (7 days), 4 (14 days), 5 (mastered)
   nextReviewDate: string; // YYYY-MM-DD
+  /** تعداد دفعات فراموشی (برای نشان «نیاز به توجه ویژه») */
+  lapses?: number;
+  /** چند روز از موعد گذشته است (۰ = به‌موقع) */
+  overdueDays?: number;
+  /** آیهٔ پرخطا که باید بیشتر تمرین شود */
+  isLeech?: boolean;
 }
 
 const STORAGE_KEY_ACTIVITY = 'mobin_daily_activity_v1';
 const STORAGE_KEY_STREAK = 'mobin_streak_data_v1';
-const STORAGE_KEY_REVIEW = 'mobin_review_deck_v1';
 
 // نام روزهای هفته به تقویم فارسی (شنبه تا جمعه)
 export const PERSIAN_WEEK_DAYS = [
@@ -200,15 +218,26 @@ export function getCurrentWeekStatus(): WeekDayStatus[] {
 
 // -------------------------------------------------------------
 // سیستم لایتنر و آیات نیازمند مرور (Spaced Repetition)
+// داده اکنون در ذخیره‌گاه یکپارچهٔ پیشرفت (Dexie) است؛ این توابع واسط همگام قبلی‌اند.
 // -------------------------------------------------------------
 
+function toReviewItem(p: AyahProgress): ReviewAyahItem {
+  return {
+    id: p.key,
+    surahId: p.surahId,
+    surahNameArabic: p.surahNameArabic ?? '',
+    verseNumber: p.verseNumber,
+    addedAt: p.addedAt,
+    box: p.box,
+    nextReviewDate: p.nextReviewDate ?? localDateKey(),
+    lapses: p.lapses,
+    overdueDays: overdueDays(p, localDateKey()),
+    isLeech: isLeech(p),
+  };
+}
+
 export function getReviewDeck(): ReviewAyahItem[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_REVIEW);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return getReviewItems().map(toReviewItem);
 }
 
 export function addAyahToReview(
@@ -217,32 +246,7 @@ export function addAyahToReview(
   verseNumber: number,
   dueImmediately = true
 ): void {
-  const deck = getReviewDeck();
-  const id = `${surahId}:${verseNumber}`;
-  const existing = deck.find((item) => item.id === id);
-  const today = new Date();
-
-  const reviewDate = dueImmediately ? today : new Date(today.getTime() + 86400000);
-
-  if (existing) {
-    existing.box = 1;
-    existing.nextReviewDate = localDateKey(reviewDate);
-  } else {
-    deck.push({
-      id,
-      surahId,
-      surahNameArabic,
-      verseNumber,
-      addedAt: Date.now(),
-      box: 1,
-      nextReviewDate: localDateKey(reviewDate),
-    });
-  }
-
-  try {
-    localStorage.setItem(STORAGE_KEY_REVIEW, JSON.stringify(deck));
-    window.dispatchEvent(new CustomEvent('mobin-review-deck-updated'));
-  } catch {}
+  addVerseToReview(surahId, surahNameArabic, verseNumber, dueImmediately);
 }
 
 /** دریافت کل آیات موجود در جعبه لایتنر */
@@ -250,51 +254,51 @@ export function getAllReviewAyahs(): ReviewAyahItem[] {
   return getReviewDeck();
 }
 
-/** افزودن چند آیه نمونه برای تست سریع سیستم لایتنر */
-export function seedSampleReviewAyahs(): void {
-  addAyahToReview(2, 'البَقَرَة', 255, true); // آیة الکرسی
-  addAyahToReview(112, 'الإِخْلَاص', 1, true); // توحید
-  addAyahToReview(94, 'الشَّرْح', 5, true); // إن مع العسر یسرا
+export function advanceAyahReview(id: string, isCorrect: boolean): void {
+  gradeReview(id, isCorrect ? 'good' : 'again');
 }
 
-export function advanceAyahReview(id: string, isCorrect: boolean): void {
-  const deck = getReviewDeck();
-  const item = deck.find((x) => x.id === id);
-  if (!item) return;
-
-  const today = new Date();
-  if (isCorrect) {
-    item.box += 1;
-    // فواصل لایتنر: جعبه ۱: ۱ روز، جعبه ۲: ۳ روز، جعبه ۳: ۷ روز، جعبه ۴: ۱۴ روز
-    const daysToAdd = item.box === 2 ? 3 : item.box === 3 ? 7 : item.box === 4 ? 14 : 30;
-    const nextDate = new Date(today);
-    nextDate.setDate(today.getDate() + daysToAdd);
-    item.nextReviewDate = localDateKey(nextDate);
-  } else {
-    // بازگشت به جعبه ۱
-    item.box = 1;
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    item.nextReviewDate = localDateKey(tomorrow);
-  }
-
-  try {
-    localStorage.setItem(STORAGE_KEY_REVIEW, JSON.stringify(deck));
-    window.dispatchEvent(new CustomEvent('mobin-review-deck-updated'));
-  } catch {}
+/** ثبت پاسخ مرور با سه درجه: دوباره / سخت بود / تثبیت شد */
+export function gradeAyahReview(id: string, grade: ReviewGrade): void {
+  gradeReview(id, grade);
 }
 
 export function removeAyahFromReview(id: string): void {
-  const deck = getReviewDeck().filter((x) => x.id !== id);
-  try {
-    localStorage.setItem(STORAGE_KEY_REVIEW, JSON.stringify(deck));
-    window.dispatchEvent(new CustomEvent('mobin-review-deck-updated'));
-  } catch {}
+  removeVerseFromReview(id);
 }
 
-/** آیاتی که موعد مرور آنها امروز یا قبل از آن است */
+/** سهمیهٔ مرور امروز (سقف روزانه و اولویت‌بندی اعمال شده) */
 export function getDueReviewAyahs(): ReviewAyahItem[] {
-  const deck = getReviewDeck();
-  const todayKey = localDateKey();
-  return deck.filter((item) => item.nextReviewDate <= todayKey);
+  return getReviewQueue(localDateKey()).items.map(toReviewItem);
+}
+
+export interface ReviewSummary {
+  items: ReviewAyahItem[];
+  totalDue: number;
+  deferred: number;
+  overdue: number;
+  dailyLimit: number;
+  /** آیه‌های حفظ‌شده‌ای که هنوز وارد مرور نشده‌اند */
+  memorizedNotInReview: number;
+}
+
+export function getReviewSummary(): ReviewSummary {
+  const q = getReviewQueue(localDateKey());
+  return {
+    items: q.items.map(toReviewItem),
+    totalDue: q.totalDue,
+    deferred: q.deferred,
+    overdue: q.overdue,
+    dailyLimit: getReviewDailyLimit(),
+    memorizedNotInReview: countMemorizedNotInReview(),
+  };
+}
+
+export function setReviewLimit(limit: number): void {
+  setReviewDailyLimit(limit);
+}
+
+/** ورود تدریجی آیه‌های حفظ‌شده به مرور؛ تعداد واردشده را برمی‌گرداند */
+export function enrollMemorizedAyahs(): number {
+  return enrollMemorizedIntoReview();
 }

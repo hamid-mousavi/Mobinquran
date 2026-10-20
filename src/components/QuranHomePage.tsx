@@ -42,6 +42,11 @@ import { RealisticQuizView, QuizQuestionItem } from './RealisticQuizView';
 import { QuranStoryDetailModal } from './QuranStoryDetailModal';
 import { DailyCompanionCard } from './DailyCompanionCard';
 import { DailyStreakModal } from './DailyStreakModal';
+import { TadabburModal } from './TadabburModal';
+import { ALL_SURAHS } from '../data/surahs';
+import { TADABBUR_POOL } from '../data/tadabburPool';
+import { dailyPoolIndex, isDoneOn } from '../services/tadabbur/tadabburCore';
+import { EVENT_TADABBUR, getTadabburLog } from '../services/tadabbur/tadabburStore';
 import { PrayerTimesCard } from './PrayerTimesCard';
 import { PrayerTimesModal } from './PrayerTimesModal';
 import {
@@ -254,18 +259,59 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
     return () => window.removeEventListener('mobin-khatm-updated', loadKhatmData);
   }, [loadKhatmData]);
 
-  const [randomVerseIndex, setRandomVerseIndex] = useState<number>(() =>
-    Math.floor(Math.random() * POOL_OF_VERSES.length)
+  // آیهٔ منتخب: هر روز یک آیهٔ ثابت از مجموعهٔ تدبر؛ دکمهٔ تصادفی فقط نمای فعلی را عوض می‌کند
+  const [featuredIndex, setFeaturedIndex] = useState<number>(() =>
+    dailyPoolIndex(localDateKey(), TADABBUR_POOL.length)
   );
-  const selectedRandomVerse = POOL_OF_VERSES[randomVerseIndex] || POOL_OF_VERSES[0];
+  const [featuredData, setFeaturedData] = useState<(typeof POOL_OF_VERSES)[number] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const item = TADABBUR_POOL[featuredIndex];
+    setFeaturedData(null);
+    (async () => {
+      try {
+        const v = await QuranService.getVerseBySurahAndNumber(item.surahId, item.verseNumber);
+        if (!cancelled && v) {
+          setFeaturedData({
+            surahId: item.surahId,
+            surahNameArabic: ALL_SURAHS.find((s) => s.id === item.surahId)?.nameArabic ?? '',
+            verseNumber: item.verseNumber,
+            textArabic: v.textArabic,
+            translationPersian: v.translationMakarem ?? '',
+            theme: item.theme,
+          });
+        }
+      } catch {
+        // متن محلی در دسترس نیست؛ نمونهٔ ثابت پایین نمایش داده می‌شود
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [featuredIndex]);
+
+  const featuredItem = TADABBUR_POOL[featuredIndex];
+  const selectedRandomVerse =
+    featuredData ??
+    POOL_OF_VERSES.find((p) => p.surahId === featuredItem.surahId && p.verseNumber === featuredItem.verseNumber) ??
+    POOL_OF_VERSES[0];
 
   const handleShuffleVerse = () => {
-    setRandomVerseIndex((prev) => {
-      let next = Math.floor(Math.random() * POOL_OF_VERSES.length);
-      if (next === prev) next = (next + 1) % POOL_OF_VERSES.length;
+    setFeaturedIndex((prev) => {
+      let next = Math.floor(Math.random() * TADABBUR_POOL.length);
+      if (next === prev) next = (next + 1) % TADABBUR_POOL.length;
       return next;
     });
   };
+
+  const [isTadabburOpen, setIsTadabburOpen] = useState(false);
+  const [tadabburDoneToday, setTadabburDoneToday] = useState(() => isDoneOn(getTadabburLog(), localDateKey()));
+  useEffect(() => {
+    const refresh = () => setTadabburDoneToday(isDoneOn(getTadabburLog(), localDateKey()));
+    window.addEventListener(EVENT_TADABBUR, refresh);
+    return () => window.removeEventListener(EVENT_TADABBUR, refresh);
+  }, []);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -810,6 +856,16 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
 
             <div className="pt-2 flex flex-wrap sm:flex-nowrap items-center justify-end gap-2 border-t border-stone-100 dark:border-slate-800">
               <button
+                onClick={() => setIsTadabburOpen(true)}
+                className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs sm:text-sm font-bold cursor-pointer active:scale-95 transition-all ${
+                  tadabburDoneToday
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                    : 'border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                }`}
+              >
+                <span>{tadabburDoneToday ? '✓ تدبر امروز' : 'تدبر در این آیه'}</span>
+              </button>
+              <button
                 onClick={() => onPlayVerseAudio(selectedRandomVerse.surahId, selectedRandomVerse.verseNumber)}
                 className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-slate-700 hover:bg-stone-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors"
               >
@@ -1030,6 +1086,15 @@ export const QuranHomePage: React.FC<QuranHomePageProps> = ({
       )}
 
       {/* مدال تقویم همراهی و استمرار قرآنی و لایتنر */}
+      <TadabburModal
+        isOpen={isTadabburOpen}
+        onClose={() => setIsTadabburOpen(false)}
+        darkMode={darkMode}
+        verse={selectedRandomVerse}
+        onPlayVerseAudio={onPlayVerseAudio}
+        onNavigateToVerse={onNavigateToVerse}
+      />
+
       <DailyStreakModal
         isOpen={isStreakModalOpen}
         onClose={() => setIsStreakModalOpen(false)}

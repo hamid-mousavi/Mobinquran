@@ -14,6 +14,12 @@ export interface AiRecitationResult {
   matchedWords?: string[];
   missedWords?: string[];
   tajweedNote?: string;
+  /** ارائه‌دهندهٔ پاسخ (فقط اطلاع‌رسانی) */
+  provider?: string;
+  /** پاسخ از کش بوده و سهمیه مصرف نکرده است */
+  cached?: boolean;
+  /** سهمیهٔ روزانهٔ باقی‌مانده پس از این درخواست */
+  quota?: { used: number; limit: number; remaining: number };
 }
 
 export interface SmartRecitationFeedbackPanelProps {

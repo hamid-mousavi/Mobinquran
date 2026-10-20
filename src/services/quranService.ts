@@ -9,6 +9,7 @@ import {
   ContentMetadata,
   KhatmPlan,
 } from '../types';
+import { ensureSinglePrimary } from '../utils/khatmPlans';
 import { ALL_SURAHS } from '../data/surahs';
 import { searchQuranOffline, SearchOptions, SearchResponse } from './searchEngine';
 
@@ -222,6 +223,16 @@ export const QuranService = {
     return [];
   },
 
+  /** متن همهٔ آیه‌ها (فقط سه فیلد لازم) برای یافتن آیه‌های مشابه */
+  async getAllVerseTexts(): Promise<Array<{ surahId: number; verseNumber: number; text: string }>> {
+    try {
+      const all = await db.verses.toArray();
+      return all.map((v) => ({ surahId: v.surahId, verseNumber: v.verseNumber, text: v.textArabic }));
+    } catch {
+      return [];
+    }
+  },
+
   async getVerseBySurahAndNumber(surahId: number, verseNumber: number): Promise<Verse | undefined> {
     try {
       const v = await db.verses.where({ surahId, verseNumber }).first();
@@ -328,6 +339,27 @@ export const QuranService = {
     } catch {
       return null;
     }
+  },
+
+  /** همهٔ برنامه‌های ختم (برای فهرست مدیریت ختم‌ها) */
+  async getKhatmPlans(): Promise<KhatmPlan[]> {
+    try {
+      return await db.khatmPlans.toArray();
+    } catch {
+      return [];
+    }
+  },
+
+  async deleteKhatmPlan(id: string): Promise<void> {
+    await db.khatmPlans.delete(id);
+  },
+
+  /** فقط یک برنامه «اصلی» (نمایش در صفحهٔ خانه) می‌ماند */
+  async setPrimaryKhatmPlan(id: string | null): Promise<void> {
+    await db.transaction('rw', db.khatmPlans, async () => {
+      const all = await db.khatmPlans.toArray();
+      await db.khatmPlans.bulkPut(ensureSinglePrimary(all, id));
+    });
   },
 
   async saveKhatmPlan(plan: KhatmPlan): Promise<void> {

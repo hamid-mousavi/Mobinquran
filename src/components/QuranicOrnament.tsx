@@ -100,11 +100,22 @@ export const QuranicCard: React.FC<{
   );
 };
 
+/** خط تزیینی ظریف با لوزی میانی؛ دو سر به تدریج محو می‌شوند */
+const OrnamentRule: React.FC = () => (
+  <div className="flex items-center gap-2" aria-hidden="true">
+    <span className="h-px flex-1 bg-gradient-to-l from-transparent to-amber-700/45 dark:to-amber-400/45" />
+    <span className="w-1.5 h-1.5 rotate-45 bg-amber-600/70 dark:bg-amber-400/70" />
+    <span className="h-px flex-1 bg-gradient-to-r from-transparent to-amber-700/45 dark:to-amber-400/45" />
+  </div>
+);
+
+const SURAH_NAME_FONT = "'Amiri', 'Amiri Quran', serif";
+
 /**
- * کتیبه فشرده و فاخر سرسوره قرآنی:
- * وسط: اسم سوره
- * چپ: تعداد آیات
- * راست: شماره سوره
+ * کتیبهٔ سرسوره — طراحی ساده و بی‌قاب:
+ *  - variant="mushaf": نوار فشردهٔ تک‌خطی داخل صفحهٔ مصحف (شمارهٔ سوره | نام | تعداد آیات)
+ *  - variant="reader": سرسورهٔ خوانا برای نمای آیه‌به‌آیه (نام درشت + یک خط اطلاعات)
+ * فقط دو خط ظریف بالا و پایین؛ بدون قاب، گوشه‌های تزئینی یا چیپ‌های رنگی.
  */
 export const QuranicSurahBanner: React.FC<{
   surah: {
@@ -116,63 +127,54 @@ export const QuranicSurahBanner: React.FC<{
   };
   darkMode: boolean;
   className?: string;
-}> = ({ surah, darkMode, className = '' }) => {
-  const isMeccan = surah.revelationType === 'Meccan';
+  variant?: 'reader' | 'mushaf';
+}> = ({ surah, className = '', variant = 'reader' }) => {
+  const title = `سُورَةُ ${surah.nameArabic}`;
   const versesText = `${toPersianDigits(surah.versesCount)} آیه`;
-  const surahNumText = `سوره ${toPersianDigits(surah.id)}`;
+  const numText = `سورهٔ ${toPersianDigits(surah.id)}`;
+  const place = surah.revelationType ? (surah.revelationType === 'Meccan' ? 'مکی' : 'مدنی') : null;
 
-  return (
-    <div
-      id="surah-compact-quranic-header"
-      className={`relative overflow-hidden rounded-2xl px-3 sm:px-5 py-2 sm:py-2.5 border-2 shadow-sm transition-all select-none ${
-        darkMode
-          ? 'bg-gradient-to-r from-slate-900 via-amber-950/20 to-slate-900 border-amber-500/50 text-slate-100 shadow-teal-950/20'
-          : 'bg-gradient-to-r from-amber-50/80 via-white to-amber-50/80 border-amber-600/40 text-slate-900 shadow-amber-900/5'
-      } ${className}`}
-      dir="rtl"
-    >
-      {/* قاب ظریف تذهیب قرآنی داخلی */}
-      <div className="absolute inset-1 rounded-xl border border-dashed border-amber-500/30 pointer-events-none" />
-
-      {/* گوشه‌های اسلیمی سنتی سرسوره */}
-      <div className="absolute top-1.5 right-1.5 w-3 h-3 border-t-2 border-r-2 border-amber-500/70 pointer-events-none" />
-      <div className="absolute top-1.5 left-1.5 w-3 h-3 border-t-2 border-l-2 border-amber-500/70 pointer-events-none" />
-      <div className="absolute bottom-1.5 right-1.5 w-3 h-3 border-b-2 border-r-2 border-amber-500/70 pointer-events-none" />
-      <div className="absolute bottom-1.5 left-1.5 w-3 h-3 border-b-2 border-l-2 border-amber-500/70 pointer-events-none" />
-
-      <div className="relative z-10 flex items-center justify-between gap-2 max-w-2xl mx-auto">
-        {/* سمت راست: شماره سوره */}
-        <div className="flex items-center gap-1.5 text-right shrink-0">
-          <div className="px-2.5 py-0.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 font-bold text-xs sm:text-sm shadow-2xs">
-            {surahNumText}
-          </div>
-          {surah.revelationType && (
-            <span className="hidden sm:inline-block text-[11px] text-slate-400 font-medium">
-              ({isMeccan ? 'مکی' : 'مدنی'})
-            </span>
-          )}
-        </div>
-
-        {/* وسط: نام سوره با خط عثمان طه / امیری */}
-        <div className="flex items-center justify-center gap-2 text-center flex-1 min-w-0">
-          <span className="hidden xs:inline-block w-4 sm:w-8 h-px bg-gradient-to-r from-transparent to-amber-500/70" />
+  if (variant === 'mushaf') {
+    return (
+      <div id="surah-compact-quranic-header" className={`select-none ${className}`} dir="rtl">
+        <OrnamentRule />
+        <div className="flex items-center justify-between gap-2 px-1 py-0.5">
+          <span className="shrink-0 min-w-[3.5rem] text-right text-[11px] font-semibold text-amber-800/80 dark:text-amber-300/80">
+            {numText}
+          </span>
           <h1
-            className="text-lg sm:text-2xl font-bold text-amber-700 dark:text-amber-300 drop-shadow-2xs tracking-tight truncate leading-normal"
-            style={{ fontFamily: "'Amiri', 'Amiri Quran', serif" }}
+            className="flex-1 min-w-0 truncate text-center text-lg sm:text-xl font-bold leading-normal text-amber-800 dark:text-amber-300"
+            style={{ fontFamily: SURAH_NAME_FONT }}
           >
-            سُورَةُ {surah.nameArabic}
+            {title}
           </h1>
-          <span className="hidden xs:inline-block w-4 sm:w-8 h-px bg-gradient-to-l from-transparent to-amber-500/70" />
-        </div>
-
-        {/* سمت چپ: تعداد آیات */}
-        <div className="flex items-center gap-1.5 text-left shrink-0">
-          <div className="px-2.5 py-0.5 rounded-xl bg-teal-600/15 border border-teal-600/30 text-teal-700 dark:text-teal-300 font-bold text-xs sm:text-sm shadow-2xs">
+          <span className="shrink-0 min-w-[3.5rem] text-left text-[11px] font-semibold text-amber-800/80 dark:text-amber-300/80">
             {versesText}
-          </div>
+          </span>
         </div>
+        <OrnamentRule />
       </div>
-    </div>
+    );
+  }
+
+  const meta = [numText, place, versesText].filter(Boolean).join(' • ');
+  return (
+    <header id="surah-compact-quranic-header" className={`select-none py-2 space-y-2 text-center ${className}`} dir="rtl">
+      <OrnamentRule />
+      <div className="space-y-0.5">
+        <h1
+          className="text-2xl sm:text-3xl font-bold leading-relaxed text-amber-800 dark:text-amber-300"
+          style={{ fontFamily: SURAH_NAME_FONT }}
+        >
+          {title}
+        </h1>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {surah.namePersian ? `${surah.namePersian} • ` : ''}
+          {meta}
+        </p>
+      </div>
+      <OrnamentRule />
+    </header>
   );
 };
 
