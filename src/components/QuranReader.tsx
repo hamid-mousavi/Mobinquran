@@ -171,8 +171,8 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
     const diffX = currentX - touchStartXRef.current;
     const diffY = currentY - touchStartYRef.current;
 
-    // تشخیص حرکت افقی مسلط (برای جلوگیری از تداخل با اسکرول عمودی عادی)
-    if (Math.abs(diffX) > 20 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+    // تشخیص حرکت افقی مسلط (برای جلوگیری از تداخل با اسکرول عمودی سریع)
+    if (Math.abs(diffX) > 35 && Math.abs(diffX) > Math.abs(diffY) * 2.2) {
       isSwipingHorizontalRef.current = true;
       touchDeltaXRef.current = diffX;
     }
@@ -181,17 +181,16 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   const handleTouchEnd = () => {
     if (touchStartXRef.current !== null && isSwipingHorizontalRef.current) {
       const deltaX = touchDeltaXRef.current;
-      const SWIPE_THRESHOLD = 75; // پیکسل حداقل برای تایید کشیدن
+      const SWIPE_THRESHOLD = 110; // افزایش آستانه برای جلوگیری از جابجایی ناخواسته حین مطالعه
 
-      // در چیدمان راست‌به‌چپ (RTL):
-      // کشیدن به سمت چپ (deltaX منفی) -> رفتن به سوره بعد
-      // کشیدن به سمت راست (deltaX مثبت) -> رفتن به سوره قبل
-      if (deltaX < -SWIPE_THRESHOLD) {
+      // کشیدن به سمت راست (deltaX مثبت) -> رفتن به سوره بعد
+      // کشیدن به سمت چپ (deltaX منفی) -> رفتن به سوره قبل
+      if (deltaX > SWIPE_THRESHOLD) {
         if (onNextSurah) {
           window.scrollTo({ top: 0, behavior: 'smooth' });
           onNextSurah();
         }
-      } else if (deltaX > SWIPE_THRESHOLD) {
+      } else if (deltaX < -SWIPE_THRESHOLD) {
         if (onPrevSurah) {
           window.scrollTo({ top: 0, behavior: 'smooth' });
           onPrevSurah();

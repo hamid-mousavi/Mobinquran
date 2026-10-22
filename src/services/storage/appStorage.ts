@@ -14,8 +14,6 @@ export const STORAGE_KEYS = {
   READ_STORIES: 'quran_read_stories',
   RECENT_SEARCHES: 'mobin_recent_searches',
   DEVICE_ID: 'mobin_device_id_v1',
-  CITY: 'mobin_prayer_city_id',
-  COORDS: 'mobin_prayer_custom_coords',
   AI_HISTORY: 'mobin_ai_chat_history_v1',
   AI_REFLECTIONS: 'mobin_ayah_reflections_v1',
   AUDIO_RESUME: 'mobin_audio_last_position',

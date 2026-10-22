@@ -33,7 +33,9 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, darkMode }
     <div
       id="mobin-splash-screen"
       dir="rtl"
-      className="fixed inset-0 z-[200] flex flex-col items-center justify-between p-6 sm:p-10 bg-gradient-to-b from-teal-950 via-slate-950 to-slate-950 text-white select-none overflow-hidden"
+      className={`fixed inset-0 z-[200] flex flex-col items-center justify-between p-6 sm:p-10 bg-gradient-to-b from-teal-950 via-slate-950 to-slate-950 text-white select-none overflow-hidden transition-opacity duration-700 ${
+        stage === 3 ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      }`}
     >
       {/* دکمه رد شدن سریع (Skip) در گوشه بالا */}
       <div className="w-full flex justify-end items-center max-w-md z-20">
@@ -133,7 +135,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, darkMode }
       <div className="relative z-10 flex flex-col items-center gap-2 text-center text-[11px] text-stone-400">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-          <span className="font-medium text-stone-300">در حال بارگذاری کلام وحی و اوقات شرعی...</span>
+          <span className="font-medium text-stone-300">در حال بارگذاری کلام وحی و مصحف شریف...</span>
         </div>
         <p className="text-[10px] text-stone-500">
           نسخهٔ آفلاین با رسم‌الخط عثمان طه و ترتیل قاریان برجسته

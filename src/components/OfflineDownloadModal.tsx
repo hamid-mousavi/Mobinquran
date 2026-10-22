@@ -39,6 +39,7 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
   const [isDownloading, setIsDownloading] = useState(false);
   const [failedSurahIds, setFailedSurahIds] = useState<number[]>([]);
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'audio' | 'text' | 'storage'>('audio');
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [requestingPersist, setRequestingPersist] = useState(false);
   const cancelDownloadRef = useRef(false);
@@ -233,6 +234,9 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
     ? Math.round((downloadProgress.current / downloadProgress.total) * 100)
     : 0;
 
+  const currentSurahEstBytes = currentSurahId ? estimateSurahAudioBytes(audioReciterId, currentSurahId) : 0;
+  const currentSurahMeta = currentSurahId ? ALL_SURAHS.find((s) => s.id === currentSurahId) : null;
+
   return (
     <div
       id="offline-download-modal-backdrop"
@@ -241,7 +245,7 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
     >
       <div
         id="offline-download-modal-container"
-        className={`w-full max-w-lg rounded-3xl shadow-2xl border transition-all overflow-hidden ${
+        className={`w-full max-w-lg max-h-[88vh] flex flex-col rounded-3xl shadow-2xl border transition-all overflow-hidden ${
           darkMode
             ? 'bg-slate-900 border-slate-800 text-slate-100'
             : 'bg-[#f7f3e8] border-stone-200 text-slate-800'
@@ -250,7 +254,7 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
         dir="rtl"
       >
         {/* هدر */}
-        <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-teal-600/10 text-teal-700 dark:text-teal-400">
               <DownloadCloud className="w-5 h-5" />
@@ -258,536 +262,615 @@ export const OfflineDownloadModal: React.FC<OfflineDownloadModalProps> = ({
             <div>
               <h2 className="text-base sm:text-lg font-bold">مدیریت ذخیره‌سازی آفلاین</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                دانلود بسته‌ای متن و ترجمه‌ها جهت استفاده بدون نیاز به اینترنت
+                دانلود صوت ترتیل و متن قرآن جهت استفاده بدون نیاز به اینترنت
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-stone-200 dark:hover:bg-slate-800 transition-colors text-slate-500"
+            className="p-2 rounded-xl hover:bg-stone-200 dark:hover:bg-slate-800 transition-colors text-slate-500 cursor-pointer"
+            title="بستن"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* محتوا */}
-        <div className="p-4 sm:p-5 space-y-4">
-          {/* کارت وضعیت حافظه محلی */}
-          <div
-            className={`p-4 rounded-2xl border flex items-center justify-between ${
-              darkMode
-                ? 'bg-slate-800/70 border-slate-700'
-                : 'bg-white border-stone-200 shadow-xs'
+        {/* تب‌های انتخاب بخش */}
+        <div className="flex border-b border-stone-200 dark:border-slate-800 bg-stone-100/60 dark:bg-slate-800/50 p-1.5 gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab('audio')}
+            className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'audio'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                <Database className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="font-bold text-sm">وضعیت دیتابیس محلی (IndexedDB)</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {toPersianDigits(cachedSurahIds.size)} از ۱۱۴ سوره • {toPersianDigits(totalVersesCount)} آیه ذخیره شده
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleClearCache}
-              disabled={cachedSurahIds.size === 0 || isDownloading}
-              className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-30 transition-colors"
-              title="پاکسازی حافظه کش"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
+            <Headphones className="w-3.5 h-3.5" />
+            <span>صوت ترتیل</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('text')}
+            className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'text'
+                ? 'bg-teal-700 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>متن و ترجمه‌ها</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('storage')}
+            className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'storage'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <HardDrive className="w-3.5 h-3.5" />
+            <span>حافظه و گزارش</span>
+          </button>
+        </div>
 
-          {/* وضعیت سهمیه حافظه و ماندگاری دائمی مرورگر (P2-T5) */}
-          {storageStatus && (
-            <div
-              className={`p-3.5 rounded-2xl border text-xs space-y-2.5 ${
-                darkMode
-                  ? 'bg-slate-800/40 border-slate-700 text-slate-300'
-                  : 'bg-teal-50/50 border-teal-100 text-slate-700'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-bold">
-                  <HardDrive className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                  <span>فضای ذخیره‌سازی مرورگر</span>
-                </div>
-                <span className="text-[11px] text-teal-700 dark:text-teal-300 font-bold">
-                  {toPersianDigits(storageStatus.usageMB)} مگابایت مصرف‌شده
-                  {Number(storageStatus.quotaMB) > 0 && ` از ${toPersianDigits(storageStatus.quotaMB)} مگابایت`}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
-                <div className="flex items-center gap-1.5">
-                  {storageStatus.isPersisted ? (
-                    <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-                  ) : (
-                    <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
-                  )}
-                  <span className="text-[11px]">
-                    {storageStatus.isPersisted
-                      ? 'ماندگاری دائم فعال است (داده‌ها در پاکسازی مرورگر حذف نمی‌شوند)'
-                      : 'ماندگاری موقت است (مرورگر ممکن است در کمبود فضا پاک کند)'}
-                  </span>
-                </div>
-                {!storageStatus.isPersisted && (
+        {/* محتوای تب‌ها */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          {/* تب ۱: صوت‌های ترتیل آفلاین */}
+          {activeTab === 'audio' && (
+            <div className="space-y-3.5">
+              <div className={`p-4 rounded-2xl border space-y-3 ${
+                darkMode ? 'bg-slate-800/70 border-slate-700' : 'bg-white border-stone-200 shadow-xs'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                      <Headphones className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm">صوت ترتیل آفلاین</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        دانلود صوت هر سوره جهت پخش بدون اینترنت
+                      </p>
+                    </div>
+                  </div>
                   <button
-                    onClick={handleRequestPersistence}
-                    disabled={requestingPersist}
-                    className="px-2 py-1 rounded-lg bg-teal-600 text-white font-bold text-[10px] hover:bg-teal-700 transition disabled:opacity-50 shrink-0 mr-2"
+                    onClick={() => {
+                      if (window.confirm('همهٔ صوت‌های دانلودشده با قاری انتخاب‌شده حذف می‌شوند. ادامه می‌دهید؟')) {
+                        deleteAllAudioForReciter(audioReciterId).then(refreshAudioStatus);
+                      }
+                    }}
+                    disabled={isAudioDownloading || (audioStatus?.records.filter((r) => r.reciterId === audioReciterId).length ?? 0) === 0}
+                    className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-30 transition-colors cursor-pointer"
+                    title="حذف همهٔ صوت‌های این قاری"
                   >
-                    {requestingPersist ? 'در حال ثبت...' : 'دائمی کردن'}
+                    <Trash2 className="w-4 h-4" />
                   </button>
+                </div>
+
+                {/* انتخاب قاری */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                    انتخاب قاری جهت دانلود صوت:
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-0.5">
+                    {(Object.keys(RECITER_NAMES) as ReciterId[]).map((rid) => {
+                      const reciter = RECITER_NAMES[rid];
+                      const isActive = rid === audioReciterId;
+                      return (
+                        <button
+                          key={rid}
+                          type="button"
+                          onClick={() => {
+                            setAudioReciterId(rid);
+                            try {
+                              localStorage.setItem('mobin_selected_reciter', rid);
+                            } catch {}
+                          }}
+                          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                            isActive
+                              ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs'
+                              : 'border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {reciter.shortName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* وضعیت حجم کش صوتی */}
+                {audioStatus && (
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1 font-medium">
+                      <Music2 className="w-3.5 h-3.5 text-indigo-500" />
+                      {toPersianDigits(audioStatus.totalVerses)} آیه ذخیره‌شده
+                      {audioStatus.totalBytes > 0 && ` • ${formatBytes(audioStatus.totalBytes)}`}
+                    </span>
+                    <span className="text-slate-400">
+                      سقف نرم: {formatBytes(audioStatus.softLimitBytes)}
+                    </span>
+                  </div>
                 )}
+
+                {/* بسته‌های پیشنهادی دانلود صوت با نمایش حجم تخمینی */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    بسته‌های پیشنهادی صوت ({RECITER_NAMES[audioReciterId]?.shortName}):
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => currentSurahId && handleDownloadAudioSurahs([currentSurahId], `سورهٔ ${currentSurahId}`, audioReciterId)}
+                      disabled={!currentSurahId || isAudioDownloading}
+                      className="flex items-center justify-between px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all active:scale-95 cursor-pointer shadow-xs"
+                    >
+                      <span className="flex items-center gap-1.5 truncate">
+                        <DownloadCloud className="w-4 h-4 shrink-0" />
+                        <span className="truncate">
+                          {currentSurahMeta ? `سورهٔ ${currentSurahMeta.nameArabic}` : 'سورهٔ فعلی'}
+                        </span>
+                      </span>
+                      <span className="text-[10px] opacity-90 shrink-0 mr-1">
+                        {currentSurahEstBytes > 0 ? `~${formatBytes(currentSurahEstBytes)}` : 'تک‌سوره'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ids: number[] = [];
+                        for (let i = 78; i <= 114; i++) ids.push(i);
+                        handleDownloadAudioSurahs(ids, 'صوت جزء ۳۰ (۳۷ سوره)', audioReciterId);
+                      }}
+                      disabled={isAudioDownloading}
+                      className="flex items-center justify-between px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs disabled:opacity-50 disabled:hover:bg-teal-600 transition-all active:scale-95 cursor-pointer shadow-xs"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Download className="w-4 h-4" />
+                        صوت جزء ۳۰ (عمّ جزء)
+                      </span>
+                      <span className="text-[10px] opacity-90">~۲۵ مگابایت</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleDownloadAudioSurahs([36, 55, 56, 67, 18, 76, 62], 'سوره‌های پرفضیلت', audioReciterId);
+                      }}
+                      disabled={isAudioDownloading}
+                      className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs disabled:opacity-50 disabled:hover:bg-amber-600 transition-all active:scale-95 cursor-pointer shadow-xs"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Download className="w-4 h-4" />
+                        سوره‌های پرفضیلت (۷ سوره)
+                      </span>
+                      <span className="text-[10px] opacity-90">~۳۰ مگابایت</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ids: number[] = [];
+                        for (let i = 1; i <= 114; i++) ids.push(i);
+                        handleDownloadAudioSurahs(ids, 'کل قرآن کریم', audioReciterId);
+                      }}
+                      disabled={isAudioDownloading}
+                      className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs disabled:opacity-50 disabled:hover:bg-slate-700 transition-all active:scale-95 cursor-pointer shadow-xs"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Download className="w-4 h-4" />
+                        کل قرآن (۱۱۴ سوره)
+                      </span>
+                      <span className="text-[10px] opacity-90">~۱.۲ گیگابایت</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* پیشرفت دانلود صوت */}
+                {isAudioDownloading && (
+                  <div className="space-y-1.5 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+                      <span className="flex items-center gap-1.5">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        {audioDownloadingSurah || 'در حال آماده‌سازی...'}
+                      </span>
+                      <span>{Math.round((audioProgress.current / (audioProgress.total || 1)) * 100)}٪</span>
+                    </div>
+                    <div className="w-full bg-indigo-200/60 dark:bg-indigo-900/60 h-2 rounded-full overflow-hidden">
+                      <div
+                        className="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                        style={{ width: `${(audioProgress.current / (audioProgress.total || 1)) * 100}%` }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { cancelAudioDownloadRef.current = true; }}
+                      className="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                    >
+                      توقف دانلود
+                    </button>
+                  </div>
+                )}
+
+                {audioNotice && (
+                  <div className={`p-2.5 rounded-xl text-[11px] leading-relaxed border ${
+                    audioNotice.includes('سقف')
+                      ? 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'
+                      : 'bg-teal-50 border-teal-200 text-teal-900 dark:bg-teal-950/30 dark:border-teal-800 dark:text-teal-200'
+                  }`}>
+                    {audioNotice}
+                  </div>
+                )}
+
+                {/* لیست سوره‌های دانلودشده صوتی */}
+                {audioStatus && audioStatus.records.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto space-y-1 border-t border-slate-200/60 dark:border-slate-700/60 pt-2">
+                    <div className="text-[11px] font-bold text-slate-500 mb-1">
+                      سوره‌های دانلودشده این قاری:
+                    </div>
+                    {audioStatus.records
+                      .filter((r) => r.reciterId === audioReciterId)
+                      .map((rec) => {
+                        const surah = ALL_SURAHS.find((s) => s.id === rec.surahId);
+                        const isComplete = rec.downloadedVerses === rec.totalVerses;
+                        return (
+                          <div key={rec.key} className="flex items-center justify-between text-[11px] px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              {isComplete ? (
+                                <CheckCircle className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+                              ) : (
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                              )}
+                              <span className="truncate">{surah?.nameArabic ?? `سوره ${toPersianDigits(rec.surahId)}`}</span>
+                              <span className="text-slate-400 shrink-0">
+                                ({toPersianDigits(rec.downloadedVerses)}/{toPersianDigits(rec.totalVerses)} آیه)
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => deleteSurahAudio(audioReciterId, rec.surahId).then(refreshAudioStatus)}
+                              disabled={isAudioDownloading}
+                              className="p-1 text-slate-400 hover:text-red-500 disabled:opacity-30 transition-colors cursor-pointer"
+                              title="حذف صوت این سوره"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+
+                <p className="text-[10px] text-slate-400 leading-normal flex gap-1">
+                  <Info className="w-3 h-3 shrink-0 mt-0.5" />
+                  صوت از منابع استاندارد کش می‌شود و فقط برای قاری انتخابی ذخیره می‌شود. برای پخش آفلاین، سوره مورد نظر را دانلود نمایید.
+                </p>
               </div>
             </div>
           )}
 
-          <div className={`p-3.5 rounded-2xl border text-xs leading-relaxed ${
-            darkMode ? 'bg-slate-800/40 border-slate-700 text-slate-300' : 'bg-stone-50 border-stone-200 text-slate-600'
-          }`}>
-            <div className="font-bold text-slate-800 dark:text-slate-100 mb-1">منبع دادهٔ فعلی</div>
-            <p>
-              {contentMetadata
-                ? `${contentMetadata.sourceName} • ${contentMetadata.datasetVersion}`
-                : 'پس از نخستین دریافت کامل آیات، منبع و زمان همگام‌سازی اینجا ثبت می‌شود.'}
-            </p>
-            {contentMetadata && (
-              <p className="mt-1 text-[11px] text-slate-400">
-                آخرین همگام‌سازی: {new Date(contentMetadata.lastSyncedAt).toLocaleString('fa-IR')} • وضعیت مجوز: در حال بررسی
-              </p>
-            )}
-          </div>
-
-          {/* ——— کش صوتی (P5-T2) ——— */}
-          <div className={`p-4 rounded-2xl border space-y-3 ${
-            darkMode ? 'bg-slate-800/70 border-slate-700' : 'bg-white border-stone-200 shadow-xs'
-          }`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                  <Headphones className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm">صوت ترتیل آفلاین</h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    دانلود صوت هر سوره جهت پخش بدون اینترنت (هر قاری)
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  if (window.confirm('همهٔ صوت‌های دانلودشده با قاری انتخاب‌شده حذف می‌شوند. ادامه می‌دهید؟')) {
-                    deleteAllAudioForReciter(audioReciterId).then(refreshAudioStatus);
-                  }
-                }}
-                disabled={isAudioDownloading || (audioStatus?.records.filter((r) => r.reciterId === audioReciterId).length ?? 0) === 0}
-                className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-30 transition-colors"
-                title="حذف همهٔ صوت‌های این قاری"
+          {/* تب ۲: متن و ترجمه‌ها */}
+          {activeTab === 'text' && (
+            <div className="space-y-3.5">
+              {/* کارت وضعیت حافظه محلی */}
+              <div
+                className={`p-4 rounded-2xl border flex items-center justify-between ${
+                  darkMode
+                    ? 'bg-slate-800/70 border-slate-700'
+                    : 'bg-white border-stone-200 shadow-xs'
+                }`}
               >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* انتخاب قاری */}
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-0.5">
-              {(Object.keys(RECITER_NAMES) as ReciterId[]).map((rid) => {
-                const reciter = RECITER_NAMES[rid];
-                const isActive = rid === audioReciterId;
-                return (
-                  <button
-                    key={rid}
-                    onClick={() => {
-                      setAudioReciterId(rid);
-                      try {
-                        localStorage.setItem('mobin_selected_reciter', rid);
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all ${
-                      isActive
-                        ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs'
-                        : 'border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    {reciter.shortName}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* وضعیت حجم کش صوتی */}
-            {audioStatus && (
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <Music2 className="w-3.5 h-3.5" />
-                  {toPersianDigits(audioStatus.totalVerses)} آیه ذخیره‌شده
-                  {audioStatus.totalBytes > 0 && ` • ${formatBytes(audioStatus.totalBytes)}`}
-                </span>
-                <span className="text-slate-400">
-                  سقف نرم: {formatBytes(audioStatus.softLimitBytes)}
-                </span>
-              </div>
-            )}
-
-            {/* بسته‌های پیشنهادی دانلود صوت */}
-            <div className="space-y-1.5">
-              <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                بسته‌های پیشنهادی صوت ({RECITER_NAMES[audioReciterId]?.shortName}):
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  onClick={() => currentSurahId && handleDownloadAudioSurahs([currentSurahId], `سورهٔ ${currentSurahId}`, audioReciterId)}
-                  disabled={!currentSurahId || isAudioDownloading}
-                  className="flex items-center justify-between px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all active:scale-95"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <DownloadCloud className="w-4 h-4" />
-                    {currentSurahId ? `سورهٔ انتخابی فعلی` : 'سوره‌ای انتخاب نشده'}
-                  </span>
-                  <span className="text-[10px] opacity-80">تک‌سوره</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    const ids: number[] = [];
-                    for (let i = 78; i <= 114; i++) ids.push(i);
-                    handleDownloadAudioSurahs(ids, 'صوت جزء ۳۰ (۳۷ سوره)', audioReciterId);
-                  }}
-                  disabled={isAudioDownloading}
-                  className="flex items-center justify-between px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs disabled:opacity-50 disabled:hover:bg-teal-600 transition-all active:scale-95"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <Download className="w-4 h-4" />
-                    صوت جزء ۳۰ (عمّ جزء)
-                  </span>
-                  <span className="text-[10px] opacity-80">~۲۵ MB</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    // سوره‌های پرفضیلت: یس، الرحمن، واقعه، ملک، کهف، انسان، جمعه
-                    handleDownloadAudioSurahs([36, 55, 56, 67, 18, 76, 62], 'سوره‌های پرفضیلت', audioReciterId);
-                  }}
-                  disabled={isAudioDownloading}
-                  className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs disabled:opacity-50 disabled:hover:bg-amber-600 transition-all active:scale-95"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <Download className="w-4 h-4" />
-                    سوره‌های پرفضیلت (۷ سوره)
-                  </span>
-                  <span className="text-[10px] opacity-80">~۳۰ MB</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    const ids: number[] = [];
-                    for (let i = 1; i <= 114; i++) ids.push(i);
-                    handleDownloadAudioSurahs(ids, 'کل قرآن کریم', audioReciterId);
-                  }}
-                  disabled={isAudioDownloading}
-                  className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs disabled:opacity-50 disabled:hover:bg-slate-700 transition-all active:scale-95"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <Download className="w-4 h-4" />
-                    کل قرآن (۱۱۴ سوره)
-                  </span>
-                  <span className="text-[10px] opacity-80">مدیریت خودکار</span>
-                </button>
-              </div>
-            </div>
-
-            {/* پیشرفت دانلود صوت */}
-            {isAudioDownloading && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
-                  <span className="flex items-center gap-1.5">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    {audioDownloadingSurah || 'در حال آماده‌سازی...'}
-                  </span>
-                  <span>{Math.round((audioProgress.current / (audioProgress.total || 1)) * 100)}٪</span>
-                </div>
-                <div className="w-full bg-indigo-200/60 dark:bg-indigo-900/60 h-2 rounded-full overflow-hidden">
-                  <div
-                    className="bg-indigo-600 h-full rounded-full transition-all duration-300"
-                    style={{ width: `${(audioProgress.current / (audioProgress.total || 1)) * 100}%` }}
-                  />
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm">وضعیت دیتابیس محلی (IndexedDB)</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {toPersianDigits(cachedSurahIds.size)} از ۱۱۴ سوره • {toPersianDigits(totalVersesCount)} آیه ذخیره شده
+                    </p>
+                  </div>
                 </div>
                 <button
-                  onClick={() => { cancelAudioDownloadRef.current = true; }}
-                  className="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 hover:underline"
-                >
-                  توقف دانلود
-                </button>
-              </div>
-            )}
-
-            {audioNotice && (
-              <div className={`p-2.5 rounded-xl text-[11px] leading-relaxed border ${
-                audioNotice.includes('سقف')
-                  ? 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'
-                  : 'bg-teal-50 border-teal-200 text-teal-900 dark:bg-teal-950/30 dark:border-teal-800 dark:text-teal-200'
-              }`}>
-                {audioNotice}
-              </div>
-            )}
-
-            {/* لیست سوره‌های دانلودشده صوتی */}
-            {audioStatus && audioStatus.records.length > 0 && (
-              <div className="max-h-40 overflow-y-auto space-y-1 border-t border-slate-200/60 dark:border-slate-700/60 pt-2">
-                {audioStatus.records
-                  .filter((r) => r.reciterId === audioReciterId)
-                  .map((rec) => {
-                    const surah = ALL_SURAHS.find((s) => s.id === rec.surahId);
-                    const isComplete = rec.downloadedVerses === rec.totalVerses;
-                    return (
-                      <div key={rec.key} className="flex items-center justify-between text-[11px] px-1.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          {isComplete ? (
-                            <CheckCircle className="w-3.5 h-3.5 text-teal-500 shrink-0" />
-                          ) : (
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                          )}
-                          <span className="truncate">{surah?.nameArabic ?? `سوره ${toPersianDigits(rec.surahId)}`}</span>
-                          <span className="text-slate-400 shrink-0">
-                            {toPersianDigits(rec.downloadedVerses)}/{toPersianDigits(rec.totalVerses)}
-                          </span>
-                        </span>
-                        <button
-                          onClick={() => deleteSurahAudio(audioReciterId, rec.surahId).then(refreshAudioStatus)}
-                          disabled={isAudioDownloading}
-                          className="p-1 text-slate-400 hover:text-red-500 disabled:opacity-30 transition-colors"
-                          title="حذف صوت این سوره"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-
-            <p className="text-[10px] text-slate-400 leading-normal flex gap-1">
-              <Info className="w-3 h-3 shrink-0 mt-0.5" />
-              صوت از منابع مجاز (everyayah و آینهٔ Maqra) کش می‌شود و فقط برای قاری انتخابی ذخیره می‌شود. برای پخش آفلاین، سوره را دانلود کنید.
-            </p>
-          </div>
-
-          {/* ——— گزارش خطاهای صوتی (P5-T5) ——— */}
-          <div className={`p-4 rounded-2xl border space-y-2.5 ${
-            darkMode ? 'bg-slate-800/70 border-slate-700' : 'bg-white border-stone-200 shadow-xs'
-          }`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-red-500/10 text-red-500">
-                  <Bug className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm">گزارش خطاهای صوت</h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {audioErrors.length === 0
-                      ? 'هنوز خطایی ثبت نشده است.'
-                      : `${toPersianDigits(audioErrors.length)} خطای اخیر (مشاهده‌پذیری)`}
-                  </p>
-                </div>
-              </div>
-              {audioErrors.length > 0 && (
-                <button
-                  onClick={async () => {
-                    if (window.confirm('همهٔ گزارش‌های خطای صوت حذف می‌شوند. ادامه می‌دهید؟')) {
-                      await clearAudioErrorLog();
-                      refreshAudioErrors();
-                    }
-                  }}
-                  className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-                  title="پاک کردن گزارش"
+                  type="button"
+                  onClick={handleClearCache}
+                  disabled={cachedSurahIds.size === 0 || isDownloading}
+                  className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-30 transition-colors cursor-pointer"
+                  title="پاکسازی حافظه کش متن"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
-              )}
-            </div>
+              </div>
 
-            {audioErrors.length > 0 && (
-              <div className="max-h-48 overflow-y-auto space-y-1.5 border-t border-slate-200/60 dark:border-slate-700/60 pt-2">
-                {audioErrors.map((e) => (
-                  <div
-                    key={e.id}
-                    className={`p-2.5 rounded-xl border text-[11px] leading-relaxed ${
-                      e.kind === 'network'
-                        ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
-                        : e.kind === 'corrupt'
-                        ? 'bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800'
-                        : 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800'
+              {/* نوار پیشرفت در حین دانلود متن */}
+              {isDownloading && (
+                <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-teal-800 dark:text-teal-300">
+                    <div className="flex items-center gap-1.5">
+                      <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
+                      <span>در حال دانلود: {downloadProgress.surahName}</span>
+                    </div>
+                    <span>
+                      {downloadProgress.current} از {downloadProgress.total} ({percent}٪)
+                    </span>
+                  </div>
+                  <div className="w-full bg-teal-200/60 dark:bg-teal-900/60 h-2.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-teal-600 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { cancelDownloadRef.current = true; }}
+                    className="text-xs font-bold text-teal-700 dark:text-teal-300 hover:underline cursor-pointer"
+                  >
+                    توقف پس از پایان سورهٔ جاری
+                  </button>
+                </div>
+              )}
+
+              {downloadNotice && (
+                <div className={`p-3 rounded-xl text-xs leading-relaxed border ${
+                  failedSurahIds.length > 0
+                    ? 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'
+                    : 'bg-teal-50 border-teal-200 text-teal-900 dark:bg-teal-950/30 dark:border-teal-800 dark:text-teal-200'
+                }`}>
+                  <p>{downloadNotice}</p>
+                  {failedSurahIds.length > 0 && (
+                    <button type="button" onClick={handleRetryFailed} className="mt-2 font-bold underline cursor-pointer">
+                      تلاش مجدد برای {failedSurahIds.length} سوره
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* لیست بسته‌های دانلود متن پیشنهادی */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-xs text-slate-500 dark:text-slate-400">
+                  بسته‌های دانلود پیشنهادی متن و ترجمه:
+                </h4>
+
+                {/* بسته ۱: جزء ۳۰ */}
+                <div
+                  className={`p-3.5 rounded-2xl border flex items-center justify-between ${
+                    darkMode
+                      ? 'bg-slate-800/40 border-slate-700'
+                      : 'bg-white border-stone-200 shadow-2xs'
+                  }`}
+                >
+                  <div>
+                    <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                      بسته جزء ۳۰ (۳۷ سوره پرکاربرد)
+                    </span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      سوره‌های نبأ تا ناس، مناسب برای حفظ، نماز و قرائت روزانه
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadJuz30}
+                    disabled={isDownloading}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs disabled:opacity-50 transition-all active:scale-95 cursor-pointer shadow-xs"
+                  >
+                    <DownloadCloud className="w-3.5 h-3.5" />
+                    <span>دانلود بسته</span>
+                  </button>
+                </div>
+
+                {/* بسته ۲: سوره‌های منتخب و پرفضیلت */}
+                <div
+                  className={`p-3.5 rounded-2xl border flex items-center justify-between ${
+                    darkMode
+                      ? 'bg-slate-800/40 border-slate-700'
+                      : 'bg-white border-stone-200 shadow-2xs'
+                  }`}
+                >
+                  <div>
+                    <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                      سوره‌های پرفضیلت
+                    </span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      یس، الرحمن، واقعه، ملک، کهف، نور و جمعه
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadVirtueSurahs}
+                    disabled={isDownloading}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs disabled:opacity-50 transition-all active:scale-95 cursor-pointer shadow-xs"
+                  >
+                    <DownloadCloud className="w-3.5 h-3.5" />
+                    <span>دانلود بسته</span>
+                  </button>
+                </div>
+
+                {/* بسته ۳: کل قرآن کریم */}
+                <div
+                  className={`p-3.5 rounded-2xl border flex items-center justify-between ${
+                    darkMode
+                      ? 'bg-slate-800/40 border-slate-700'
+                      : 'bg-white border-stone-200 shadow-2xs'
+                  }`}
+                >
+                  <div>
+                    <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                      دانلود کامل کل قرآن کریم
+                    </span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      تمامی ۱۱۴ سوره و ۶۲۳۶ آیه به همراه ۳ ترجمه رسمی (~۱۰ مگابایت)
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadAllQuran}
+                    disabled={isDownloading || (cachedSurahIds.size === 114 && totalVersesCount >= 6236)}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer ${
+                      cachedSurahIds.size === 114 && totalVersesCount >= 6236
+                        ? 'bg-stone-100 dark:bg-slate-800 text-slate-400 cursor-default'
+                        : 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-slate-700 dark:text-slate-200">
-                        سوره {toPersianDigits(e.surahId)} : آیه {toPersianDigits(e.verseNumber)}
-                      </span>
-                      <span className="font-bold shrink-0">
-                        <BadgeKind kind={e.kind} />
+                    {cachedSurahIds.size === 114 && totalVersesCount >= 6236 ? (
+                      <>
+                        <CheckCircle className="w-3.5 h-3.5 text-teal-500" />
+                        <span>کامل ذخیره شد</span>
+                      </>
+                    ) : (
+                      <>
+                        <DownloadCloud className="w-3.5 h-3.5" />
+                        <span>دانلود کل مصحف</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400 leading-normal pt-1">
+                * فقط سوره‌هایی که شمار کامل آیاتشان ذخیره شده باشد «دانلودشده» محسوب می‌شوند.
+              </p>
+            </div>
+          )}
+
+          {/* تب ۳: حافظه مرورگر و گزارش‌ها */}
+          {activeTab === 'storage' && (
+            <div className="space-y-3.5">
+              {/* وضعیت سهمیه حافظه و ماندگاری دائمی مرورگر */}
+              {storageStatus && (
+                <div
+                  className={`p-3.5 rounded-2xl border text-xs space-y-2.5 ${
+                    darkMode
+                      ? 'bg-slate-800/40 border-slate-700 text-slate-300'
+                      : 'bg-teal-50/50 border-teal-100 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold">
+                      <HardDrive className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                      <span>فضای ذخیره‌سازی مرورگر</span>
+                    </div>
+                    <span className="text-[11px] text-teal-700 dark:text-teal-300 font-bold">
+                      {toPersianDigits(storageStatus.usageMB)} مگابایت مصرف‌شده
+                      {Number(storageStatus.quotaMB) > 0 && ` از ${toPersianDigits(storageStatus.quotaMB)} مگابایت`}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                    <div className="flex items-center gap-1.5">
+                      {storageStatus.isPersisted ? (
+                        <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                      ) : (
+                        <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+                      )}
+                      <span className="text-[11px]">
+                        {storageStatus.isPersisted
+                          ? 'ماندگاری دائم فعال است (داده‌ها در پاکسازی مرورگر حذف نمی‌شوند)'
+                          : 'ماندگاری موقت است (مرورگر ممکن است در کمبود فضا پاک کند)'}
                       </span>
                     </div>
-                    <div className="text-slate-600 dark:text-slate-300 mt-0.5">
-                      {e.message}
+                    {!storageStatus.isPersisted && (
+                      <button
+                        type="button"
+                        onClick={handleRequestPersistence}
+                        disabled={requestingPersist}
+                        className="px-2 py-1 rounded-lg bg-teal-600 text-white font-bold text-[10px] hover:bg-teal-700 transition disabled:opacity-50 shrink-0 mr-2 cursor-pointer"
+                      >
+                        {requestingPersist ? 'در حال ثبت...' : 'دائمی کردن'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* منبع داده */}
+              <div className={`p-3.5 rounded-2xl border text-xs leading-relaxed ${
+                darkMode ? 'bg-slate-800/40 border-slate-700 text-slate-300' : 'bg-stone-50 border-stone-200 text-slate-600'
+              }`}>
+                <div className="font-bold text-slate-800 dark:text-slate-100 mb-1">منبع دادهٔ فعلی</div>
+                <p>
+                  {contentMetadata
+                    ? `${contentMetadata.sourceName} • ${contentMetadata.datasetVersion}`
+                    : 'پس از نخستین دریافت کامل آیات، منبع و زمان همگام‌سازی اینجا ثبت می‌شود.'}
+                </p>
+                {contentMetadata && (
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    آخرین همگام‌سازی: {new Date(contentMetadata.lastSyncedAt).toLocaleString('fa-IR')}
+                  </p>
+                )}
+              </div>
+
+              {/* گزارش خطاهای صوتی */}
+              <div className={`p-4 rounded-2xl border space-y-2.5 ${
+                darkMode ? 'bg-slate-800/70 border-slate-700' : 'bg-white border-stone-200 shadow-xs'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-red-500/10 text-red-500">
+                      <Bug className="w-5 h-5" />
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1 text-left" dir="ltr">
-                      {new Date(e.createdAt).toLocaleString('fa-IR')}
+                    <div>
+                      <h4 className="font-bold text-sm">گزارش خطاهای صوت</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {audioErrors.length === 0
+                          ? 'هنوز خطایی ثبت نشده است.'
+                          : `${toPersianDigits(audioErrors.length)} خطای اخیر (مشاهده‌پذیری)`}
+                      </p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* نوار پیشرفت در حین دانلود */}
-          {isDownloading && (
-            <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 space-y-2.5">
-              <div className="flex items-center justify-between text-xs font-bold text-teal-800 dark:text-teal-300">
-                <div className="flex items-center gap-1.5">
-                  <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
-                  <span>در حال دانلود: {downloadProgress.surahName}</span>
+                  {audioErrors.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (window.confirm('همهٔ گزارش‌های خطای صوت حذف می‌شوند. ادامه می‌دهید؟')) {
+                          await clearAudioErrorLog();
+                          refreshAudioErrors();
+                        }
+                      }}
+                      className="p-2 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                      title="پاک کردن گزارش"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-                <span>
-                  {downloadProgress.current} از {downloadProgress.total} ({percent}٪)
-                </span>
-              </div>
-              <div className="w-full bg-teal-200/60 dark:bg-teal-900/60 h-2.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-teal-600 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-              <button
-                onClick={() => { cancelDownloadRef.current = true; }}
-                className="text-xs font-bold text-teal-700 dark:text-teal-300 hover:underline"
-              >
-                توقف پس از پایان سورهٔ جاری
-              </button>
-            </div>
-          )}
 
-          {downloadNotice && (
-            <div className={`p-3 rounded-xl text-xs leading-relaxed border ${
-              failedSurahIds.length > 0
-                ? 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'
-                : 'bg-teal-50 border-teal-200 text-teal-900 dark:bg-teal-950/30 dark:border-teal-800 dark:text-teal-200'
-            }`}>
-              <p>{downloadNotice}</p>
-              {failedSurahIds.length > 0 && (
-                <button onClick={handleRetryFailed} className="mt-2 font-bold underline">
-                  تلاش مجدد برای {failedSurahIds.length} سوره
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* لیست بسته‌های دانلود پیشنهادی */}
-          <div className="space-y-2">
-            <h4 className="font-bold text-xs text-slate-500 dark:text-slate-400">
-              بسته‌های دانلود پیشنهادی:
-            </h4>
-
-            {/* بسته ۱: جزء ۳۰ */}
-            <div
-              className={`p-3.5 rounded-2xl border flex items-center justify-between ${
-                darkMode
-                  ? 'bg-slate-800/40 border-slate-700'
-                  : 'bg-white border-stone-200'
-              }`}
-            >
-              <div>
-                <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                  بسته جزء ۳۰ (۳۷ سوره پرکاربرد)
-                </span>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  سوره‌های نبأ تا ناس، مناسب برای حفظ، نماز و قرائت روزانه
-                </p>
-              </div>
-              <button
-                onClick={handleDownloadJuz30}
-                disabled={isDownloading}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs disabled:opacity-50 transition-all active:scale-95"
-              >
-                <DownloadCloud className="w-3.5 h-3.5" />
-                <span>دانلود بسته</span>
-              </button>
-            </div>
-
-            {/* بسته ۲: سوره‌های منتخب و پرفضیلت */}
-            <div
-              className={`p-3.5 rounded-2xl border flex items-center justify-between ${
-                darkMode
-                  ? 'bg-slate-800/40 border-slate-700'
-                  : 'bg-white border-stone-200'
-              }`}
-            >
-              <div>
-                <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                  سوره‌های پرفضیلت
-                </span>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  یس، الرحمن، واقعه، ملک، کهف، نور و جمعه
-                </p>
-              </div>
-              <button
-                onClick={handleDownloadVirtueSurahs}
-                disabled={isDownloading}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs disabled:opacity-50 transition-all active:scale-95"
-              >
-                <DownloadCloud className="w-3.5 h-3.5" />
-                <span>دانلود بسته</span>
-              </button>
-            </div>
-
-            {/* بسته ۳: کل قرآن کریم */}
-            <div
-              className={`p-3.5 rounded-2xl border flex items-center justify-between ${
-                darkMode
-                  ? 'bg-slate-800/40 border-slate-700'
-                  : 'bg-white border-stone-200'
-              }`}
-            >
-              <div>
-                <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                  دانلود کامل کل قرآن کریم
-                </span>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  تمامی ۱۱۴ سوره و ۶۲۳۶ آیه به همراه ۳ ترجمه رسمی (~۱۰ مگابایت)
-                </p>
-              </div>
-              <button
-                onClick={handleDownloadAllQuran}
-                disabled={isDownloading || (cachedSurahIds.size === 114 && totalVersesCount >= 6236)}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold text-xs transition-all active:scale-95 ${
-                  cachedSurahIds.size === 114 && totalVersesCount >= 6236
-                    ? 'bg-stone-100 dark:bg-slate-800 text-slate-400 cursor-default'
-                    : 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
-                }`}
-              >
-                {cachedSurahIds.size === 114 && totalVersesCount >= 6236 ? (
-                  <>
-                    <CheckCircle className="w-3.5 h-3.5 text-teal-500" />
-                    <span>کامل ذخیره شد</span>
-                  </>
-                ) : (
-                  <>
-                    <DownloadCloud className="w-3.5 h-3.5" />
-                    <span>دانلود کل مصحف</span>
-                  </>
+                {audioErrors.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 border-t border-slate-200/60 dark:border-slate-700/60 pt-2">
+                    {audioErrors.map((e) => (
+                      <div
+                        key={e.id}
+                        className={`p-2.5 rounded-xl border text-[11px] leading-relaxed ${
+                          e.kind === 'network'
+                            ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
+                            : e.kind === 'corrupt'
+                            ? 'bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800'
+                            : 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-slate-700 dark:text-slate-200">
+                            سوره {toPersianDigits(e.surahId)} : آیه {toPersianDigits(e.verseNumber)}
+                          </span>
+                          <span className="font-bold shrink-0">
+                            <BadgeKind kind={e.kind} />
+                          </span>
+                        </div>
+                        <div className="text-slate-600 dark:text-slate-300 mt-0.5">
+                          {e.message}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-1 text-left" dir="ltr">
+                          {new Date(e.createdAt).toLocaleString('fa-IR')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </button>
+              </div>
             </div>
-          </div>
-
-          <p className="text-[11px] text-slate-400 leading-normal pt-1">
-            * فقط سوره‌هایی که شمار کامل آیاتشان ذخیره شده باشد «دانلودشده» محسوب می‌شوند. صوت و پاسخ هوش مصنوعی همچنان به اینترنت نیاز دارند.
-          </p>
+          )}
         </div>
       </div>
     </div>

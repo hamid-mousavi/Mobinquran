@@ -23,6 +23,8 @@ import {
   Quote,
   Lightbulb,
   Save,
+  Menu,
+  FileText,
 } from 'lucide-react';
 import { Verse, Surah } from '../types';
 import { aiResponseSchema } from '../services/aiContract';
@@ -36,7 +38,12 @@ import {
   clearAllAiHistory,
 } from '../services/aiHistoryStorage';
 import { toPersianDigits } from '../utils/textNormalization';
-import { getVerseReflection, saveVerseReflection } from '../services/aiReflectionStorage';
+import {
+  getVerseReflection,
+  saveVerseReflection,
+  getAllVerseReflections,
+  type ReflectionNote,
+} from '../services/aiReflectionStorage';
 import { getOrCreateDeviceId } from '../utils/deviceId';
 import { useAiQuota } from '../hooks/useAiQuota';
 import { applyQuotaUpdate, markQuotaExhausted, refreshAiQuota } from '../services/aiQuotaStore';
@@ -52,11 +59,18 @@ interface AIPageProps {
   onNavigateToVerse?: (surahId: number, verseNumber: number) => void;
 }
 
-const SUGGESTED_QUESTIONS = [
+const VERSE_SUGGESTED_QUESTIONS = [
   'پیام‌های کاربردی این آیه برای زندگی امروز چیست؟',
   'نکات تفسیری و لطایف معنایی آیه را توضیح دهید.',
   'ریشه واژگان کلیدی و مفاهیم بلاغی آیه چیست؟',
   'چگونه می‌توان به این آیه در هنگام سختی‌ها عمل کرد؟',
+];
+
+const GENERAL_SUGGESTED_QUESTIONS = [
+  'مهم‌ترین توصیه‌های قرآن برای آرامش روحی چیست؟',
+  'آیات مربوط به صبر و پاداش شکیبایان کدام است؟',
+  'جایگاه تفکر و تعقل در آیات قرآن کریم را شرح دهید.',
+  'دعاهای قرآنی برای طلب هدایت و عاقبت‌به‌خیری چیست؟',
 ];
 
 export const AIPage: React.FC<AIPageProps> = ({
@@ -73,7 +87,9 @@ export const AIPage: React.FC<AIPageProps> = ({
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const [showMenuDrawer, setShowMenuDrawer] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<'history' | 'reflections'>('history');
+  const [allReflections, setAllReflections] = useState<ReflectionNote[]>([]);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [reflectionText, setReflectionText] = useState('');
   const [savedReflection, setSavedReflection] = useState('');
@@ -91,8 +107,13 @@ export const AIPage: React.FC<AIPageProps> = ({
     setHistoryList(getAiHistory());
   };
 
+  const reloadReflections = () => {
+    setAllReflections(getAllVerseReflections());
+  };
+
   useEffect(() => {
     reloadHistory();
+    reloadReflections();
   }, []);
 
   useEffect(() => {
@@ -143,14 +164,14 @@ export const AIPage: React.FC<AIPageProps> = ({
         timestamp: Date.now(),
       },
     ]);
-    setShowHistoryDrawer(false);
+    setShowMenuDrawer(false);
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const handleLoadSession = (sess: AiChatSession) => {
     setCurrentSessionId(sess.id);
     setMessages(sess.messages);
-    setShowHistoryDrawer(false);
+    setShowMenuDrawer(false);
   };
 
   const handleDeleteSession = (id: string, e: React.MouseEvent) => {
@@ -352,6 +373,7 @@ export const AIPage: React.FC<AIPageProps> = ({
     if (saveVerseReflection(currentVerse.surahId, currentVerse.verseNumber, normalizedText)) {
       setReflectionText(normalizedText);
       setSavedReflection(normalizedText);
+      reloadReflections();
       setReflectionStatus(normalizedText ? 'یادداشت شخصی به این آیه پیوند خورد.' : 'یادداشت این آیه حذف شد.');
     } else {
       setReflectionStatus('ذخیره انجام نشد. فضای ذخیره‌سازی مرورگر را بررسی کنید.');
@@ -374,10 +396,9 @@ export const AIPage: React.FC<AIPageProps> = ({
       <header className="shrink-0 h-16 border-b border-amber-300/60 dark:border-slate-800/90 bg-stone-50/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xs">
         {/* سمت راست: دکمه بازگشت و عنوان */}
         <div className="flex items-center gap-2 min-w-0">
-          {/* دکمه آیکونی بازگشت به نمای قبل در صورت وجود */}
           <button
             onClick={onBack}
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-stone-200 dark:border-slate-700/80 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-95 shrink-0 cursor-pointer"
+            className="min-w-[42px] min-h-[42px] flex items-center justify-center rounded-xl border border-stone-200 dark:border-slate-700/80 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-95 shrink-0 cursor-pointer"
             title="بازگشت به صفحه قبل"
             aria-label="بازگشت"
           >
@@ -404,130 +425,243 @@ export const AIPage: React.FC<AIPageProps> = ({
           </div>
         </div>
 
-        {/* سمت چپ: ابزارهای کاملاً آیکونی تاریخچه و گفتگوی جدید */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* سمت چپ: نمودار دایره‌ای سهمیه روزانه و منوی سه خط (همبرگری) */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* نمودار دایره‌ای سهمیه روزانه در هدر */}
+          {aiQuota && (
+            <div
+              className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-stone-100 dark:bg-slate-800 border border-stone-200 dark:border-slate-700 shrink-0 cursor-pointer"
+              title={`سهمیه روزانه: ${toPersianDigits(aiQuota.remaining)} از ${toPersianDigits(aiQuota.dailyLimit)} پرسش باقی‌مانده`}
+            >
+              <svg className="w-8 h-8 -rotate-90" viewBox="0 0 36 36">
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="14"
+                  fill="none"
+                  className="stroke-stone-200 dark:stroke-slate-700"
+                  strokeWidth="3.5"
+                />
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="14"
+                  fill="none"
+                  className="stroke-teal-600 dark:stroke-teal-400 transition-all duration-500"
+                  strokeWidth="3.5"
+                  strokeDasharray={2 * Math.PI * 14}
+                  strokeDashoffset={
+                    2 * Math.PI * 14 * (1 - Math.max(0, Math.min(1, aiQuota.remaining / Math.max(1, aiQuota.dailyLimit))))
+                  }
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className="absolute text-[10px] font-black text-teal-800 dark:text-teal-300">
+                {toPersianDigits(aiQuota.remaining)}
+              </span>
+            </div>
+          )}
+
+          {/* دکمه منوی سه خط */}
           <button
-            onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
-            className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border relative transition-all active:scale-95 ${
-              showHistoryDrawer
-                ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                : 'border-stone-200 dark:border-slate-700 hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-            title="تاریخچه گفتگوها"
-            aria-label="تاریخچه گفتگوها"
+            onClick={() => {
+              reloadReflections();
+              setShowMenuDrawer(true);
+            }}
+            className="relative min-w-[42px] min-h-[42px] flex items-center justify-center rounded-xl border border-stone-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 hover:bg-stone-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all active:scale-95 shrink-0 cursor-pointer shadow-2xs"
+            title="منوی گفتگوها و یادداشت‌ها"
+            aria-label="منوی گفتگوها و یادداشت‌ها"
           >
-            <History className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+            <Menu className="w-5 h-5" />
             {historyList.length > 0 && (
-              <span className="absolute -top-1 -right-1 px-1 rounded-full bg-amber-500 text-slate-950 font-bold text-[9px] leading-tight min-w-[16px] text-center">
+              <span className="absolute -top-1 -right-1 px-1 rounded-full bg-amber-500 text-slate-950 font-bold text-[9px] min-w-[16px] text-center">
                 {toPersianDigits(historyList.length)}
               </span>
             )}
           </button>
-
-          <button
-            onClick={handleStartNewChat}
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all active:scale-95 shrink-0"
-            title="گفتگوی جدید"
-            aria-label="گفتگوی جدید"
-          >
-            <Plus className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-          </button>
         </div>
       </header>
 
-      {/* کشوی افقی یا پنل تاریخچه در صورت فعال بودن */}
-      {showHistoryDrawer && (
-        <div className="shrink-0 bg-stone-100/90 dark:bg-slate-900/90 border-b border-stone-200 dark:border-slate-800 p-3 sm:px-6 max-h-56 overflow-y-auto animate-fadeIn">
-          <div className="max-w-3xl mx-auto space-y-2">
-            <div className="flex items-center justify-between pb-1">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                <History className="w-4 h-4 text-teal-600" />
-                <span>جلسات گذشته گفتگو</span>
+      {/* کشوی منوی سه‌خط (سایدبار گفتگوها، یادداشت‌های تدبر و گفتگوی جدید) */}
+      {showMenuDrawer && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-fadeIn"
+          onClick={() => setShowMenuDrawer(false)}
+        >
+          <div
+            className="w-full max-w-sm h-full bg-white dark:bg-slate-900 border-r border-stone-200 dark:border-slate-800 shadow-2xl flex flex-col p-4 space-y-4 animate-slideLeft"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            {/* سربرگ کشو */}
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">منوی دستیار تدبّر</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">تاریخچه، یادداشت‌ها و تنظیمات</p>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                {historyList.length > 0 && (
-                  <button
-                    onClick={handleClearAllHistory}
-                    className="text-[11px] text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>پاک کردن همه</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowHistoryDrawer(false)}
-                  className="p-1 rounded-lg hover:bg-stone-200 dark:hover:bg-slate-800 text-slate-500"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                onClick={() => setShowMenuDrawer(false)}
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-stone-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer"
+                aria-label="بستن منو"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            {historyList.length === 0 ? (
-              <p className="text-xs text-slate-400 py-3 text-center">
-                هنوز گفتگویی در تاریخچه ذخیره نشده است. با ارسال اولین پیام، تاریخچه محلی تشکیل می‌شود.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {historyList.map((sess) => {
-                  const isActive = sess.id === currentSessionId;
-                  const dateStr = new Date(sess.timestamp).toLocaleDateString('fa-IR');
-                  return (
-                    <div
-                      key={sess.id}
-                      onClick={() => handleLoadSession(sess)}
-                      className={`p-2.5 rounded-xl border text-right cursor-pointer transition-all flex items-center justify-between gap-2 ${
-                        isActive
-                          ? 'border-teal-600 bg-teal-500/10 text-teal-900 dark:text-teal-200'
-                          : 'border-stone-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 bg-stone-50 dark:bg-slate-900/60'
-                      }`}
+            {/* دکمه گفتگوی جدید */}
+            <button
+              onClick={handleStartNewChat}
+              className="w-full py-2.5 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>شروع گفتگوی جدید</span>
+            </button>
+
+            {/* تب‌های درون کشو: تاریخچه گفتگوها | یادداشت‌های تدبر */}
+            <div className="flex rounded-xl bg-stone-100 dark:bg-slate-800 p-1">
+              <button
+                onClick={() => setDrawerTab('history')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  drawerTab === 'history'
+                    ? 'bg-white dark:bg-slate-900 text-teal-800 dark:text-teal-300 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                تاریخچه ({toPersianDigits(historyList.length)})
+              </button>
+              <button
+                onClick={() => {
+                  reloadReflections();
+                  setDrawerTab('reflections');
+                }}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  drawerTab === 'reflections'
+                    ? 'bg-white dark:bg-slate-900 text-teal-800 dark:text-teal-300 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                یادداشت‌های من ({toPersianDigits(allReflections.length)})
+              </button>
+            </div>
+
+            {/* محتوای تب تاریخچه */}
+            {drawerTab === 'history' && (
+              <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                {historyList.length > 0 && (
+                  <div className="flex items-center justify-between pb-1">
+                    <span className="text-[11px] text-slate-400">جلسات گذشته گفتگو</span>
+                    <button
+                      onClick={handleClearAllHistory}
+                      className="text-[11px] text-red-600 dark:text-red-400 hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-xs truncate">{sess.title}</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
-                          <span>{toPersianDigits(dateStr)}</span>
-                          {sess.verseRef && (
-                            <span>
-                              سوره {sess.verseRef.surahName} (آیه {toPersianDigits(sess.verseRef.verseNumber)})
-                            </span>
-                          )}
+                      <Trash2 className="w-3 h-3" />
+                      <span>پاک کردن همه</span>
+                    </button>
+                  </div>
+                )}
+
+                {historyList.length === 0 ? (
+                  <div className="py-12 text-center space-y-2 text-slate-400">
+                    <History className="w-8 h-8 mx-auto opacity-40" />
+                    <p className="text-xs">هنوز گفتگویی در تاریخچه ذخیره نشده است.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {historyList.map((sess) => {
+                      const isActive = sess.id === currentSessionId;
+                      const dateStr = new Date(sess.timestamp).toLocaleDateString('fa-IR');
+                      return (
+                        <div
+                          key={sess.id}
+                          onClick={() => handleLoadSession(sess)}
+                          className={`p-2.5 rounded-xl border text-right cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                            isActive
+                              ? 'border-teal-600 bg-teal-500/10 text-teal-900 dark:text-teal-200'
+                              : 'border-stone-200 dark:border-slate-800 hover:bg-stone-50 dark:hover:bg-slate-800 bg-stone-50/50 dark:bg-slate-900/60'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-xs truncate">{sess.title}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                              <span>{toPersianDigits(dateStr)}</span>
+                              {sess.verseRef && (
+                                <span>
+                                  سوره {sess.verseRef.surahName} ({toPersianDigits(sess.verseRef.verseNumber)})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => handleDeleteSession(sess.id, e)}
+                            className="p-1.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                            title="حذف این گفتگو"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      </div>
-                      <button
-                        onClick={(e) => handleDeleteSession(sess.id, e)}
-                        className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                        title="حذف"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        </div>
-      )}
 
-      {/* نوار نمایش سهمیه روزانه هوش مصنوعی */}
-      {aiQuota && (
-        <div className="shrink-0 bg-stone-100/80 dark:bg-slate-900/80 border-b border-stone-200/70 dark:border-slate-800/70 px-3 sm:px-6 py-2">
-          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 min-w-0">
-              <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-              <span className="font-bold text-slate-700 dark:text-slate-300">سهمیه روزانه تدبّر هوشمند:</span>
-              <span className="px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 font-bold text-[11px] truncate">
-                {toPersianDigits(aiQuota.remaining)} از {toPersianDigits(aiQuota.dailyLimit)} پرسش باقی‌مانده
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="w-20 sm:w-28 bg-stone-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${Math.min(100, Math.round((aiQuota.remaining / Math.max(1, aiQuota.dailyLimit)) * 100))}%` }}
-                />
+            {/* محتوای تب یادداشت‌های تدبر */}
+            {drawerTab === 'reflections' && (
+              <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  یادداشت‌های شخصی شما ذیل آیات قرآن (ذخیره‌شده در دستگاه):
+                </p>
+
+                {allReflections.length === 0 ? (
+                  <div className="py-12 text-center space-y-2 text-slate-400">
+                    <FileText className="w-8 h-8 mx-auto opacity-40" />
+                    <p className="text-xs">هنوز یادداشتی برای آیات ثبت نشده است.</p>
+                    <p className="text-[10px] text-slate-400">
+                      هنگام تدبر ذیل هر آیه، می‌توانید جمله‌ای که با خود می‌برید را یادداشت و ذخیره کنید.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {allReflections.map((item, idx) => {
+                      const itemSurah = surahs.find((s) => s.id === item.surahId);
+                      const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('fa-IR') : '';
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            setShowMenuDrawer(false);
+                            if (onNavigateToVerse) {
+                              onNavigateToVerse(item.surahId, item.verseNumber);
+                            }
+                          }}
+                          className="p-3 rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50/50 dark:bg-slate-900/60 hover:border-teal-500/70 hover:bg-stone-50 dark:hover:bg-slate-800 transition-all cursor-pointer space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between text-[11px] font-bold text-teal-700 dark:text-teal-400">
+                            <span>
+                              سوره {itemSurah?.nameArabic || itemSurah?.namePersian || item.surahId} · آیه {toPersianDigits(item.verseNumber)}
+                            </span>
+                            {dateStr && <span className="text-[10px] text-slate-400 font-normal">{toPersianDigits(dateStr)}</span>}
+                          </div>
+                          <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
+                            «{item.text}»
+                          </p>
+                          <div className="text-[10px] text-teal-600 dark:text-teal-400 flex items-center gap-1 justify-end font-bold">
+                            <span>مشاهده آیه در قرآن</span>
+                            <ArrowRight className="w-3 h-3 rotate-180" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -542,7 +676,11 @@ export const AIPage: React.FC<AIPageProps> = ({
                   <Sparkles className="w-4 h-4" />
                   <h2 className="font-bold text-sm sm:text-base">با این آیه فکر کن</h2>
                 </div>
-                <p className="mt-3 text-right text-xl sm:text-2xl leading-loose font-['Amiri',serif] text-slate-900 dark:text-slate-100">
+                <p
+                  className="mt-3 text-right text-2xl sm:text-3xl leading-loose text-slate-900 dark:text-slate-50"
+                  style={{ fontFamily: "'UthmanTaha', 'IranMushaf', 'Amiri Quran', 'Amiri', serif" }}
+                  dir="rtl"
+                >
                   {currentVerse.textArabic}
                 </p>
                 <p className="mt-2 text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
@@ -583,7 +721,7 @@ export const AIPage: React.FC<AIPageProps> = ({
                   />
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <p aria-live="polite" className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {reflectionStatus || `یادداشت خصوصی و پیوندخورده به این آیه · ${toPersianDigits(reflectionText.length)}/۵۰۰`}
+                      {reflectionStatus || `یادداشت در حافظه دستگاه ذخیره می‌شود و در منوی سه خط بالای صفحه در دسترس است · ${toPersianDigits(reflectionText.length)}/۵۰۰`}
                     </p>
                     <button
                       type="button"
@@ -836,7 +974,7 @@ export const AIPage: React.FC<AIPageProps> = ({
           {/* پرسش‌های پیشنهادی سریع در صورت کم بودن پیام‌ها */}
           {messages.length <= 3 && (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              {SUGGESTED_QUESTIONS.map((q, idx) => (
+              {(currentVerse ? VERSE_SUGGESTED_QUESTIONS : GENERAL_SUGGESTED_QUESTIONS).map((q, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSendMessage(q)}
@@ -873,7 +1011,7 @@ export const AIPage: React.FC<AIPageProps> = ({
               title="ارسال پیام"
               aria-label="ارسال پیام"
             >
-              <Send className="w-4 h-4 sm:w-5 sm:h-5 rotate-180" />
+              <Send className="w-4 h-4 sm:w-5 sm:h-5 scale-x-[-1]" />
             </button>
           </form>
 

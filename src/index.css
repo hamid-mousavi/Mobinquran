@@ -254,3 +254,34 @@ body {
   box-sizing: border-box;
 }
 
+/* انیمیشن لمسی نرم ورق خوردن صفحات مصحف */
+@keyframes pageTurnSlideLeft {
+  0% {
+    opacity: 0.55;
+    transform: translateX(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pageTurnSlideRight {
+  0% {
+    opacity: 0.55;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-page-turn-left {
+  animation: pageTurnSlideLeft 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-page-turn-right {
+  animation: pageTurnSlideRight 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

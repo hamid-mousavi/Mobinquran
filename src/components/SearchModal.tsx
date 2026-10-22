@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, X, BookOpen, Loader2, ChevronLeft, Sparkles, Filter, Zap, Mic, MicOff } from 'lucide-react';
+import { Search, X, BookOpen, Loader2, ChevronLeft, Sparkles, Filter, Zap, Mic, MicOff, Clock, ArrowUpDown } from 'lucide-react';
 import { Surah, SearchResultItem } from '../types';
 import { QuranService } from '../services/quranService';
 import { toPersianDigits, parseJuzQuery, parsePageQuery } from '../utils/textNormalization';
@@ -57,12 +57,26 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resultsContainerRef = useRef<HTMLDivElement>(null);
+
+  const loadRecentSearches = () => {
+    try {
+      const stored = localStorage.getItem('mobin_recent_searches');
+      if (stored) {
+        setRecentSearches(JSON.parse(stored));
+      }
+    } catch {}
+  };
 
   useEffect(() => {
     if (isOpen) {
+      loadRecentSearches();
+      setSelectedIndex(-1);
       if (initialQuery && initialQuery.trim().length >= 2) {
         setQuery(initialQuery);
         executeSearch(initialQuery);
@@ -77,6 +91,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       setSearchTimeMs(0);
       setHasSearched(false);
       setError(null);
+      setSelectedIndex(-1);
     }
   }, [isOpen, initialQuery]);
 
@@ -292,11 +307,25 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     );
   }, [query, surahs]);
 
-  // مدیریت فشردن کلید اینتر در باکس جستجو جهت پرش فوری
+  // مدیریت فشردن کلیدها در باکس جستجو جهت پیمایش با کیبورد و اینتر
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'ArrowDown') {
+      if (results.length > 0) {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev < results.length - 1 ? prev + 1 : 0));
+      }
+    } else if (e.key === 'ArrowUp') {
+      if (results.length > 0) {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+      }
+    } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (detectedJuz && onNavigateToJuz) {
+      if (selectedIndex >= 0 && selectedIndex < results.length) {
+        const item = results[selectedIndex];
+        onSelectResult(item.surahId, item.verseNumber);
+        onClose();
+      } else if (detectedJuz && onNavigateToJuz) {
         onNavigateToJuz(detectedJuz, false);
         onClose();
       } else if (detectedPage && onNavigateToPage) {
@@ -311,6 +340,18 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       }
     }
   };
+
+  // پیمایش خودکار المان انتخاب‌شده با کیبورد به دید کاربر
+  useEffect(() => {
+    if (selectedIndex >= 0 && resultsContainerRef.current) {
+      const activeElem = resultsContainerRef.current.querySelector(
+        `[data-search-index="${selectedIndex}"]`
+      ) as HTMLElement | null;
+      if (activeElem) {
+        activeElem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [selectedIndex]);
 
   if (!isOpen) return null;
 
@@ -483,31 +524,69 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
           {/* کلمات کلیدی پیشنهادی */}
           {!hasSearched && (
-            <div className="pt-1 space-y-1.5">
-              <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>کلیدواژه‌های موضوعی پرکاربرد:</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {POPULAR_SEARCH_KEYWORDS.map((kw) => (
-                  <button
-                    key={kw}
-                    onClick={() => {
-                      setQuery(kw);
-                      executeSearch(kw);
-                    }}
-                    className="px-2.5 py-1 rounded-lg text-xs bg-white dark:bg-slate-800 border border-stone-200 dark:border-slate-700 hover:border-teal-500 dark:hover:border-teal-400 transition-all"
-                  >
-                    {kw}
-                  </button>
-                ))}
+            <div className="pt-1 space-y-2">
+              {recentSearches.length > 0 && !query && (
+                <div className="space-y-1.5 pb-1 border-b border-stone-200/60 dark:border-slate-800">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                      <span>جستجوهای اخیر شما:</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.removeItem('mobin_recent_searches');
+                        setRecentSearches([]);
+                      }}
+                      className="text-[10px] text-slate-400 hover:text-rose-500 transition-colors"
+                    >
+                      پاک کردن تاریخچه
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {recentSearches.map((item, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setQuery(item);
+                          executeSearch(item);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-xs bg-stone-100 dark:bg-slate-800 border border-stone-200 dark:border-slate-700 hover:border-teal-500 dark:hover:border-teal-400 transition-all text-slate-700 dark:text-slate-200"
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                  <Sparkles className="w-3 h-3 text-amber-500" />
+                  <span>کلیدواژه‌های موضوعی پرکاربرد:</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {POPULAR_SEARCH_KEYWORDS.map((kw) => (
+                    <button
+                      key={kw}
+                      onClick={() => {
+                        setQuery(kw);
+                        executeSearch(kw);
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-xs bg-white dark:bg-slate-800 border border-stone-200 dark:border-slate-700 hover:border-teal-500 dark:hover:border-teal-400 transition-all"
+                    >
+                      {kw}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </div>
 
         {/* لیست نتایج جستجو */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+        <div ref={resultsContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
           {/* کارت‌های پرش مستقیم هوشمند (صفحه، جزء، سوره و فهرست اجزاء) */}
           {(detectedPage || detectedJuz || detectedSurah || isBrowsingAllJuz) && (
             <div className="space-y-2.5 mb-3">
@@ -672,20 +751,32 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     زمان: {toPersianDigits(searchTimeMs)} میلی‌ثانیه
                   </span>
                 </div>
-                <span className="text-[11px] text-slate-400">کلیک روی هر آیه جهت باز کردن در مصحف</span>
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <span className="hidden sm:inline-flex items-center gap-1 text-teal-600 dark:text-teal-400">
+                    <ArrowUpDown className="w-3 h-3" />
+                    پیمایش با کیبورد (↑/↓) و Enter
+                  </span>
+                  <span>• کلیک روی آیه جهت مشاهده</span>
+                </div>
               </div>
 
-              {results.map((item) => {
+              {results.map((item, index) => {
                 const matchedSurah = surahs.find((s) => s.id === item.surahId);
+                const isSelected = selectedIndex === index;
                 return (
                   <div
                     key={`${item.surahId}-${item.verseNumber}-${item.id}`}
+                    data-search-index={index}
                     onClick={() => {
                       onSelectResult(item.surahId, item.verseNumber);
                       onClose();
                     }}
                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer group ${
-                      darkMode
+                      isSelected
+                        ? darkMode
+                          ? 'bg-slate-800 border-teal-400 ring-2 ring-teal-400/50 shadow-lg'
+                          : 'bg-teal-50/70 border-teal-600 ring-2 ring-teal-600/40 shadow-md'
+                        : darkMode
                         ? 'bg-slate-800/60 border-slate-700/80 hover:bg-slate-800 hover:border-teal-500/50'
                         : 'bg-white border-stone-200 hover:border-teal-600 hover:shadow-md'
                     }`}

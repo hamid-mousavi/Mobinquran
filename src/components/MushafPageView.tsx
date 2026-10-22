@@ -76,7 +76,6 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
   }, [selectedVerse]);
   const [isJumpInputOpen, setIsJumpInputOpen] = useState(false);
   const [jumpPageInput, setJumpPageInput] = useState(String(initialPageNumber || 1));
-  const [isPartNavOpen, setIsPartNavOpen] = useState(false);
 
   const pageContainerRef = useRef<HTMLDivElement>(null);
 
@@ -259,24 +258,79 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     return () => window.clearTimeout(t);
   }, [activeVerseKey, isLoading, layoutPage, currentPage]);
 
+  const [pageTurnAnim, setPageTurnAnim] = useState<'slide-left' | 'slide-right' | null>(null);
+
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const touchDeltaXRef = useRef<number>(0);
+  const isSwipingHorizontalRef = useRef(false);
+
   const handlePrevPage = () => {
     if (currentPage > 1) {
+      setPageTurnAnim('slide-right');
       setCurrentPage((prev) => prev - 1);
+      setTimeout(() => setPageTurnAnim(null), 280);
     }
   };
 
   const handleNextPage = () => {
     if (currentPage < 604) {
+      setPageTurnAnim('slide-left');
       setCurrentPage((prev) => prev + 1);
+      setTimeout(() => setPageTurnAnim(null), 280);
     }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+      touchDeltaXRef.current = 0;
+      isSwipingHorizontalRef.current = false;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const diffX = currentX - touchStartXRef.current;
+    const diffY = currentY - touchStartYRef.current;
+
+    // تشخیص حرکت افقی مسلط (بیش از ۲۵ پیکسل با شیب افقی قوی)
+    if (Math.abs(diffX) > 25 && Math.abs(diffX) > Math.abs(diffY) * 1.8) {
+      isSwipingHorizontalRef.current = true;
+      touchDeltaXRef.current = diffX;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartXRef.current !== null && isSwipingHorizontalRef.current && !isLoading) {
+      const deltaX = touchDeltaXRef.current;
+      const SWIPE_THRESHOLD = 65;
+
+      // کشیدن به سمت راست (deltaX مثبت) -> رفتن به صفحه بعد
+      // کشیدن به سمت چپ (deltaX منفی) -> رفتن به صفحه قبل
+      if (deltaX > SWIPE_THRESHOLD && currentPage < 604) {
+        handleNextPage();
+      } else if (deltaX < -SWIPE_THRESHOLD && currentPage > 1) {
+        handlePrevPage();
+      }
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    touchDeltaXRef.current = 0;
+    isSwipingHorizontalRef.current = false;
   };
 
   const handleJumpToPage = (e: React.FormEvent) => {
     e.preventDefault();
     const target = parseInt(jumpPageInput, 10);
     if (!isNaN(target) && target >= 1 && target <= 604) {
+      setPageTurnAnim(target > currentPage ? 'slide-left' : 'slide-right');
       setCurrentPage(target);
       setIsJumpInputOpen(false);
+      setTimeout(() => setPageTurnAnim(null), 280);
     }
   };
 
@@ -355,32 +409,34 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           <span className="hidden xs:inline">صفحه قبل</span>
         </button>
 
-        {/* سربرگ صفحه مصحف */}
-        <div className="flex items-center justify-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold text-center min-w-0 flex-1 px-1">
-          <span className="text-teal-700 dark:text-teal-400 shrink-0">جزء {toPersianDigits(currentJuz)}</span>
-          {currentHizbQuarter ? (
-            <>
-              <span className="opacity-30 hidden sm:inline">•</span>
-              <span className="text-slate-500 dark:text-slate-400 hidden sm:inline shrink-0">حزب {toPersianDigits(currentHizbQuarter)}</span>
-            </>
-          ) : null}
-          <span className="opacity-30">•</span>
+        {/* سربرگ تمیز و خلاصه صفحه مصحف */}
+        <div className="flex items-center justify-center gap-2 text-xs font-bold text-center min-w-0 flex-1 px-1">
           {isJumpInputOpen ? (
-            <form onSubmit={handleJumpToPage} className="flex items-center gap-1">
+            <form onSubmit={handleJumpToPage} className="flex items-center gap-1.5 bg-amber-500/10 dark:bg-slate-800 px-2 py-1 rounded-xl border border-amber-500/30">
               <input
                 type="number"
+                inputMode="numeric"
                 min={1}
                 max={604}
                 value={jumpPageInput}
                 onChange={(e) => setJumpPageInput(e.target.value)}
                 autoFocus
-                className="w-12 sm:w-16 px-1 py-0.5 rounded border text-center font-bold text-xs bg-white dark:bg-slate-800"
+                placeholder="۱-۶۰۴"
+                className="w-14 sm:w-16 px-1.5 py-0.5 rounded-lg border border-amber-500/50 text-center font-bold text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500"
               />
               <button
                 type="submit"
-                className="px-2 py-0.5 rounded bg-teal-700 text-white text-xs font-bold"
+                className="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
               >
                 برو
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsJumpInputOpen(false)}
+                className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-slate-400"
+                aria-label="انصراف"
+              >
+                <X className="w-3.5 h-3.5" />
               </button>
             </form>
           ) : (
@@ -389,14 +445,18 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 setJumpPageInput(String(currentPage));
                 setIsJumpInputOpen(true);
               }}
-              className="px-1.5 py-0.5 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800 text-amber-600 dark:text-amber-400 shrink-0 cursor-pointer"
+              className="min-h-[32px] px-3 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center gap-1 shrink-0 cursor-pointer transition-all active:scale-95"
               title="کلیک جهت پرش به صفحه دلخواه"
+              aria-label={`صفحه ${toPersianDigits(currentPage)} از ۶۰۴ - کلیک جهت پرش`}
             >
-              ص {toPersianDigits(currentPage)}<span className="hidden sm:inline"> از ۶۰۴</span> ✎
+              <span>صفحه {toPersianDigits(currentPage)}</span>
+              <span className="text-[10px] opacity-70">✎</span>
             </button>
           )}
           <span className="opacity-30">•</span>
-          <span className="text-slate-600 dark:text-slate-300 truncate max-w-[80px] xs:max-w-[120px] sm:max-w-[200px]" title={surahsOnThisPage.map((s) => s.surah.nameArabic).join('، ')}>
+          <span className="text-teal-700 dark:text-teal-400 font-bold shrink-0">جزء {toPersianDigits(currentJuz)}</span>
+          <span className="opacity-30">•</span>
+          <span className="text-slate-700 dark:text-slate-300 truncate max-w-[140px] sm:max-w-[220px]" title={surahsOnThisPage.map((s) => s.surah.nameArabic).join('، ')}>
             {surahsOnThisPage.map((s) => s.surah.nameArabic).join('، ')}
           </span>
         </div>
@@ -413,87 +473,20 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         </button>
       </div>
 
-      {/* ناوبری اجزاء و احزاب */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          onClick={() => setIsPartNavOpen((v) => !v)}
-          className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
-            darkMode
-              ? 'bg-slate-900 border-slate-700 text-amber-300 hover:bg-slate-800'
-              : 'bg-white border-stone-200 text-teal-800 hover:bg-slate-50'
-          }`}
-          aria-expanded={isPartNavOpen}
-        >
-          جزء / حزب 📖
-        </button>
-      </div>
-
-      {isPartNavOpen && (
-        <div
-          className={`rounded-2xl border p-3 space-y-2 ${
-            darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-stone-200'
-          }`}
-        >
-          <div className="text-[11px] font-bold text-slate-400">شروع جزء ۳۰ گانه</div>
-          <div className="flex flex-wrap gap-1.5">
-            {Array.from({ length: 30 }, (_, i) => i + 1).map((juz) => (
-              <button
-                key={`juz-${juz}`}
-                onClick={() => {
-                  setIsPartNavOpen(false);
-                  QuranService.getJuzStartPage(juz).then((page) => {
-                    if (page) setCurrentPage(page);
-                  });
-                }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
-                  juz === currentJuz
-                    ? 'bg-teal-600 text-white border-teal-600'
-                    : darkMode
-                    ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-teal-500'
-                    : 'bg-slate-50 border-stone-200 text-slate-600 hover:border-teal-500'
-                }`}
-              >
-                جزء {toPersianDigits(juz)}
-              </button>
-            ))}
-          </div>
-          <div className="text-[11px] font-bold text-slate-400 pt-1">شروع ربع حزب ۶۰ گانه</div>
-          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
-            {Array.from({ length: 60 }, (_, i) => i + 1).map((hizb) => (
-              <button
-                key={`hizb-${hizb}`}
-                onClick={() => {
-                  setIsPartNavOpen(false);
-                  QuranService.getHizbStartPage(hizb).then((page) => {
-                    if (page) setCurrentPage(page);
-                  });
-                }}
-                className={`px-2 py-1 rounded-lg text-[10px] font-semibold border transition-all ${
-                  hizb === currentHizbQuarter
-                    ? 'bg-amber-600 text-white border-amber-600'
-                    : darkMode
-                    ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-amber-500'
-                    : 'bg-slate-50 border-stone-200 text-slate-600 hover:border-amber-500'
-                }`}
-              >
-                {toPersianDigits(hizb)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* قاب تزئینی نمایهٔ صفحه‌ای (رندر بر اساس دیتابیس موجود؛ چیدمان ۱۵ خطی در P3-T3) */}
       <div
         ref={pageContainerRef}
         tabIndex={0}
         onKeyDown={handleContainerKeyDown}
-        className={`relative w-full max-w-full px-0 py-2 sm:px-8 sm:py-6 sm:rounded-2xl sm:border transition-colors duration-300 outline-none focus-visible:ring-2 focus-visible:ring-teal-500 overflow-x-hidden box-border ${
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className={`relative w-full max-w-full px-0 py-2 sm:px-8 sm:py-6 sm:rounded-2xl sm:border transition-colors duration-300 outline-none focus-visible:ring-2 focus-visible:ring-teal-500 overflow-x-hidden box-border select-none sm:select-text ${
           darkMode
             ? 'bg-slate-900 sm:border-slate-800 text-slate-100'
             : 'bg-[#fbf8ef] sm:border-[#d4b982]/40 text-slate-900'
         }`}
-        aria-label="نمای صفحه مصحف — برای صفحهٔ قبل و بعد از کلیدهای جهت‌نما استفاده کنید"
+        aria-label="نمای صفحه مصحف — برای ورق زدن، انگشت خود را بکشید یا از کلیدهای جهت‌نما استفاده کنید"
       >
         {qcfOffer && !qcfReady && !isLoading && (
           <button
@@ -519,7 +512,13 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           <div
             ref={linesRef}
             dir="rtl"
-            className="w-full max-w-full overflow-x-hidden px-1 text-slate-800 dark:text-slate-100"
+            className={`w-full max-w-full overflow-x-hidden px-1 text-slate-800 dark:text-slate-100 ${
+              pageTurnAnim === 'slide-left'
+                ? 'animate-page-turn-left'
+                : pageTurnAnim === 'slide-right'
+                ? 'animate-page-turn-right'
+                : 'animate-fadeIn'
+            }`}
             style={{ fontFamily: getArabicFontFamily(settings.arabicFont), fontSize: `${fit.fontSize}px` }}
           >
             {layoutPage.lines.map((line) => {
@@ -723,27 +722,24 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         </div>
       </div>
 
-      {/* ناوبری انتهای صفحه: بدون نیاز به برگشت به بالا */}
-      <div className="flex items-center gap-2" dir="rtl">
+      {/* ناوبری انتهای صفحه: بدون نیاز به برگشت به بالا با فاصله امن برای پلیر صوتی */}
+      <div className="flex items-center gap-3 pb-28 sm:pb-32" dir="rtl">
         <button
           onClick={handlePrevPage}
           disabled={currentPage <= 1 || isLoading}
-          className="flex-1 min-h-[48px] flex items-center justify-center gap-1.5 rounded-2xl border border-amber-300/70 dark:border-slate-700 bg-stone-50 dark:bg-slate-900 text-sm font-bold text-teal-800 dark:text-teal-300 disabled:opacity-40 cursor-pointer active:scale-[0.98] transition-transform"
+          className="flex-1 min-h-[48px] flex items-center justify-center gap-1.5 rounded-2xl border border-amber-300/70 dark:border-slate-700 bg-stone-50 dark:bg-slate-900 text-sm font-bold text-teal-800 dark:text-teal-300 disabled:opacity-40 cursor-pointer active:scale-[0.98] transition-transform shadow-2xs"
           aria-label="صفحه قبل"
         >
           <ChevronRight className="w-5 h-5" />
-          صفحه قبل
+          <span>صفحه قبل</span>
         </button>
-        <div className="min-w-[56px] text-center text-xs font-bold text-slate-500 dark:text-slate-400">
-          {toPersianDigits(currentPage)}
-        </div>
         <button
           onClick={handleNextPage}
           disabled={currentPage >= 604 || isLoading}
-          className="flex-1 min-h-[48px] flex items-center justify-center gap-1.5 rounded-2xl bg-teal-800 text-amber-200 text-sm font-bold disabled:opacity-40 cursor-pointer active:scale-[0.98] transition-transform"
+          className="flex-1 min-h-[48px] flex items-center justify-center gap-1.5 rounded-2xl bg-teal-800 text-amber-200 text-sm font-bold disabled:opacity-40 cursor-pointer active:scale-[0.98] transition-transform shadow-xs"
           aria-label="صفحه بعد"
         >
-          صفحه بعد
+          <span>صفحه بعد</span>
           <ChevronLeft className="w-5 h-5" />
         </button>
       </div>

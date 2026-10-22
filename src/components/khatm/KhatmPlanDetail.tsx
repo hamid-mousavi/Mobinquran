@@ -6,7 +6,6 @@ import { computeKhatmStatus } from '../../utils/khatmProgress';
 import { dayStates, planGlance } from '../../utils/khatmPlans';
 import { pendingCandidates, toRanges } from '../../services/khatm/pageViewCore';
 import { toPersianDigits } from '../../utils/textNormalization';
-import { DayStrip, DayStripLegend } from './DayStrip';
 
 interface KhatmPlanDetailProps {
   plan: KhatmPlan;
@@ -86,35 +85,64 @@ export const KhatmPlanDetail: React.FC<KhatmPlanDetailProps> = ({
         </button>
       </div>
 
-      {/* وضعیت کلی */}
-      <div className={`p-4 rounded-2xl border space-y-3 ${card}`}>
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className={`text-xs ${subtle}`}>
+      {/* وضعیت کلی با نمودار دایره‌ای پیشرفت ختم */}
+      <div className={`p-4 sm:p-5 rounded-2xl border space-y-3.5 ${card}`}>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="space-y-1.5 text-right w-full sm:flex-1">
+            <p className={`text-xs font-bold ${subtle}`}>
               روز {toPersianDigits(g.currentDay)} از {toPersianDigits(g.totalDays)} • {toPersianDigits(perDayLabel)}
             </p>
             <p className={`text-[11px] ${subtle}`}>
               شروع: {toPersianDigits(plan.startDate)} • {toPersianDigits(g.daysLeft)} روز باقی‌مانده
             </p>
+            <div className={`flex flex-wrap items-center gap-3 text-xs font-bold pt-1 ${subtle}`}>
+              <span className="text-emerald-700 dark:text-emerald-400">
+                ✓ {toPersianDigits(g.completedCount)} صفحه خوانده شده
+              </span>
+              <span>•</span>
+              <span className="text-amber-700 dark:text-amber-400">
+                {toPersianDigits(g.remainingPages)} صفحه باقی‌مانده
+              </span>
+            </div>
           </div>
-          <div className="text-left">
-            <span className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">{toPersianDigits(g.percent)}٪</span>
-            <p className="text-[11px] text-slate-400">پیشرفت کل</p>
+
+          {/* نمودار دایره‌ای با نمایش درصد در مرکز */}
+          <div className="relative flex items-center justify-center shrink-0">
+            <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                fill="none"
+                className="stroke-stone-200 dark:stroke-slate-700"
+                strokeWidth="8"
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                fill="none"
+                className="stroke-amber-500 dark:stroke-amber-400 transition-all duration-700"
+                strokeWidth="8"
+                strokeDasharray={2 * Math.PI * 40}
+                strokeDashoffset={2 * Math.PI * 40 * (1 - Math.max(0, Math.min(100, g.percent)) / 100)}
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <span className="text-xl font-black text-amber-600 dark:text-amber-400 leading-none">
+                {toPersianDigits(g.percent)}٪
+              </span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">پیشرفت کل</span>
+            </div>
           </div>
         </div>
-        <div className="w-full bg-stone-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+
+        <div className="w-full bg-stone-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
           <div
             className="bg-gradient-to-l from-amber-500 to-amber-600 h-full rounded-full transition-all duration-500"
             style={{ width: `${g.percent}%` }}
           />
-        </div>
-        <div className={`flex items-center justify-between text-[11px] font-medium ${subtle}`}>
-          <span>{toPersianDigits(g.completedCount)} صفحه خوانده شده</span>
-          <span>{toPersianDigits(g.remainingPages)} صفحه باقی‌مانده</span>
-        </div>
-        <div className="space-y-1.5 pt-1">
-          <DayStrip states={states} tall />
-          <DayStripLegend />
         </div>
       </div>
 

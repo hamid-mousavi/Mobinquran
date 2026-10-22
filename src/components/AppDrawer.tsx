@@ -7,7 +7,7 @@ import {
   GraduationCap,
   Calendar,
   Bookmark,
-  Clock,
+  RotateCcw,
   DownloadCloud,
   Settings,
   Moon,
@@ -169,10 +169,11 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({
               <Divider />
               <GroupLabel>ابزارها</GroupLabel>
               <Row
-                icon={Clock}
-                label="اوقات شرعی و قبله‌نما"
+                icon={RotateCcw}
+                label="جعبه لایتنر و مرور آیات"
+                iconClass="text-amber-600 dark:text-amber-400"
                 onClick={go(() =>
-                  window.dispatchEvent(new CustomEvent('mobin-open-prayer-times', { detail: { tab: 'times' } }))
+                  window.dispatchEvent(new CustomEvent('mobin-open-leitner'))
                 )}
               />
               <Row

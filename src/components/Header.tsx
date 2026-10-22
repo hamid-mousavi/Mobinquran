@@ -49,8 +49,13 @@ export const Header: React.FC<HeaderProps> = ({
       setHidden(delta > 0 && y > 96);
       last = y;
     };
+    const onShowHeader = () => setHidden(false);
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    window.addEventListener('mobin-show-header', onShowHeader);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('mobin-show-header', onShowHeader);
+    };
   }, []);
 
   const isMushaf = viewMode === 'mushaf-page';
@@ -59,13 +64,27 @@ export const Header: React.FC<HeaderProps> = ({
   const segOff = 'text-slate-600 dark:text-slate-300';
 
   return (
-    <header
-      id="app-main-header"
-      className={`sticky top-0 z-40 border-b border-amber-300/60 dark:border-slate-800 bg-stone-50/95 dark:bg-slate-950/95 backdrop-blur-md select-none transition-transform duration-200 ${
-        hidden ? '-translate-y-full' : 'translate-y-0'
-      }`}
-      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
-    >
+    <>
+      {/* نشانگر کوچک حالت خلوت قرآنی هنگام اسکرول به پایین */}
+      {hidden && (
+        <button
+          onClick={() => setHidden(false)}
+          className="fixed top-2.5 left-1/2 -translate-x-1/2 z-40 px-3.5 py-1.5 rounded-full bg-teal-900/90 hover:bg-teal-900 text-amber-300 text-xs font-bold shadow-lg backdrop-blur-md border border-amber-400/50 animate-fadeIn flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+          title="لمس جهت نمایش نوار ابزار و امکانات"
+          aria-label="نمایش نوار ابزار و عنوان سوره"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+          <span>سوره {currentSurah.nameArabic}</span>
+        </button>
+      )}
+
+      <header
+        id="app-main-header"
+        className={`sticky top-0 z-40 border-b border-amber-300/60 dark:border-slate-800 bg-stone-50/95 dark:bg-slate-950/95 backdrop-blur-md select-none transition-transform duration-200 ${
+          hidden ? '-translate-y-full' : 'translate-y-0'
+        }`}
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
       <div className="max-w-4xl mx-auto px-3 sm:px-4 pt-3 pb-2.5 space-y-2.5">
         <div className="flex items-center gap-2">
           {onOpenMenu && (
@@ -152,5 +171,6 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
     </header>
+    </>
   );
 };

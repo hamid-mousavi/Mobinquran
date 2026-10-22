@@ -382,6 +382,21 @@ export default function App() {
       return true;
     }
 
+    // در صورت بازگشت از صفحه تدبر هوشمند آیه، موقعیت دقیق همان آیه و سوره در قرائت بازیابی شود
+    if (activePage === 'ai' && aiContextVerse) {
+      const sId = aiContextVerse.surahId;
+      const vNum = aiContextVerse.verseNumber;
+      const targetSurah = surahs.find((s) => s.id === sId);
+      if (targetSurah) setCurrentSurah(targetSurah);
+      setResumeScrollVerse(vNum);
+      setTimeout(() => {
+        requestQuranScrollToVerse(vNum);
+      }, 120);
+      setTimeout(() => {
+        requestQuranScrollToVerse(vNum);
+      }, 380);
+    }
+
     // ۲. بررسی پشته صفحات و بازگشت به صفحه قبلی مانند اینستاگرام
     if (pageHistory.length > 1) {
       const nextHistory = pageHistory.slice(0, -1);
@@ -411,9 +426,24 @@ export default function App() {
     isMoreMenuOpen,
     pageHistory,
     activePage,
+    aiContextVerse,
+    surahs,
   ]);
 
   const handleBackToPrevious = () => {
+    if (activePage === 'ai' && aiContextVerse) {
+      const sId = aiContextVerse.surahId;
+      const vNum = aiContextVerse.verseNumber;
+      const targetSurah = surahs.find((s) => s.id === sId);
+      if (targetSurah) setCurrentSurah(targetSurah);
+      setResumeScrollVerse(vNum);
+      setTimeout(() => {
+        requestQuranScrollToVerse(vNum);
+      }, 120);
+      setTimeout(() => {
+        requestQuranScrollToVerse(vNum);
+      }, 380);
+    }
     handleAppBack();
   };
 
@@ -968,6 +998,7 @@ export default function App() {
           currentSurah={currentSurah}
           verses={verses}
           activeVerseNumber={activePlayingVerseNumber}
+          autoPlay={true}
           onSelectVerseToPlay={(vNum) => {
             setActivePlayingVerseNumber(vNum);
             setTimeout(() => requestQuranScrollToVerse(vNum), 60);
@@ -994,6 +1025,7 @@ export default function App() {
         isActive={isAutoScrollActive}
         onClose={() => setIsAutoScrollActive(false)}
         darkMode={settings.darkMode}
+        hasAudioPlayer={isAudioPlayerOpen}
         onNextPageOrSurah={() => {
           if (viewMode === 'verse-by-verse') {
             const currentIndex = surahs.findIndex((s) => s.id === currentSurah.id);

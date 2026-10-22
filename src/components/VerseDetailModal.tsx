@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, BookOpen, Layers, Bookmark, Sparkles, Copy, Check, Save } from 'lucide-react';
 import { Verse, Surah, ArabicFont } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
 import { toPersianDigits } from '../utils/textNormalization';
 import { useModalA11y } from '../hooks/useModalA11y';
+import { QuranService } from '../services/quranService';
 
 interface VerseDetailModalProps {
   isOpen: boolean;
@@ -31,6 +32,32 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [personalNote, setPersonalNote] = useState('');
   const [noteSaved, setNoteSaved] = useState(false);
+  const [isLoadingNote, setIsLoadingNote] = useState(false);
+
+  // بارگذاری یادداشت ذخیره‌شدهٔ قبلی آیه از دیتابیس محلی
+  useEffect(() => {
+    let isCancelled = false;
+    if (isOpen && verse) {
+      setIsLoadingNote(true);
+      QuranService.getBookmarkNote(currentSurah.id, verse.verseNumber)
+        .then((savedNote) => {
+          if (!isCancelled) {
+            setPersonalNote(savedNote || '');
+          }
+        })
+        .catch(() => {
+          if (!isCancelled) setPersonalNote('');
+        })
+        .finally(() => {
+          if (!isCancelled) setIsLoadingNote(false);
+        });
+    } else {
+      setPersonalNote('');
+    }
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen, verse?.verseNumber, currentSurah.id]);
 
   if (!isOpen || !verse) return null;
 
@@ -329,27 +356,40 @@ export const VerseDetailModal: React.FC<VerseDetailModalProps> = ({
           {/* ۴. تب یادداشت شخصی */}
           {activeTab === 'note' && (
             <div className="space-y-3">
-              <label className="block text-xs font-semibold text-slate-500">
-                یادداشت، برداشت معنوی یا احساس شما نسبت به این آیه (به‌صورت کاملاً آفلاین روی دستگاه شما ذخیره می‌شود):
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-500">
+                  یادداشت، برداشت معنوی یا احساس شما نسبت به این آیه (به‌صورت کاملاً آفلاین روی دستگاه شما ذخیره می‌شود):
+                </label>
+                {isLoadingNote && (
+                  <span className="text-[11px] text-teal-600 animate-pulse">در حال فراخوانی…</span>
+                )}
+              </div>
               <textarea
                 rows={5}
                 value={personalNote}
                 onChange={(e) => setPersonalNote(e.target.value)}
-                placeholder="تأملات و نکات خود را اینجا بنویسید..."
+                placeholder={isLoadingNote ? 'در حال بارگذاری یادداشت قبلی...' : 'تأملات و نکات خود را اینجا بنویسید...'}
+                disabled={isLoadingNote}
                 className={`w-full p-3 rounded-xl border text-sm outline-none transition-all ${
                   darkMode
                     ? 'bg-slate-800 border-slate-700 focus:border-teal-500 text-white placeholder-slate-500'
                     : 'bg-slate-50 border-slate-200 focus:border-teal-600 text-slate-900 placeholder-slate-400'
                 }`}
               />
-              <button
-                onClick={handleSaveNoteSubmit}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow transition-all"
-              >
-                <Save className="w-4 h-4" />
-                <span>{noteSaved ? 'با موفقیت ذخیره شد!' : 'ذخیره یادداشت'}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSaveNoteSubmit}
+                  disabled={isLoadingNote}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all cursor-pointer active:scale-95 ${
+                    noteSaved
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-teal-600 hover:bg-teal-700 text-white'
+                  }`}
+                >
+                  {noteSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                  <span>{noteSaved ? 'با موفقیت ذخیره شد!' : 'ذخیره یادداشت'}</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

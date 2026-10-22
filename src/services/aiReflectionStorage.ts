@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'mobin_ai_reflections_v1';
 
-interface ReflectionNote {
+export interface ReflectionNote {
   surahId: number;
   verseNumber: number;
   text: string;
@@ -24,6 +24,10 @@ function readNotes(): ReflectionNote[] {
   } catch {
     return [];
   }
+}
+
+export function getAllVerseReflections(): ReflectionNote[] {
+  return readNotes();
 }
 
 export function getVerseReflection(surahId: number, verseNumber: number): string {

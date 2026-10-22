@@ -134,6 +134,66 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
           </div>
 
+          {/* پیش‌نمایش زنده و واقعی تنظیمات قرائت */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>پیش‌نمایش زنده قلم و ترجمه</span>
+              </span>
+              <span className="text-[11px] font-normal opacity-80">
+                {ARABIC_FONT_OPTIONS.find((f) => f.id === settings.arabicFont)?.name || 'عثمان طه'}
+                {settings.showTranslation && ` · ${settings.activeTranslator === 'makarem' ? 'مکارم' : settings.activeTranslator === 'fooladvand' ? 'فولادوند' : 'انصاریان'}`}
+              </span>
+            </div>
+            <div
+              className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                darkMode
+                  ? 'bg-slate-950/80 border-slate-700 text-slate-100 shadow-inner'
+                  : 'bg-white border-amber-300/80 text-slate-800 shadow-xs'
+              }`}
+            >
+              {/* متن عربی نمونه با قلم، اندازه و فاصله سطور انتخابی */}
+              <div
+                className={`text-center transition-all ${
+                  settings.lineHeight === 'normal'
+                    ? 'leading-[2.1]'
+                    : settings.lineHeight === 'loose'
+                    ? 'leading-[3.0]'
+                    : 'leading-[2.5]'
+                } ${darkMode ? 'text-amber-200' : 'text-teal-950'}`}
+                style={{
+                  fontSize: `${settings.arabicFontSize}px`,
+                  fontFamily: getArabicFontFamily(settings.arabicFont),
+                }}
+              >
+                بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ۝ الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ
+              </div>
+
+              {/* ترجمه فارسی نمونه */}
+              {settings.showTranslation ? (
+                <div
+                  className={`border-t pt-2.5 text-center leading-relaxed transition-all ${
+                    darkMode
+                      ? 'border-slate-800 text-slate-300'
+                      : 'border-amber-200 text-slate-700'
+                  }`}
+                  style={{ fontSize: `${settings.translationFontSize}px` }}
+                >
+                  {settings.activeTranslator === 'fooladvand'
+                    ? 'به نام خدای بخشاینده مهربان • ستایش خدایی را که پروردگار جهانیان است.'
+                    : settings.activeTranslator === 'ansarian'
+                    ? 'به نام خدای رحمت‌گر مهربان • همه ستایش‌ها ویژه خدا، پروردگار جهانیان است.'
+                    : 'به نام خداوند بخشنده مهربان • ستایش مخصوص خداوندی است که پروردگار جهانیان است.'}
+                </div>
+              ) : (
+                <div className="border-t pt-2 text-center text-[11px] text-slate-400 border-dashed border-stone-200 dark:border-slate-800">
+                  (نمایش ترجمه غیرفعال است)
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* اندازه فونت عربی */}
           <div className="space-y-2">
             <div className="flex justify-between items-center text-sm font-semibold">
@@ -153,20 +213,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="w-full accent-teal-600 cursor-pointer"
               aria-label="اندازه متن عربی آیات (تا ۲۰۰ درصد)"
             />
-            {/* پیش‌نمایش اندازه قلم عربی */}
-            <div
-              className={`p-3 rounded-xl text-center border leading-relaxed transition-all ${
-                darkMode
-                  ? 'bg-slate-800 border-slate-700 text-amber-200'
-                  : 'bg-amber-50 border-amber-300 text-teal-900'
-              }`}
-              style={{
-                fontSize: `${settings.arabicFontSize}px`,
-                fontFamily: getArabicFontFamily(settings.arabicFont),
-              }}
-            >
-              بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
-            </div>
           </div>
 
           {/* فاصله خطوط (Line Height) */}

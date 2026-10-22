@@ -2,7 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { X, Search, MapPin, Layers, Sparkles, SlidersHorizontal, BookOpen } from 'lucide-react';
 import { Surah } from '../types';
 import { StarBadge } from './StarBadge';
-import { toPersianDigits } from '../utils/textNormalization';
+import {
+  toPersianDigits,
+  normalizeArabicForSearch,
+  normalizePersianForSearch,
+  parseAllDigits,
+} from '../utils/textNormalization';
 import { JUZ_STARTS, getJuzStartInfo } from '../data/surahs';
 import { useModalA11y } from '../hooks/useModalA11y';
 
@@ -42,28 +47,53 @@ export const SurahSelectorModal: React.FC<SurahSelectorModalProps> = ({
       list = list.filter((s) => s.revelationType === 'Medinan');
     }
 
-    if (!searchQuery.trim()) return list;
-    const q = searchQuery.toLowerCase().trim();
-    return list.filter(
-      (s) =>
-        s.nameArabic.includes(q) ||
-        s.namePersian.includes(q) ||
-        s.englishName.toLowerCase().includes(q) ||
-        s.id.toString() === q
-    );
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return list;
+
+    const normPersianQ = normalizePersianForSearch(trimmed);
+    const normArabicQ = normalizeArabicForSearch(trimmed);
+    const digitsQ = parseAllDigits(trimmed);
+    const lowerQ = trimmed.toLowerCase();
+
+    return list.filter((s) => {
+      // تطابق با شناسه عددی سوره (با رقم فارسی، عربی یا انگلیسی)
+      if (digitsQ && String(s.id) === digitsQ) return true;
+
+      // تطابق نام فارسی و عربی با نرمال‌سازی کامل حروفی
+      const sPersianNorm = normalizePersianForSearch(s.namePersian);
+      const sArabicNorm = normalizeArabicForSearch(s.nameArabic);
+      const sArabicNormInPersian = normalizePersianForSearch(s.nameArabic);
+
+      if (normPersianQ && (sPersianNorm.includes(normPersianQ) || sArabicNormInPersian.includes(normPersianQ))) {
+        return true;
+      }
+      if (normArabicQ && sArabicNorm.includes(normArabicQ)) {
+        return true;
+      }
+      if (s.englishName.toLowerCase().includes(lowerQ)) {
+        return true;
+      }
+      return false;
+    });
   }, [surahs, searchQuery, surahTypeFilter]);
 
   const filteredJuzList = useMemo(() => {
-    if (!searchQuery.trim()) return JUZ_STARTS;
-    const q = searchQuery.toLowerCase().trim();
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return JUZ_STARTS;
+
+    const normQ = normalizePersianForSearch(trimmed);
+    const normArQ = normalizeArabicForSearch(trimmed);
+    const digitsQ = parseAllDigits(trimmed);
+
     return JUZ_STARTS.filter((j) => {
-      return (
-        String(j.juz) === q ||
-        j.surahNameArabic.includes(q) ||
-        j.surahNamePersian.includes(q) ||
-        j.startWordsArabic.includes(q) ||
-        `جزء ${j.juz}`.includes(q)
-      );
+      if (digitsQ && String(j.juz) === digitsQ) return true;
+
+      const juzPersianNorm = normalizePersianForSearch(`جزء ${j.juz} ${j.surahNamePersian}`);
+      const juzArabicNorm = normalizeArabicForSearch(`${j.surahNameArabic} ${j.startWordsArabic}`);
+
+      if (normQ && juzPersianNorm.includes(normQ)) return true;
+      if (normArQ && juzArabicNorm.includes(normArQ)) return true;
+      return false;
     });
   }, [searchQuery]);
 

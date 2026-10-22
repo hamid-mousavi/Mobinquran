@@ -18,6 +18,8 @@ import {
   Search,
   Loader2,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Verse, Surah } from '../types';
 import {
@@ -64,6 +66,7 @@ interface AudioPlayerBarProps {
   onJumpToSurah?: (surahId: number) => void;
   allSurahs?: { id: number; nameArabic: string; namePersian?: string; versesCount?: number }[];
   hasBottomNav?: boolean;
+  autoPlay?: boolean;
 }
 
 export type { ReciterId } from '../services/audioSources';
@@ -198,8 +201,9 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   onJumpToSurah,
   allSurahs = [],
   hasBottomNav = true,
+  autoPlay = true,
 }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>(() => {
     try {
       const saved = localStorage.getItem('mobin_selected_reciter') ||
@@ -248,6 +252,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showQueueMenu, setShowQueueMenu] = useState(false);
   const [queueSearchQuery, setQueueSearchQuery] = useState('');
+  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
 
   // حالت تکرار آیه
   const [repeatTarget, setRepeatTarget] = useState<number>(1);
@@ -271,13 +276,21 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   const triedRoutesRef = useRef<{ key: string; routes: Set<string> }>({ key: '', routes: new Set() });
   const handleAudioErrorRef = useRef<() => void>(() => {});
   const [retryNonce, setRetryNonce] = useState(0);
-  const isPlayingRef = useRef(isPlaying);
+  const isPlayingRef = useRef(autoPlay);
   const activeBlobUrlRef = useRef<string | null>(null);
   const currentRawUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
+
+  // پخش فوری هنگام تپ روی آیکون پخش آیه
+  useEffect(() => {
+    if (activeVerseNumber !== null && autoPlay) {
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+    }
+  }, [activeVerseNumber, autoPlay]);
 
   // اعمال پیش‌فرض تایمر خواب از تنظیمات ذخیره‌شده
   useEffect(() => {
@@ -886,44 +899,75 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-0.5 shrink-0">
+            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
               <button
                 onClick={handlePrevVerse}
-                className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 transition-colors active:scale-95"
+                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 transition-colors active:scale-95 cursor-pointer"
                 title="آیه قبلی"
                 aria-label="آیه قبلی"
               >
-                <SkipForward className="w-5 h-5" />
+                <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
               <button
                 onClick={togglePlay}
-                className="w-12 h-12 rounded-full bg-teal-800 hover:bg-teal-900 text-amber-300 flex items-center justify-center shadow-lg transition-all active:scale-95"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-teal-800 hover:bg-teal-900 text-amber-300 flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer"
                 title={isLoadingAudio ? 'در حال بارگذاری صوت...' : isPlaying ? 'توقف' : 'پخش ترتیل'}
                 aria-label={isPlaying ? 'توقف' : 'پخش ترتیل'}
               >
                 {isLoadingAudio ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
                 ) : isPlaying ? (
-                  <Pause className="w-5 h-5 fill-current" />
+                  <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                 ) : (
-                  <Play className="w-5 h-5 fill-current mr-0.5" />
+                  <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current mr-0.5" />
                 )}
               </button>
 
               <button
                 onClick={handleNextVerse}
-                className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 transition-colors active:scale-95"
+                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 transition-colors active:scale-95 cursor-pointer"
                 title="آیه بعدی"
                 aria-label="آیه بعدی"
               >
-                <SkipBack className="w-5 h-5" />
+                <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+
+              {/* کلید بازکردن ابزارهای تکمیلی در موبایل */}
+              <button
+                onClick={() => setIsMobileExpanded((v) => !v)}
+                className={`w-9 h-9 sm:hidden relative flex items-center justify-center rounded-xl border transition-colors cursor-pointer active:scale-95 ${
+                  isMobileExpanded || hasActiveOptionsBadge
+                    ? 'bg-amber-500/15 border-amber-500/50 text-amber-800 dark:text-amber-300'
+                    : 'border-stone-200 dark:border-slate-800 text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
+                }`}
+                title={isMobileExpanded ? 'فشرده‌سازی ابزارها' : 'ابزارها و تنظیمات ترتیل'}
+                aria-label="ابزارها و تنظیمات ترتیل"
+              >
+                {isMobileExpanded ? <ChevronDown className="w-4 h-4" /> : <SlidersHorizontal className="w-4 h-4" />}
+                {hasActiveOptionsBadge && !isMobileExpanded && (
+                  <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                )}
+              </button>
+
+              {/* دکمه بستن سریع در حالت فشرده موبایل */}
+              <button
+                onClick={() => {
+                  if (audioRef.current) audioRef.current.pause();
+                  setIsPlaying(false);
+                  onClose();
+                }}
+                className="w-8 h-8 sm:hidden flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+                title="بستن پلیر"
+                aria-label="بستن پلیر"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
           {/* ردیف دوم: ابزارها با برچسب (صف پخش، تنظیمات ترتیل، صدا، بستن) */}
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className={`${isMobileExpanded ? 'grid animate-fadeIn' : 'hidden sm:grid'} grid-cols-4 gap-1.5 pt-0.5`}>
             {[
               {
                 key: 'queue',

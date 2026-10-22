@@ -498,7 +498,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             className="p-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white transition-all active:scale-95"
             title="ارسال"
           >
-            <Send className="w-4 h-4 rotate-180" />
+            <Send className="w-4 h-4 scale-x-[-1]" />
           </button>
         </div>
       </div>

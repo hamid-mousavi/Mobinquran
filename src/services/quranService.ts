@@ -432,6 +432,15 @@ export const QuranService = {
     }
   },
 
+  async getBookmarkNote(surahId: number, verseNumber: number): Promise<string | undefined> {
+    try {
+      const existing = await db.bookmarks.where({ surahId, verseNumber }).first();
+      return existing?.note;
+    } catch {
+      return undefined;
+    }
+  },
+
   async isBookmarked(surahId: number, verseNumber: number): Promise<boolean> {
     try {
       const existing = await db.bookmarks.where({ surahId, verseNumber }).first();

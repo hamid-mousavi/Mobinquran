@@ -7,6 +7,7 @@ interface AutoScrollControlsProps {
   onClose: () => void;
   darkMode: boolean;
   onNextPageOrSurah?: () => void;
+  hasAudioPlayer?: boolean;
 }
 
 type SpeedPreset = {
@@ -26,6 +27,7 @@ export const AutoScrollControls: React.FC<AutoScrollControlsProps> = ({
   onClose,
   darkMode,
   onNextPageOrSurah,
+  hasAudioPlayer = false,
 }) => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [speedFactor, setSpeedFactor] = useState<number>(1.0);
@@ -123,7 +125,9 @@ export const AutoScrollControls: React.FC<AutoScrollControlsProps> = ({
   return (
     <div
       id="auto-scroll-floating-bar"
-      className="fixed bottom-6 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-sm transition-all duration-300 select-none animate-fadeIn"
+      className={`fixed ${
+        hasAudioPlayer ? 'bottom-[80px] sm:bottom-[125px]' : 'bottom-6 sm:bottom-6'
+      } left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-sm transition-all duration-300 select-none animate-fadeIn`}
       dir="rtl"
     >
       <div
