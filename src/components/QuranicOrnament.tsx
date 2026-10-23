@@ -109,13 +109,54 @@ const OrnamentRule: React.FC = () => (
   </div>
 );
 
-const SURAH_NAME_FONT = "'Amiri', 'Amiri Quran', serif";
+const SURAH_NAME_FONT = "'Amiri Quran', 'Amiri', 'UthmanTaha', serif";
+
+/** نسبت عرض هر سر کتیبه به ارتفاعش (از تصویر اصلی: ۳۳۲ × ۴۵۴) */
+const CARTOUCHE_END_RATIO = 332 / 454;
 
 /**
- * کتیبهٔ سرسوره — طراحی ساده و بی‌قاب:
- *  - variant="mushaf": نوار فشردهٔ تک‌خطی داخل صفحهٔ مصحف (شمارهٔ سوره | نام | تعداد آیات)
- *  - variant="reader": سرسورهٔ خوانا برای نمای آیه‌به‌آیه (نام درشت + یک خط اطلاعات)
- * فقط دو خط ظریف بالا و پایین؛ بدون قاب، گوشه‌های تزئینی یا چیپ‌های رنگی.
+ * کتیبهٔ تذهیب‌شدهٔ نام سوره (مثل مصحف چاپی): سه تکه تصویر — دو سر (اسلیمی) و تکهٔ میانی که تکرار می‌شود —
+ * تا در هر عرضی بدون کشیدگی بنشیند. نام سوره روی بخش خالی وسط نوشته می‌شود.
+ */
+const SurahCartouche: React.FC<{ title: string; dark: boolean; height: number }> = ({ title, dark, height }) => {
+  const endW = Math.round(height * CARTOUCHE_END_RATIO);
+  const filter = dark ? 'invert(0.9) hue-rotate(180deg)' : undefined;
+  const layer = (file: string, extra: React.CSSProperties): React.CSSProperties => ({
+    height: '100%',
+    backgroundImage: `url(/ornaments/${file})`,
+    filter,
+    ...extra,
+  });
+  return (
+    <div dir="ltr" className="relative w-full select-none" style={{ height }}>
+      <div className="flex h-full" aria-hidden="true">
+        <div style={layer('surah-left.webp', { width: endW, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat' })} />
+        <div style={layer('surah-mid.webp', { flex: '1 1 0', minWidth: 0, backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x' })} />
+        <div style={layer('surah-right.webp', { width: endW, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat' })} />
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <h1
+          dir="rtl"
+          className="font-bold whitespace-nowrap"
+          style={{
+            fontFamily: SURAH_NAME_FONT,
+            fontSize: Math.round(height * 0.36),
+            lineHeight: 1.6,
+            paddingBottom: '0.1em',
+            color: dark ? '#fcd34d' : '#0f4c47',
+          }}
+        >
+          {title}
+        </h1>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * کتیبهٔ سرسوره — کادر تذهیب مثل مصحف چاپی:
+ *  - variant="mushaf": کتیبه با ارتفاع سطر مصحف (داخل صفحهٔ ۱۵ سطری)
+ *  - variant="reader": کتیبهٔ بزرگ‌تر برای نمای آیه‌به‌آیه + یک خط اطلاعات زیرش
  */
 export const QuranicSurahBanner: React.FC<{
   surah: {
@@ -128,7 +169,9 @@ export const QuranicSurahBanner: React.FC<{
   darkMode: boolean;
   className?: string;
   variant?: 'reader' | 'mushaf';
-}> = ({ surah, className = '', variant = 'reader' }) => {
+  /** ارتفاع کتیبه (px)؛ در مصحف برابر ارتفاع سطر */
+  height?: number;
+}> = ({ surah, darkMode, className = '', variant = 'reader', height }) => {
   const title = `سُورَةُ ${surah.nameArabic}`;
   const versesText = `${toPersianDigits(surah.versesCount)} آیه`;
   const numText = `سورهٔ ${toPersianDigits(surah.id)}`;
@@ -136,44 +179,22 @@ export const QuranicSurahBanner: React.FC<{
 
   if (variant === 'mushaf') {
     return (
-      <div id="surah-compact-quranic-header" className={`select-none ${className}`} dir="rtl">
-        <OrnamentRule />
-        <div className="flex items-center justify-between gap-2 px-1 py-0.5">
-          <span className="shrink-0 min-w-[3.5rem] text-right text-[11px] font-semibold text-amber-800/80 dark:text-amber-300/80">
-            {numText}
-          </span>
-          <h1
-            className="flex-1 min-w-0 truncate text-center text-lg sm:text-xl font-bold leading-normal text-amber-800 dark:text-amber-300"
-            style={{ fontFamily: SURAH_NAME_FONT }}
-          >
-            {title}
-          </h1>
-          <span className="shrink-0 min-w-[3.5rem] text-left text-[11px] font-semibold text-amber-800/80 dark:text-amber-300/80">
-            {versesText}
-          </span>
-        </div>
-        <OrnamentRule />
+      <div id="surah-compact-quranic-header" className={`w-full select-none ${className}`}>
+        <SurahCartouche title={title} dark={darkMode} height={height ?? 64} />
       </div>
     );
   }
 
   const meta = [numText, place, versesText].filter(Boolean).join(' • ');
   return (
-    <header id="surah-compact-quranic-header" className={`select-none py-2 space-y-2 text-center ${className}`} dir="rtl">
-      <OrnamentRule />
-      <div className="space-y-0.5">
-        <h1
-          className="text-2xl sm:text-3xl font-bold leading-relaxed text-amber-800 dark:text-amber-300"
-          style={{ fontFamily: SURAH_NAME_FONT }}
-        >
-          {title}
-        </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          {surah.namePersian ? `${surah.namePersian} • ` : ''}
-          {meta}
-        </p>
+    <header id="surah-compact-quranic-header" className={`select-none py-2 space-y-1.5 text-center ${className}`} dir="rtl">
+      <div className="max-w-md mx-auto">
+        <SurahCartouche title={title} dark={darkMode} height={height ?? 84} />
       </div>
-      <OrnamentRule />
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        {surah.namePersian ? `${surah.namePersian} • ` : ''}
+        {meta}
+      </p>
     </header>
   );
 };

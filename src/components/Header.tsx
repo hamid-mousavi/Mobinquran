@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, ChevronDown, ChevronsDown, Menu } from 'lucide-react';
+import { Search, ChevronDown, ChevronsDown, Menu, BookOpen, Rows3 } from 'lucide-react';
 import { Surah, ViewMode } from '../types';
 import { toPersianDigits } from '../utils/textNormalization';
 import { StarBadge } from './StarBadge';
@@ -24,7 +24,8 @@ const iconBtn =
   'w-11 h-11 shrink-0 flex items-center justify-center rounded-xl border border-amber-300/70 dark:border-slate-700 bg-stone-50 dark:bg-slate-900 text-teal-700 dark:text-teal-300 hover:bg-stone-100 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer';
 
 /**
- * هدر سبک قرائت: منو، چیپ انتخاب سوره، Aa، جستجو و سوییچ «مصحف | آیه‌به‌آیه».
+ * هدر سبک قرائت. نمای آیه‌به‌آیه: منو، چیپ سوره، Aa، جستجو، اسکرول خودکار + سوییچ «مصحف | آیه‌به‌آیه» (با آیکون).
+ * نمای مصحف (صفحهٔ ثابت): هدر فشرده بدون سوییچ؛ تعویض نما با یک دکمهٔ آیکونی.
  * هنگام اسکرول به پایین مخفی و با اسکرول به بالا دوباره نمایان می‌شود.
  */
 export const Header: React.FC<HeaderProps> = ({
@@ -59,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const isMushaf = viewMode === 'mushaf-page';
-  const segBase = 'flex-1 min-h-[40px] rounded-xl text-[13px] font-bold transition-colors cursor-pointer';
+  const segBase = 'flex-1 min-h-[40px] rounded-xl text-[13px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5';
   const segOn = 'bg-teal-800 text-white font-extrabold';
   const segOff = 'text-slate-600 dark:text-slate-300';
 
@@ -115,7 +116,19 @@ export const Header: React.FC<HeaderProps> = ({
             <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
           </button>
 
-          {onOpenSettings && (
+          {isMushaf && (
+            <button
+              id="btn-header-view-toggle"
+              onClick={onToggleViewMode}
+              className={iconBtn}
+              title="نمای آیه‌به‌آیه + ترجمه"
+              aria-label="تغییر به نمای آیه‌به‌آیه"
+            >
+              <Rows3 className="w-5 h-5" />
+            </button>
+          )}
+
+          {!isMushaf && onOpenSettings && (
             <button
               id="btn-header-settings-toggle"
               onClick={onOpenSettings}
@@ -151,24 +164,23 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        <div role="tablist" aria-label="نحوه نمایش" className="flex p-1 gap-1 rounded-2xl bg-stone-200/70 dark:bg-slate-800">
-          <button
-            role="tab"
-            aria-selected={isMushaf}
-            onClick={() => !isMushaf && onToggleViewMode()}
-            className={`${segBase} ${isMushaf ? segOn : segOff}`}
-          >
-            مصحف
-          </button>
-          <button
-            role="tab"
-            aria-selected={!isMushaf}
-            onClick={() => isMushaf && onToggleViewMode()}
-            className={`${segBase} ${!isMushaf ? segOn : segOff}`}
-          >
-            آیه‌به‌آیه + ترجمه
-          </button>
-        </div>
+        {!isMushaf && (
+          <div role="tablist" aria-label="نحوه نمایش" className="flex p-1 gap-1 rounded-2xl bg-stone-200/70 dark:bg-slate-800">
+            <button
+              role="tab"
+              aria-selected={false}
+              onClick={onToggleViewMode}
+              className={`${segBase} ${segOff}`}
+            >
+              <BookOpen className="w-4 h-4" />
+              مصحف
+            </button>
+            <button role="tab" aria-selected={true} className={`${segBase} ${segOn}`}>
+              <Rows3 className="w-4 h-4" />
+              آیه‌به‌آیه + ترجمه
+            </button>
+          </div>
+        )}
       </div>
     </header>
     </>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { ChevronRight, ChevronLeft, Volume2, Sparkles, BookOpen, Bookmark, Loader2, Share2, Copy, X } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Volume2, Sparkles, BookOpen, Bookmark, Loader2, Share2, Copy, X, Eye, EyeOff } from 'lucide-react';
 import { Surah, Verse, AppSettings } from '../types';
 import { getArabicFontFamily } from '../utils/fontHelper';
 import { shareAyah } from '../utils/shareAyah';
@@ -18,6 +18,8 @@ import {
   wasPromptDismissed,
 } from '../services/qcf4FontService';
 import { Qcf4DownloadSheet } from './Qcf4DownloadSheet';
+import { MushafFrame, MUSHAF_FRAME_W } from './MushafFrame';
+import { HizbBadge } from './HizbBadge';
 
 interface MushafPageViewProps {
   initialPageNumber: number;
@@ -46,65 +48,90 @@ function getTranslationDisplay(verse: Verse, settings: AppSettings): string {
   }
 }
 
-export const MushafPageView: React.FC<MushafPageViewProps> = ({
-  initialPageNumber,
+const PAGE_LINES = 15;
+const TOTAL_PAGES = 604;
+/** فاصلهٔ متن از لبهٔ صفحه = پهنای قاب + کمی فضای تنفس */
+const PAGE_PAD = MUSHAF_FRAME_W + 3;
+/** ارتفاع سطر سرسوره نسبت به سطر عادی */
+const HEADER_WEIGHT = 1.7;
+
+interface MushafPageBodyProps {
+  pageNumber: number;
+  height: number;
+  surahs: Surah[];
+  settings: AppSettings;
+  darkMode: boolean;
+  selectedVerse: Verse | null;
+  onSelectVerse: (verse: Verse | null) => void;
+  activeVerseKey: string | null;
+  isCurrent: boolean;
+  onGlyphData: (has: boolean) => void;
+}
+
+/**
+ * بدنهٔ یک صفحهٔ مصحف (۱۵ سطر). هر صفحه مستقل بارگذاری و اندازه‌گیری می‌شود
+ * تا هنگام ورق زدن، صفحهٔ قبل و بعد کنار صفحهٔ جاری آماده باشند.
+ */
+const MushafPageBody: React.FC<MushafPageBodyProps> = ({
+  pageNumber,
+  height,
   surahs,
   settings,
   darkMode,
-  bookmarkedVerseIds,
-  onToggleBookmark,
-  onOpenVerseDetail,
-  onOpenAIForVerse,
-  onPlayVerseAudio,
-  activeVerseKey = null,
-  onPageChange,
+  selectedVerse,
+  onSelectVerse,
+  activeVerseKey,
+  isCurrent,
+  onGlyphData,
 }) => {
-  const [currentPage, setCurrentPage] = useState<number>(initialPageNumber || 1);
-  const [verses, setVerses] = useState<Verse[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedVerse, setSelectedVerse] = useState<Verse | null>(null);
-
-  // دکمهٔ Back ابتدا منوی آیهٔ انتخاب‌شده را می‌بندد
-  useEffect(() => {
-    if (!selectedVerse) return;
-    const onBack = (e: Event) => {
-      e.preventDefault();
-      setSelectedVerse(null);
-    };
-    window.addEventListener('mobin-back', onBack);
-    return () => window.removeEventListener('mobin-back', onBack);
-  }, [selectedVerse]);
-  const [isJumpInputOpen, setIsJumpInputOpen] = useState(false);
-  const [jumpPageInput, setJumpPageInput] = useState(String(initialPageNumber || 1));
-
-  const pageContainerRef = useRef<HTMLDivElement>(null);
-
-  // چیدمان خط‌به‌خط مصحف مدینه (۱۵ سطر): هر سطر دقیقاً عرض صفحه را پر می‌کند
   const [layoutPage, setLayoutPage] = useState<MushafPageData | null>(null);
+  const [layoutLoaded, setLayoutLoaded] = useState(false);
+  const [verses, setVerses] = useState<Verse[]>([]);
   const linesRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<{ fontSize: number; centered: number[]; scales: Record<number, number> }>({
     fontSize: 22,
     centered: [],
     scales: {},
   });
+  // سطر سرسوره (کتیبهٔ تذهیب) کمی بلندتر از سطر معمولی است؛ بقیهٔ سطرها متناسب فشرده می‌شوند
+  const headerCount = layoutPage ? layoutPage.lines.filter((l) => l.words[0]?.type === 'surah_header').length : 0;
+  const units = Math.max(PAGE_LINES, (layoutPage?.lines.length ?? PAGE_LINES) + headerCount * (HEADER_WEIGHT - 1));
+  const rowH = Math.max(18, height / units);
+  const headH = rowH * HEADER_WEIGHT;
 
   useEffect(() => {
     let cancelled = false;
     setLayoutPage(null);
-    loadMushafPage(currentPage).then((page) => {
-      if (!cancelled) setLayoutPage(page);
+    setLayoutLoaded(false);
+    loadMushafPage(pageNumber).then((page) => {
+      if (cancelled) return;
+      setLayoutPage(page);
+      setLayoutLoaded(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [currentPage]);
+  }, [pageNumber]);
 
-  // فونت‌های QCF4: رندر گلیفی فقط وقتی همه‌ی فونت‌های این صفحه آماده باشند؛ در غیر این‌صورت نمایش ساده
+  useEffect(() => {
+    let cancelled = false;
+    QuranService.getVersesByPage(pageNumber).then((v) => {
+      if (!cancelled) setVerses(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pageNumber]);
+
   const [qcfReady, setQcfReady] = useState(false);
-  const [qcfOffer, setQcfOffer] = useState(false); // فونت‌ها موجودند ولی هنوز دانلود نشده‌اند
-  const [showQcfSheet, setShowQcfSheet] = useState(false);
   const hasGlyphData = !!layoutPage?.lines.some((l) => l.words.some((w) => w.c && w.f));
 
+  useEffect(() => {
+    if (isCurrent) onGlyphData(hasGlyphData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCurrent, hasGlyphData]);
+
+  // فونت‌های QCF4: رندر گلیفی فقط وقتی همه‌ی فونت‌های این صفحه آماده باشند؛ در غیر این‌صورت نمایش ساده
   useEffect(() => {
     setQcfReady(false);
     if (!layoutPage || !hasGlyphData || !isQcf4Supported()) return;
@@ -124,33 +151,14 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     };
   }, [layoutPage, hasGlyphData]);
 
-  // اگر بستهٔ گلیف و فونت‌ها در دسترس باشند ولی دانلود نشده باشند، پیشنهاد دانلود (با حجم) نشان می‌دهیم
-  useEffect(() => {
-    if (!hasGlyphData || !isQcf4Supported()) return;
-    let cancelled = false;
-    (async () => {
-      const manifest = await loadQcf4Manifest();
-      if (cancelled || !manifest) return;
-      const done = await isFullyDownloaded();
-      if (cancelled) return;
-      setQcfOffer(!done);
-      if (!done && !wasPromptDismissed()) setShowQcfSheet(true);
-      if (done) setShowQcfSheet(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [hasGlyphData, qcfReady]);
-
   // اندازهٔ فونت پایه طوری تنظیم می‌شود که پهن‌ترین سطر دقیقاً در عرض صفحه جا شود.
-  // سطرهای کوتاه‌تر تا ۱۰٪ بزرگ‌تر می‌شوند (به‌جای کشیده‌شدن فاصله‌ها) و باقی‌مانده بین کلمه‌ها پخش می‌شود؛
+  // سطرهای کوتاه‌تر تا ۱۰٪ بزرگ‌تر می‌شوند و باقی‌مانده بین کلمه‌ها پخش می‌شود؛
   // فاصلهٔ بین کلمات (نه حروف) کشیده می‌شود تا اعراب و اتصال حروف هرگز به‌هم نریزد.
   useLayoutEffect(() => {
     const root = linesRef.current;
     if (!root || !layoutPage) return;
     const MAX_LINE_SCALE = 1.1;
     const measure = () => {
-      // عرض قابل‌استفاده = عرض ریشه منهای پدینگ (حاشیهٔ ایمن برای بیرون‌زدگی گلیف‌ها)
       const cs = getComputedStyle(root);
       const width = root.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
       if (width <= 0) return;
@@ -159,9 +167,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
       const currentSize = parseFloat(getComputedStyle(root).fontSize) || 22;
       const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
       const MIN_GAP_EM = isMobile ? 0.16 : 0.28;
-      // در گوشی حاشیهٔ اطمینان بیشتر؛ اندازه‌گیری و رندر نهایی فونت ممکن است کمی اختلاف داشته باشد
       const SAFETY = isMobile ? 0.97 : 0.985;
-      // عرض طبیعی هر سطر در مقیاس ۱ (اثر مقیاس فعلی سطر حذف می‌شود)
       const naturals = rows.map((row) => {
         const applied = Number(row.dataset.scale) || 1;
         const kids = Array.from(row.children) as HTMLElement[];
@@ -189,7 +195,6 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
       });
     };
     measure();
-    // بعد از اعمال اندازه‌ی جدید و بعد از لود کامل فونت دوباره اندازه‌گیری می‌کنیم
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(measure);
@@ -204,175 +209,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     };
   }, [layoutPage, settings.arabicFont, qcfReady]);
 
-  // با تغییر صفحه، به ابتدای صفحه برگرد (کاربر پایین صفحه روی «صفحه بعد» زده است)
-  const previousPageRef = useRef(currentPage);
-  useEffect(() => {
-    if (previousPageRef.current !== currentPage) {
-      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
-      previousPageRef.current = currentPage;
-    }
-  }, [currentPage]);
-
-  useEffect(() => {
-    if (initialPageNumber && initialPageNumber !== currentPage) {
-      setCurrentPage(initialPageNumber);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPageNumber]);
-
-  // بارگذاری آیات صفحهٔ جاری به‌صورت کاملاً آفلاین از دیتابیس محلی (P3-T2)
-  useEffect(() => {
-    let isCancelled = false;
-    async function loadPageData(pageNum: number) {
-      setIsLoading(true);
-      const pageVerses = await QuranService.getVersesByPage(pageNum);
-      if (isCancelled) return;
-      setVerses(pageVerses);
-      setSelectedVerse(null);
-      if (pageVerses.length > 0) {
-        onPageChange(pageNum, pageVerses[0].surahId, pageVerses[0].verseNumber);
-      }
-      setIsLoading(false);
-    }
-
-    loadPageData(currentPage);
-    return () => {
-      isCancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
-
-  // آیهٔ در حال پخش را در دید نگه می‌دارد (فقط اگر بیرون از ناحیهٔ قابل‌دید باشد)
-  useEffect(() => {
-    if (!activeVerseKey || isLoading) return;
-    const t = window.setTimeout(() => {
-      const el = pageContainerRef.current?.querySelector<HTMLElement>(`[data-verse="${activeVerseKey}"]`)
-        ?? document.querySelector<HTMLElement>(`#mushaf-page-container [data-verse="${activeVerseKey}"]`);
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const margin = 120; // فضای هدر و پلیر شناور
-      if (r.top < margin || r.bottom > window.innerHeight - margin) {
-        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      }
-    }, 120);
-    return () => window.clearTimeout(t);
-  }, [activeVerseKey, isLoading, layoutPage, currentPage]);
-
-  const [pageTurnAnim, setPageTurnAnim] = useState<'slide-left' | 'slide-right' | null>(null);
-
-  const touchStartXRef = useRef<number | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
-  const touchDeltaXRef = useRef<number>(0);
-  const isSwipingHorizontalRef = useRef(false);
-
-  const handlePrevPage = () => {
-    if (currentPage > 1) {
-      setPageTurnAnim('slide-right');
-      setCurrentPage((prev) => prev - 1);
-      setTimeout(() => setPageTurnAnim(null), 280);
-    }
-  };
-
-  const handleNextPage = () => {
-    if (currentPage < 604) {
-      setPageTurnAnim('slide-left');
-      setCurrentPage((prev) => prev + 1);
-      setTimeout(() => setPageTurnAnim(null), 280);
-    }
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 1) {
-      touchStartXRef.current = e.touches[0].clientX;
-      touchStartYRef.current = e.touches[0].clientY;
-      touchDeltaXRef.current = 0;
-      isSwipingHorizontalRef.current = false;
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
-    const currentX = e.touches[0].clientX;
-    const currentY = e.touches[0].clientY;
-    const diffX = currentX - touchStartXRef.current;
-    const diffY = currentY - touchStartYRef.current;
-
-    // تشخیص حرکت افقی مسلط (بیش از ۲۵ پیکسل با شیب افقی قوی)
-    if (Math.abs(diffX) > 25 && Math.abs(diffX) > Math.abs(diffY) * 1.8) {
-      isSwipingHorizontalRef.current = true;
-      touchDeltaXRef.current = diffX;
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (touchStartXRef.current !== null && isSwipingHorizontalRef.current && !isLoading) {
-      const deltaX = touchDeltaXRef.current;
-      const SWIPE_THRESHOLD = 65;
-
-      // کشیدن به سمت راست (deltaX مثبت) -> رفتن به صفحه بعد
-      // کشیدن به سمت چپ (deltaX منفی) -> رفتن به صفحه قبل
-      if (deltaX > SWIPE_THRESHOLD && currentPage < 604) {
-        handleNextPage();
-      } else if (deltaX < -SWIPE_THRESHOLD && currentPage > 1) {
-        handlePrevPage();
-      }
-    }
-    touchStartXRef.current = null;
-    touchStartYRef.current = null;
-    touchDeltaXRef.current = 0;
-    isSwipingHorizontalRef.current = false;
-  };
-
-  const handleJumpToPage = (e: React.FormEvent) => {
-    e.preventDefault();
-    const target = parseInt(jumpPageInput, 10);
-    if (!isNaN(target) && target >= 1 && target <= 604) {
-      setPageTurnAnim(target > currentPage ? 'slide-left' : 'slide-right');
-      setCurrentPage(target);
-      setIsJumpInputOpen(false);
-      setTimeout(() => setPageTurnAnim(null), 280);
-    }
-  };
-
-  // ناوبری با کیبورد (P3-T6): در RTL فلش راست = صفحهٔ قبل و فلش چپ = صفحهٔ بعد
-  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
-    if (isLoading) return;
-    if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      handlePrevPage();
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      handleNextPage();
-    }
-  };
-
-  // گروه‌بندی آیات این صفحه بر اساس سوره
-  const surahsOnThisPage: { surah: Surah; verses: Verse[] }[] = [];
-  verses.forEach((v) => {
-    let group = surahsOnThisPage.find((g) => g.surah.id === v.surahId);
-    if (!group) {
-      const meta = surahs.find((item) => item.id === v.surahId);
-      group = {
-        surah: meta || {
-          id: v.surahId,
-          nameArabic: `سورة ${v.surahId}`,
-          namePersian: `سوره ${v.surahId}`,
-          englishName: '',
-          revelationType: 'Meccan',
-          versesCount: 0,
-          startPage: currentPage,
-          juzNumber: v.juzNumber,
-        },
-        verses: [],
-      };
-      surahsOnThisPage.push(group);
-    }
-    group.verses.push(v);
-  });
-
   const verseByKey = new Map<string, Verse>(verses.map((v) => [`${v.surahId}:${v.verseNumber}`, v]));
-  const currentJuz = verses[0]?.juzNumber || 1;
-  const currentHizbQuarter = verses[0]?.hizbQuarter;
 
   const renderSajdaMark = (verse: Verse) => {
     if (!verse.sajda) return null;
@@ -388,146 +225,29 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     );
   };
 
-  return (
-    <div id="mushaf-page-container" className="w-full max-w-3xl mx-auto px-1 sm:px-4 py-2 sm:py-4 space-y-3 sm:space-y-4 overflow-x-hidden box-border">
-      {/* نوار بالایی مصحف (شماره جزء، ربع حزب، سوره، و ناوبری صفحات) */}
-      <div
-        className={`flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl border transition-all w-full max-w-full overflow-hidden ${
-          darkMode
-            ? 'bg-slate-900 border-slate-800 text-slate-200'
-            : 'bg-white border-stone-200 text-slate-800 shadow-xs'
-        }`}
-      >
-        <button
-          onClick={handlePrevPage}
-          disabled={currentPage <= 1 || isLoading}
-          className="flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 disabled:opacity-40 transition-all shrink-0 cursor-pointer"
-          title="صفحه قبل"
-          aria-label="صفحه قبل"
-        >
-          <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span className="hidden xs:inline">صفحه قبل</span>
-        </button>
-
-        {/* سربرگ تمیز و خلاصه صفحه مصحف */}
-        <div className="flex items-center justify-center gap-2 text-xs font-bold text-center min-w-0 flex-1 px-1">
-          {isJumpInputOpen ? (
-            <form onSubmit={handleJumpToPage} className="flex items-center gap-1.5 bg-amber-500/10 dark:bg-slate-800 px-2 py-1 rounded-xl border border-amber-500/30">
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={604}
-                value={jumpPageInput}
-                onChange={(e) => setJumpPageInput(e.target.value)}
-                autoFocus
-                placeholder="۱-۶۰۴"
-                className="w-14 sm:w-16 px-1.5 py-0.5 rounded-lg border border-amber-500/50 text-center font-bold text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              <button
-                type="submit"
-                className="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
-              >
-                برو
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsJumpInputOpen(false)}
-                className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-slate-400"
-                aria-label="انصراف"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </form>
-          ) : (
-            <button
-              onClick={() => {
-                setJumpPageInput(String(currentPage));
-                setIsJumpInputOpen(true);
-              }}
-              className="min-h-[32px] px-3 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center gap-1 shrink-0 cursor-pointer transition-all active:scale-95"
-              title="کلیک جهت پرش به صفحه دلخواه"
-              aria-label={`صفحه ${toPersianDigits(currentPage)} از ۶۰۴ - کلیک جهت پرش`}
-            >
-              <span>صفحه {toPersianDigits(currentPage)}</span>
-              <span className="text-[10px] opacity-70">✎</span>
-            </button>
-          )}
-          <span className="opacity-30">•</span>
-          <span className="text-teal-700 dark:text-teal-400 font-bold shrink-0">جزء {toPersianDigits(currentJuz)}</span>
-          <span className="opacity-30">•</span>
-          <span className="text-slate-700 dark:text-slate-300 truncate max-w-[140px] sm:max-w-[220px]" title={surahsOnThisPage.map((s) => s.surah.nameArabic).join('، ')}>
-            {surahsOnThisPage.map((s) => s.surah.nameArabic).join('، ')}
-          </span>
-        </div>
-
-        <button
-          onClick={handleNextPage}
-          disabled={currentPage >= 604 || isLoading}
-          className="flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 disabled:opacity-40 transition-all shrink-0 cursor-pointer"
-          title="صفحه بعد"
-          aria-label="صفحه بعد"
-        >
-          <span className="hidden xs:inline">صفحه بعد</span>
-          <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-        </button>
+  if (!layoutLoaded) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="w-7 h-7 animate-spin text-teal-600 dark:text-teal-400" />
       </div>
+    );
+  }
 
-      {/* قاب تزئینی نمایهٔ صفحه‌ای (رندر بر اساس دیتابیس موجود؛ چیدمان ۱۵ خطی در P3-T3) */}
+  if (layoutPage) {
+    return (
       <div
-        ref={pageContainerRef}
-        tabIndex={0}
-        onKeyDown={handleContainerKeyDown}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        className={`relative w-full max-w-full px-0 py-2 sm:px-8 sm:py-6 sm:rounded-2xl sm:border transition-colors duration-300 outline-none focus-visible:ring-2 focus-visible:ring-teal-500 overflow-x-hidden box-border select-none sm:select-text ${
-          darkMode
-            ? 'bg-slate-900 sm:border-slate-800 text-slate-100'
-            : 'bg-[#fbf8ef] sm:border-[#d4b982]/40 text-slate-900'
-        }`}
-        aria-label="نمای صفحه مصحف — برای ورق زدن، انگشت خود را بکشید یا از کلیدهای جهت‌نما استفاده کنید"
+        ref={linesRef}
+        dir="rtl"
+        className="w-full h-full flex flex-col justify-center overflow-hidden px-1 text-slate-800 dark:text-slate-100"
+        style={{ fontFamily: getArabicFontFamily(settings.arabicFont), fontSize: `${fit.fontSize}px` }}
       >
-        {qcfOffer && !qcfReady && !isLoading && (
-          <button
-            onClick={() => setShowQcfSheet(true)}
-            className="w-full mb-2 min-h-[40px] rounded-xl border border-amber-500/50 bg-amber-50 dark:bg-slate-800 text-xs font-bold text-amber-800 dark:text-amber-300 cursor-pointer"
-          >
-            دانلود فونت مصحف برای نمایش دقیق صفحه
-          </button>
-        )}
-
-        {isLoading ? (
-          <div className="py-24 text-center space-y-3">
-            <Loader2 className="w-8 h-8 mx-auto animate-spin text-teal-600 dark:text-teal-400" />
-            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-              در حال بازخوانی صفحه {currentPage} از دیتابیس محلی...
-            </p>
-          </div>
-        ) : verses.length === 0 ? (
-          <div className="py-24 text-center text-sm text-slate-500 dark:text-slate-400">
-            آیات این صفحه در دسترس نیست. لطفاً یکبار به اینترنت متصل شوید تا بستهٔ داده نصب شود.
-          </div>
-        ) : layoutPage ? (
-          <div
-            ref={linesRef}
-            dir="rtl"
-            className={`w-full max-w-full overflow-x-hidden px-1 text-slate-800 dark:text-slate-100 ${
-              pageTurnAnim === 'slide-left'
-                ? 'animate-page-turn-left'
-                : pageTurnAnim === 'slide-right'
-                ? 'animate-page-turn-right'
-                : 'animate-fadeIn'
-            }`}
-            style={{ fontFamily: getArabicFontFamily(settings.arabicFont), fontSize: `${fit.fontSize}px` }}
-          >
-            {layoutPage.lines.map((line) => {
+            {layoutPage.lines.map((line, li) => {
               const first = line.words[0];
               if (first?.type === 'surah_header') {
                 const meta = surahs.find((sr) => sr.id === first.sura);
                 return (
-                  <div key={line.line} data-mline="head" className="py-1 w-full max-w-full overflow-hidden" style={{ fontSize: '16px' }}>
-                    {meta ? <QuranicSurahBanner surah={meta} darkMode={darkMode} variant="mushaf" /> : null}
+                  <div key={line.line} data-mline="head" className="flex items-center w-full max-w-full overflow-hidden" style={{ fontSize: '16px', height: `${headH}px` }}>
+                    <div className="w-full">{meta ? <QuranicSurahBanner surah={meta} darkMode={darkMode} variant="mushaf" height={Math.max(40, Math.round(headH) - 2)} /> : null}</div>
                   </div>
                 );
               }
@@ -536,8 +256,8 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                   <div
                     key={line.line}
                     data-mline="bismillah"
-                    className={`text-center select-none w-full max-w-full overflow-hidden ${darkMode ? 'text-amber-300/90' : 'text-amber-800'}`}
-                    style={{ lineHeight: 2.2 }}
+                    className={`text-center select-none w-full max-w-full overflow-hidden flex items-center justify-center ${darkMode ? 'text-amber-300/90' : 'text-amber-800'}`}
+                    style={{ height: `${rowH}px`, lineHeight: 1.2 }}
                   >
                     {qcfReady && first.c && first.f ? (
                       <span style={{ fontFamily: `'${first.f}'` }}>{first.c}</span>
@@ -560,11 +280,25 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                     fontSize: `${fit.scales[line.line] ?? 1}em`,
                     justifyContent: isCentered ? 'center' : 'space-between',
                     gap: isMobile ? '0.16em' : '0.28em',
-                    lineHeight: 2.15,
+                    lineHeight: 1.2,
+                    height: `${rowH}px`,
                   }}
                 >
                   {line.words.map((w, idx) => {
                     if (w.type === 'quarter') {
+                      // ربعِ آغازشده = ربع آیهٔ بعد از نشانه (ممکن است در سطرهای بعدی صفحه باشد)
+                      let nextKey: string | undefined;
+                      for (let i = li; i < layoutPage.lines.length && !nextKey; i++) {
+                        const ws = layoutPage.lines[i].words;
+                        for (let j = i === li ? idx + 1 : 0; j < ws.length; j++) {
+                          if (ws[j].verse) {
+                            nextKey = ws[j].verse;
+                            break;
+                          }
+                        }
+                      }
+                      const hq = nextKey ? verseByKey.get(nextKey)?.hizbQuarter : undefined;
+                      if (hq) return <HizbBadge key={idx} hizbQuarter={hq} darkMode={darkMode} />;
                       return (
                         <span key={idx} className="text-amber-600 select-none" aria-hidden="true" style={{ fontSize: '0.7em' }}>
                           ۞
@@ -575,7 +309,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                     const isSel = !!verse && selectedVerse?.id === verse.id;
                     const isPlaying = !!w.verse && w.verse === activeVerseKey;
                     const hit = {
-                      onClick: verse ? () => setSelectedVerse(isSel ? null : verse) : undefined,
+                      onClick: verse ? () => onSelectVerse(isSel ? null : verse) : undefined,
                     };
                     if (qcfReady && w.c && w.f && (w.type === 'end' || w.type === 'word')) {
                       return (
@@ -648,8 +382,44 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 </div>
               );
             })}
-          </div>
-        ) : (
+      </div>
+    );
+  }
+
+  // بستهٔ چیدمان در دسترس نیست: نمایش متن پیوستهٔ آیات صفحه (اسکرول فقط داخل همین حالت)
+  if (verses.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center px-6 text-center text-sm text-slate-500 dark:text-slate-400">
+        آیات این صفحه در دسترس نیست. لطفاً یکبار به اینترنت متصل شوید تا بستهٔ داده نصب شود.
+      </div>
+    );
+  }
+
+  const surahsOnThisPage: { surah: Surah; verses: Verse[] }[] = [];
+  verses.forEach((v) => {
+    let group = surahsOnThisPage.find((g) => g.surah.id === v.surahId);
+    if (!group) {
+      const meta = surahs.find((item) => item.id === v.surahId);
+      group = {
+        surah: meta || {
+          id: v.surahId,
+          nameArabic: `سورة ${v.surahId}`,
+          namePersian: `سوره ${v.surahId}`,
+          englishName: '',
+          revelationType: 'Meccan',
+          versesCount: 0,
+          startPage: pageNumber,
+          juzNumber: v.juzNumber,
+        },
+        verses: [],
+      };
+      surahsOnThisPage.push(group);
+    }
+    group.verses.push(v);
+  });
+
+  return (
+    <div className="h-full overflow-y-auto px-3 py-2">
           <div className="space-y-6">
             {surahsOnThisPage.map((group) => {
               const isSurahStart = group.verses.some((v) => v.verseNumber === 1);
@@ -693,7 +463,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                         <span
                           key={v.id}
                           data-verse={`${v.surahId}:${v.verseNumber}`}
-                          onClick={() => setSelectedVerse(isSelected ? null : v)}
+                          onClick={() => onSelectVerse(isSelected ? null : v)}
                           className={`inline cursor-pointer px-1 py-0.5 rounded-lg transition-all ${
                             isPlayingVerse
                               ? 'bg-teal-400/35 dark:bg-teal-400/25 ring-1 ring-teal-500/40'
@@ -714,32 +484,422 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
               );
             })}
           </div>
+    </div>
+  );
+};
+
+
+export const MushafPageView: React.FC<MushafPageViewProps> = ({
+  initialPageNumber,
+  surahs,
+  settings,
+  darkMode,
+  bookmarkedVerseIds,
+  onToggleBookmark,
+  onOpenVerseDetail,
+  onOpenAIForVerse,
+  onPlayVerseAudio,
+  activeVerseKey = null,
+  onPageChange,
+}) => {
+  const [currentPage, setCurrentPage] = useState<number>(initialPageNumber || 1);
+  const [selectedVerse, setSelectedVerse] = useState<Verse | null>(null);
+  const [isJumpInputOpen, setIsJumpInputOpen] = useState(false);
+  const [jumpPageInput, setJumpPageInput] = useState(String(initialPageNumber || 1));
+
+  // دکمهٔ Back ابتدا منوی آیهٔ انتخاب‌شده را می‌بندد
+  useEffect(() => {
+    if (!selectedVerse) return;
+    const onBack = (e: Event) => {
+      e.preventDefault();
+      setSelectedVerse(null);
+    };
+    window.addEventListener('mobin-back', onBack);
+    return () => window.removeEventListener('mobin-back', onBack);
+  }, [selectedVerse]);
+
+  // صفحهٔ مصحف ثابت است و اسکرول ندارد: اسکرول سند قفل می‌شود و ارتفاع صفحه تا لبهٔ پایین پر می‌شود
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const areaRef = useRef<HTMLDivElement>(null);
+  const [wrapperH, setWrapperH] = useState<number | null>(null);
+  // دکمهٔ چشم: حالت تمرکز (مخفی‌کردن هدر تا صفحه بزرگ‌تر شود)
+  const [focusMode, setFocusMode] = useState(false);
+  useEffect(() => {
+    const header = document.getElementById('app-main-header');
+    if (header) header.style.display = focusMode ? 'none' : '';
+    return () => {
+      if (header) header.style.display = '';
+    };
+  }, [focusMode]);
+  const [areaH, setAreaH] = useState(560);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = [html.style.overflow, body.style.overflow, html.style.overscrollBehavior];
+    window.scrollTo(0, 0);
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    html.style.overscrollBehavior = 'none';
+    return () => {
+      html.style.overflow = prev[0];
+      body.style.overflow = prev[1];
+      html.style.overscrollBehavior = prev[2];
+    };
+  }, []);
+
+  // پلیر صوتی شناور روی پایین صفحه می‌نشیند؛ ارتفاعش از صفحهٔ مصحف کم می‌شود تا نوار پایین پنهان نشود
+  const playerHRef = useRef(0);
+  const [playerH, setPlayerH] = useState(0);
+  useEffect(() => {
+    let el: HTMLElement | null = null;
+    let ro: ResizeObserver | null = null;
+    const apply = () => {
+      const h = el ? Math.ceil(el.getBoundingClientRect().height) : 0;
+      if (h !== playerHRef.current) {
+        playerHRef.current = h;
+        setPlayerH(h);
+      }
+    };
+    const sync = () => {
+      const found = document.getElementById('audio-player-bar-container');
+      if (found !== el) {
+        ro?.disconnect();
+        el = found;
+        if (el) {
+          ro = new ResizeObserver(apply);
+          ro.observe(el);
+        }
+      }
+      apply();
+    };
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      ro?.disconnect();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = wrapperRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      setWrapperH(Math.max(240, Math.floor(window.innerHeight - top - playerHRef.current)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    const header = document.getElementById('app-main-header');
+    const ro = header ? new ResizeObserver(measure) : null;
+    if (header && ro) ro.observe(header);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro?.disconnect();
+    };
+  }, [playerH]);
+
+  useLayoutEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setAreaH(el.clientHeight));
+    ro.observe(el);
+    setAreaH(el.clientHeight);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (initialPageNumber && initialPageNumber !== currentPage) {
+      setCurrentPage(initialPageNumber);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPageNumber]);
+
+  // گزارش صفحهٔ جاری به App (موقعیت مطالعه، سورهٔ جاری)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const pageVerses = await QuranService.getVersesByPage(currentPage);
+      if (cancelled) return;
+      setSelectedVerse(null);
+      if (pageVerses.length > 0) {
+        onPageChange(currentPage, pageVerses[0].surahId, pageVerses[0].verseNumber);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
+
+  // پیشنهاد دانلود فونت‌های QCF4
+  const [hasGlyphData, setHasGlyphData] = useState(false);
+  const [qcfOffer, setQcfOffer] = useState(false);
+  const [showQcfSheet, setShowQcfSheet] = useState(false);
+
+  useEffect(() => {
+    if (!hasGlyphData || !isQcf4Supported()) return;
+    let cancelled = false;
+    const check = async () => {
+      const manifest = await loadQcf4Manifest();
+      if (cancelled || !manifest) return;
+      const done = await isFullyDownloaded();
+      if (cancelled) return;
+      setQcfOffer(!done);
+      if (!done && !wasPromptDismissed()) setShowQcfSheet(true);
+      if (done) setShowQcfSheet(false);
+    };
+    void check();
+    const off = onQcf4Change(() => void check());
+    return () => {
+      cancelled = true;
+      off();
+    };
+  }, [hasGlyphData]);
+
+  // ---------- ورق زدن: صفحه همراه انگشت حرکت می‌کند و صفحهٔ بعد/قبل کنارش دیده می‌شود ----------
+  const [dragX, setDragX] = useState(0);
+  const [animating, setAnimating] = useState(false);
+  const animatingRef = useRef(false);
+  const touchRef = useRef({ x: 0, y: 0, t: 0, lastDx: 0, mode: null as null | 'h' | 'v', active: false, moved: false });
+
+  const areaWidth = () => areaRef.current?.clientWidth || window.innerWidth;
+
+  // dir = +1: صفحهٔ بعد (از چپ وارد می‌شود)، dir = -1: صفحهٔ قبل (از راست)
+  const slideTo = (dir: 1 | -1) => {
+    const target = currentPage + dir;
+    if (target < 1 || target > TOTAL_PAGES || animatingRef.current) return;
+    animatingRef.current = true;
+    setAnimating(true);
+    setDragX(dir * areaWidth());
+    window.setTimeout(() => {
+      setCurrentPage(target);
+      setAnimating(false);
+      setDragX(0);
+      animatingRef.current = false;
+    }, 250);
+  };
+
+  const snapBack = () => {
+    animatingRef.current = true;
+    setAnimating(true);
+    setDragX(0);
+    window.setTimeout(() => {
+      setAnimating(false);
+      animatingRef.current = false;
+    }, 220);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1 || animatingRef.current) return;
+    const t = touchRef.current;
+    t.x = e.touches[0].clientX;
+    t.y = e.touches[0].clientY;
+    t.t = Date.now();
+    t.lastDx = 0;
+    t.mode = null;
+    t.moved = false;
+    t.active = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const t = touchRef.current;
+    if (!t.active) return;
+    const dx = e.touches[0].clientX - t.x;
+    const dy = e.touches[0].clientY - t.y;
+    if (t.mode === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      t.mode = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'h' : 'v';
+    }
+    if (t.mode !== 'h') return;
+    t.moved = true;
+    t.lastDx = dx;
+    // کشیدن به راست = صفحهٔ بعد؛ در ابتدا/انتهای مصحف مقاومت می‌دهیم
+    const blocked = (dx > 0 && currentPage >= TOTAL_PAGES) || (dx < 0 && currentPage <= 1);
+    setDragX(blocked ? dx * 0.25 : dx);
+  };
+
+  const handleTouchEnd = () => {
+    const t = touchRef.current;
+    if (!t.active) return;
+    t.active = false;
+    if (t.mode !== 'h') return;
+    const dx = t.lastDx;
+    const dir: 1 | -1 = dx > 0 ? 1 : -1;
+    const velocity = Math.abs(dx) / Math.max(1, Date.now() - t.t);
+    const allowed = dir === 1 ? currentPage < TOTAL_PAGES : currentPage > 1;
+    if (allowed && (Math.abs(dx) > areaWidth() * 0.25 || (velocity > 0.5 && Math.abs(dx) > 40))) {
+      slideTo(dir);
+    } else {
+      snapBack();
+    }
+  };
+
+  const handleJumpToPage = (e: React.FormEvent) => {
+    e.preventDefault();
+    const target = parseInt(jumpPageInput, 10);
+    if (!isNaN(target) && target >= 1 && target <= TOTAL_PAGES) {
+      setCurrentPage(target);
+      setIsJumpInputOpen(false);
+    }
+  };
+
+  // ناوبری با کیبورد: در RTL فلش راست = صفحهٔ قبل و فلش چپ = صفحهٔ بعد
+  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      slideTo(-1);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      slideTo(1);
+    }
+  };
+
+  const pages = [currentPage - 1, currentPage, currentPage + 1].filter((p) => p >= 1 && p <= TOTAL_PAGES);
+  const pageBg = darkMode ? 'bg-slate-900' : 'bg-[#fbf8ef]';
+  const navBtn =
+    'w-10 h-10 flex items-center justify-center rounded-xl text-teal-800 dark:text-teal-300 disabled:opacity-30 cursor-pointer active:scale-95 transition-transform';
+
+  return (
+    <div
+      id="mushaf-page-container"
+      ref={wrapperRef}
+      className={`w-full max-w-3xl mx-auto flex flex-col overflow-hidden box-border ${pageBg}`}
+      style={{
+        height: wrapperH ?? 'calc(100dvh - 120px)',
+        paddingTop: focusMode ? 'env(safe-area-inset-top, 0px)' : undefined,
+      }}
+    >
+      <div
+        ref={areaRef}
+        tabIndex={0}
+        onKeyDown={handleContainerKeyDown}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        onClickCapture={(e) => {
+          if (touchRef.current.moved) {
+            e.stopPropagation();
+            e.preventDefault();
+            touchRef.current.moved = false;
+          }
+        }}
+        className="relative flex-1 min-h-0 w-full overflow-hidden outline-none select-none"
+        style={{ touchAction: 'none' }}
+        aria-label="نمای صفحه مصحف — برای ورق زدن، انگشت خود را بکشید"
+      >
+        {qcfOffer && (
+          <button
+            onClick={() => setShowQcfSheet(true)}
+            className="absolute top-1 inset-x-3 z-20 min-h-[32px] rounded-xl border border-amber-500/50 bg-amber-50 dark:bg-slate-800 text-xs font-bold text-amber-800 dark:text-amber-300 cursor-pointer"
+          >
+            دانلود فونت مصحف برای نمایش دقیق صفحه
+          </button>
         )}
 
-        {/* فوتر شماره صفحه */}
-        <div className="mt-8 pt-4 border-t border-stone-200 dark:border-slate-800 text-center text-xs font-bold text-slate-400">
-          — {toPersianDigits(currentPage)} —
-        </div>
+        {pages.map((p) => (
+          <div
+            key={p}
+            className={`absolute inset-0 ${pageBg}`}
+            aria-hidden={p !== currentPage}
+            style={{
+              transform: `translate3d(calc(${(currentPage - p) * 100}% + ${dragX}px), 0, 0)`,
+              transition: animating ? 'transform 240ms cubic-bezier(0.22, 0.8, 0.3, 1)' : 'none',
+              boxShadow: dragX !== 0 ? '0 0 22px rgba(0,0,0,0.22)' : 'none',
+              willChange: 'transform',
+            }}
+          >
+            <MushafFrame darkMode={darkMode} />
+            <div className="absolute" style={{ inset: PAGE_PAD }}>
+              <MushafPageBody
+                pageNumber={p}
+                height={Math.max(120, areaH - PAGE_PAD * 2)}
+                surahs={surahs}
+                settings={settings}
+                darkMode={darkMode}
+                selectedVerse={selectedVerse}
+                onSelectVerse={setSelectedVerse}
+                activeVerseKey={activeVerseKey}
+                isCurrent={p === currentPage}
+                onGlyphData={setHasGlyphData}
+              />
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* ناوبری انتهای صفحه: بدون نیاز به برگشت به بالا با فاصله امن برای پلیر صوتی */}
-      <div className="flex items-center gap-3 pb-28 sm:pb-32" dir="rtl">
-        <button
-          onClick={handlePrevPage}
-          disabled={currentPage <= 1 || isLoading}
-          className="flex-1 min-h-[48px] flex items-center justify-center gap-1.5 rounded-2xl border border-amber-300/70 dark:border-slate-700 bg-stone-50 dark:bg-slate-900 text-sm font-bold text-teal-800 dark:text-teal-300 disabled:opacity-40 cursor-pointer active:scale-[0.98] transition-transform shadow-2xs"
-          aria-label="صفحه قبل"
-        >
+      {/* نوار باریک پایین: ناوبری و پرش به صفحه */}
+      <div
+        className="flex items-center justify-between px-3 shrink-0"
+        dir="rtl"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <button onClick={() => slideTo(-1)} disabled={currentPage <= 1} className={navBtn} aria-label="صفحه قبل" title="صفحه قبل">
           <ChevronRight className="w-5 h-5" />
-          <span>صفحه قبل</span>
         </button>
-        <button
-          onClick={handleNextPage}
-          disabled={currentPage >= 604 || isLoading}
-          className="flex-1 min-h-[48px] flex items-center justify-center gap-1.5 rounded-2xl bg-teal-800 text-amber-200 text-sm font-bold disabled:opacity-40 cursor-pointer active:scale-[0.98] transition-transform shadow-xs"
-          aria-label="صفحه بعد"
-        >
-          <span>صفحه بعد</span>
+
+        {isJumpInputOpen ? (
+          <form onSubmit={handleJumpToPage} className="flex items-center gap-1.5 px-2 py-1">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={TOTAL_PAGES}
+              value={jumpPageInput}
+              onChange={(e) => setJumpPageInput(e.target.value)}
+              autoFocus
+              placeholder="۱-۶۰۴"
+              className="w-16 px-1.5 py-0.5 rounded-lg border border-amber-500/50 text-center font-bold text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500"
+            />
+            <button type="submit" className="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold cursor-pointer">
+              برو
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsJumpInputOpen(false)}
+              className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-slate-400 cursor-pointer"
+              aria-label="انصراف"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </form>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setJumpPageInput(String(currentPage));
+                setIsJumpInputOpen(true);
+              }}
+              className="relative w-[52px] h-[38px] flex items-center justify-center cursor-pointer active:scale-95 transition-transform text-amber-700 dark:text-amber-400"
+              title="پرش به صفحهٔ دلخواه"
+              aria-label={`صفحه ${toPersianDigits(currentPage)} از ۶۰۴ - پرش به صفحه`}
+            >
+              <svg viewBox="0 0 44 34" className="absolute inset-0 w-full h-full" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2 6Q12 2 22 6Q32 2 42 6V28Q32 24 22 28Q12 24 2 28Z" />
+                <path d="M22 6V28" opacity="0.6" />
+              </svg>
+              <span className="relative text-[12px] font-extrabold text-teal-900 dark:text-amber-200 tabular-nums" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
+                {toPersianDigits(currentPage)}
+              </span>
+            </button>
+            <button
+              onClick={() => setFocusMode((f) => !f)}
+              aria-pressed={focusMode}
+              className={`w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:scale-95 transition-all ${
+                focusMode
+                  ? 'bg-teal-800 text-amber-200'
+                  : 'bg-sky-100 text-sky-700 dark:bg-slate-800 dark:text-sky-300'
+              }`}
+              title={focusMode ? 'نمایش نوار بالا' : 'حالت تمرکز (مخفی‌کردن نوار بالا)'}
+              aria-label={focusMode ? 'نمایش نوار بالا' : 'حالت تمرکز'}
+            >
+              {focusMode ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          </div>
+        )}
+
+        <button onClick={() => slideTo(1)} disabled={currentPage >= TOTAL_PAGES} className={navBtn} aria-label="صفحه بعد" title="صفحه بعد">
           <ChevronLeft className="w-5 h-5" />
         </button>
       </div>
@@ -779,8 +939,6 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
         ];
         return (
           <>
-            {/* فضای خالی تا آیه‌های پایین صفحه زیر منو نمانند */}
-            <div className="h-80" aria-hidden="true" />
             <div
               role="dialog"
               aria-label="منوی آیه"
