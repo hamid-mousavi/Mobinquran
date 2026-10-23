@@ -54,6 +54,8 @@ const TOTAL_PAGES = 604;
 const PAGE_PAD = MUSHAF_FRAME_W + 3;
 /** ارتفاع سطر سرسوره نسبت به سطر عادی */
 const HEADER_WEIGHT = 1.7;
+/** ضخامت حروف مصحف (کنتور دور گلیف‌ها): ۰ = نازک مثل قبل، ۰٫۰۱۵em = مقدار فعلی؛ ۰٫۰۲۵em = پررنگ‌تر، بیشتر = ضخیم‌تر */
+const GLYPH_BOLDNESS = '0.015em';
 
 interface MushafPageBodyProps {
   pageNumber: number;
@@ -257,7 +259,7 @@ const MushafPageBody: React.FC<MushafPageBodyProps> = ({
                     key={line.line}
                     data-mline="bismillah"
                     className={`text-center select-none w-full max-w-full overflow-hidden flex items-center justify-center ${darkMode ? 'text-amber-300/90' : 'text-amber-800'}`}
-                    style={{ height: `${rowH}px`, lineHeight: 1.2 }}
+                    style={{ height: `${rowH}px`, lineHeight: 1.2, WebkitTextStroke: GLYPH_BOLDNESS }}
                   >
                     {qcfReady && first.c && first.f ? (
                       <span style={{ fontFamily: `'${first.f}'` }}>{first.c}</span>
@@ -280,6 +282,7 @@ const MushafPageBody: React.FC<MushafPageBodyProps> = ({
                     fontSize: `${fit.scales[line.line] ?? 1}em`,
                     justifyContent: isCentered ? 'center' : 'space-between',
                     gap: isMobile ? '0.16em' : '0.28em',
+                    WebkitTextStroke: GLYPH_BOLDNESS,
                     lineHeight: 1.2,
                     height: `${rowH}px`,
                   }}
@@ -532,6 +535,10 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
     };
   }, [focusMode]);
   const [areaH, setAreaH] = useState(560);
+  const [areaW, setAreaW] = useState(360);
+  // حالت افقی: صفحه با نسبت عمودی طبیعی‌اش کشیده می‌شود و داخل قاب اسکرول عمودی دارد
+  const landscape = areaW > areaH * 1.1;
+  const pageH = landscape ? Math.round(areaW * 1.55) : areaH;
 
   useEffect(() => {
     const html = document.documentElement;
@@ -603,9 +610,13 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
   useLayoutEffect(() => {
     const el = areaRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setAreaH(el.clientHeight));
+    const apply = () => {
+      setAreaH(el.clientHeight);
+      setAreaW(el.clientWidth);
+    };
+    const ro = new ResizeObserver(apply);
     ro.observe(el);
-    setAreaH(el.clientHeight);
+    apply();
     return () => ro.disconnect();
   }, []);
 
@@ -786,7 +797,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           }
         }}
         className="relative flex-1 min-h-0 w-full overflow-hidden outline-none select-none"
-        style={{ touchAction: 'none' }}
+        style={{ touchAction: landscape ? 'pan-y' : 'none' }}
         aria-label="نمای صفحه مصحف — برای ورق زدن، انگشت خود را بکشید"
       >
         {qcfOffer && (
@@ -798,6 +809,11 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
           </button>
         )}
 
+        <div
+          className="absolute inset-0"
+          style={{ overflowX: 'hidden', overflowY: landscape ? 'auto' : 'hidden', overscrollBehavior: 'contain' }}
+        >
+        <div className="relative w-full" style={{ height: landscape ? pageH : '100%' }}>
         {pages.map((p) => (
           <div
             key={p}
@@ -814,7 +830,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
             <div className="absolute" style={{ inset: PAGE_PAD }}>
               <MushafPageBody
                 pageNumber={p}
-                height={Math.max(120, areaH - PAGE_PAD * 2)}
+                height={Math.max(120, pageH - PAGE_PAD * 2)}
                 surahs={surahs}
                 settings={settings}
                 darkMode={darkMode}
@@ -827,6 +843,8 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
             </div>
           </div>
         ))}
+        </div>
+        </div>
       </div>
 
       {/* نوار باریک پایین: ناوبری و پرش به صفحه */}
