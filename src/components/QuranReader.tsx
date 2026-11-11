@@ -8,6 +8,7 @@ import { QuranicSurahBanner } from './QuranicOrnament';
 import { toPersianDigits } from '../utils/textNormalization';
 import { recordUserActivity } from '../services/activityTracker';
 import { StarBadge } from './StarBadge';
+import { mapVisibleWordIndexToTimingIndex, type ActiveWordRange } from '../services/recitationWordTimings';
 
 export interface VerseCandidate {
   verse: Verse;
@@ -94,6 +95,7 @@ interface QuranReaderProps {
   darkMode: boolean;
   bookmarkedVerseIds: Set<number>;
   activePlayingVerseNumber: number | null;
+  activePlayingWordRange?: ActiveWordRange | null;
   isLoading?: boolean;
   loadError?: string | null;
   onRetry?: () => void;
@@ -106,6 +108,43 @@ interface QuranReaderProps {
   onInitialScrollHandled?: () => void;
   onNextSurah?: () => void;
   onPrevSurah?: () => void;
+}
+
+export function renderArabicWithActiveWord(verse: Verse, activeRange: ActiveWordRange | null): React.ReactNode {
+  if (!activeRange || activeRange.surahId !== verse.surahId || activeRange.verseNumber !== verse.verseNumber) {
+    return verse.textArabic;
+  }
+
+  const parts = verse.textArabic.split(/(\s+)/u);
+  let textWordIndex = 0;
+
+  return parts.map((part, partIndex) => {
+    if (!part || /^\s+$/u.test(part)) return part;
+
+    // نشانه‌های وقف و تزیین، کلمهٔ مستقل نیستند و در دادهٔ زمان‌بندی هم شمرده نشده‌اند.
+    if (!part.replace(/[\u06D6-\u06ED]/gu, '').trim()) return part;
+
+    const timingWordIndex = mapVisibleWordIndexToTimingIndex(
+      verse.surahId,
+      verse.verseNumber,
+      textWordIndex++
+    );
+
+    const isActive = activeRange?.surahId === verse.surahId
+      && activeRange.verseNumber === verse.verseNumber
+      && timingWordIndex >= activeRange.wordStartIndex
+      && timingWordIndex < activeRange.wordEndIndex;
+
+    return (
+      <span
+        key={partIndex}
+        aria-current={isActive ? 'true' : undefined}
+        className={isActive ? 'rounded-sm bg-amber-300/90 text-slate-950 shadow-[0_0_0_2px_rgba(252,211,77,0.35)]' : undefined}
+      >
+        {part}
+      </span>
+    );
+  });
 }
 
 // ثبت شنوندگان سراسری اسکرول (برای هماهنگی بین کامپوننت‌ها)
@@ -123,6 +162,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
   darkMode,
   bookmarkedVerseIds,
   activePlayingVerseNumber,
+  activePlayingWordRange = null,
   isLoading,
   loadError,
   onRetry,
@@ -611,7 +651,7 @@ export const QuranReader: React.FC<QuranReaderProps> = ({
                   }}
                   dir="rtl"
                 >
-                  {verse.textArabic}
+                  {renderArabicWithActiveWord(verse, activePlayingWordRange)}
                   {/* نشان سنتی انتهای آیه درون متن عربی بدون پرانتز */}
                   <AyahEndMarker verseNumber={verse.verseNumber} isCurrentlyPlaying={isCurrentlyPlaying} />
                 </div>

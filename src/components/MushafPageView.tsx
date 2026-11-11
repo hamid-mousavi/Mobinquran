@@ -5,7 +5,8 @@ import { getArabicFontFamily } from '../utils/fontHelper';
 import { shareAyah } from '../utils/shareAyah';
 import { QuranService } from '../services/quranService';
 import { QuranicSurahBanner } from './QuranicOrnament';
-import { AyahEndMarker } from './QuranReader';
+import { AyahEndMarker, renderArabicWithActiveWord } from './QuranReader';
+import { mapVisibleWordIndexToTimingIndex, type ActiveWordRange } from '../services/recitationWordTimings';
 import { toPersianDigits } from '../utils/textNormalization';
 import { loadMushafPage } from '../services/mushafLayoutService';
 import type { MushafPageData } from '../types/mushafLayout';
@@ -33,6 +34,7 @@ interface MushafPageViewProps {
   onPlayVerseAudio: (verseNumber: number, surahId?: number) => void;
   /** کلید آیه‌ی در حال پخش (مثل «2:255») برای هایلایت هماهنگ با پلیر */
   activeVerseKey?: string | null;
+  activePlayingWordRange?: ActiveWordRange | null;
   onPageChange: (newPage: number, surahId?: number, verseNumber?: number) => void;
 }
 
@@ -66,6 +68,7 @@ interface MushafPageBodyProps {
   selectedVerse: Verse | null;
   onSelectVerse: (verse: Verse | null) => void;
   activeVerseKey: string | null;
+  activePlayingWordRange: ActiveWordRange | null;
   isCurrent: boolean;
   onGlyphData: (has: boolean) => void;
 }
@@ -83,6 +86,7 @@ const MushafPageBody: React.FC<MushafPageBodyProps> = ({
   selectedVerse,
   onSelectVerse,
   activeVerseKey,
+  activePlayingWordRange,
   isCurrent,
   onGlyphData,
 }) => {
@@ -100,6 +104,9 @@ const MushafPageBody: React.FC<MushafPageBodyProps> = ({
   const units = Math.max(PAGE_LINES, (layoutPage?.lines.length ?? PAGE_LINES) + headerCount * (HEADER_WEIGHT - 1));
   const rowH = Math.max(18, height / units);
   const headH = rowH * HEADER_WEIGHT;
+  const activeWordVerseKey = activePlayingWordRange
+    ? `${activePlayingWordRange.surahId}:${activePlayingWordRange.verseNumber}`
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -311,6 +318,13 @@ const MushafPageBody: React.FC<MushafPageBodyProps> = ({
                     const verse = w.verse ? verseByKey.get(w.verse) : undefined;
                     const isSel = !!verse && selectedVerse?.id === verse.id;
                     const isPlaying = !!w.verse && w.verse === activeVerseKey;
+                    const timingWordIndex = verse && typeof w.p === 'number'
+                      ? mapVisibleWordIndexToTimingIndex(verse.surahId, verse.verseNumber, w.p - 1)
+                      : -1;
+                    const isPlayingWord = !!verse && !!activePlayingWordRange
+                      && w.verse === activeWordVerseKey
+                      && timingWordIndex >= activePlayingWordRange.wordStartIndex
+                      && timingWordIndex < activePlayingWordRange.wordEndIndex;
                     const hit = {
                       onClick: verse ? () => onSelectVerse(isSel ? null : verse) : undefined,
                     };
@@ -320,8 +334,11 @@ const MushafPageBody: React.FC<MushafPageBodyProps> = ({
                           key={idx}
                           {...hit}
                           data-verse={w.verse}
+                          aria-current={isPlayingWord ? 'true' : undefined}
                           className={`cursor-pointer rounded-md transition-colors ${
-                            isPlaying
+                            isPlayingWord
+                              ? 'bg-amber-300/90 text-slate-950 shadow-[0_0_0_2px_rgba(252,211,77,0.35)]'
+                              : isPlaying
                               ? 'bg-teal-400/35 dark:bg-teal-400/25'
                               : isSel
                                 ? 'bg-amber-300/40 dark:bg-amber-500/30'
@@ -476,7 +493,7 @@ const MushafPageBody: React.FC<MushafPageBodyProps> = ({
                           }`}
                           title={`سوره ${group.surah.nameArabic} - آیه ${v.verseNumber} (کلیک جهت مشاهده ترجمه و تفاسیر)`}
                         >
-                          {v.textArabic}
+                          {renderArabicWithActiveWord(v, activePlayingWordRange)}
                           <AyahEndMarker verseNumber={v.verseNumber} isCurrentlyPlaying={isSelected} />
                           {renderSajdaMark(v)}
                         </span>
@@ -503,6 +520,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
   onOpenAIForVerse,
   onPlayVerseAudio,
   activeVerseKey = null,
+  activePlayingWordRange = null,
   onPageChange,
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(initialPageNumber || 1);
@@ -837,6 +855,7 @@ export const MushafPageView: React.FC<MushafPageViewProps> = ({
                 selectedVerse={selectedVerse}
                 onSelectVerse={setSelectedVerse}
                 activeVerseKey={activeVerseKey}
+                activePlayingWordRange={activePlayingWordRange}
                 isCurrent={p === currentPage}
                 onGlyphData={setHasGlyphData}
               />

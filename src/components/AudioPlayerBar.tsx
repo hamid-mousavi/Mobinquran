@@ -54,6 +54,12 @@ import {
   describeAudioError,
 } from '../services/audioErrorLog';
 import { toPersianDigits } from '../utils/textNormalization';
+import {
+  findActiveWordRange,
+  loadWordTimingSegments,
+  type ActiveWordRange,
+  type WordTimingSegment,
+} from '../services/recitationWordTimings';
 
 interface AudioPlayerBarProps {
   currentSurah: Surah;
@@ -67,6 +73,7 @@ interface AudioPlayerBarProps {
   allSurahs?: { id: number; nameArabic: string; namePersian?: string; versesCount?: number }[];
   hasBottomNav?: boolean;
   autoPlay?: boolean;
+  onActiveWordChange?: (range: ActiveWordRange | null) => void;
 }
 
 export type { ReciterId } from '../services/audioSources';
@@ -202,6 +209,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   allSurahs = [],
   hasBottomNav = true,
   autoPlay = true,
+  onActiveWordChange,
 }) => {
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [selectedReciterId, setSelectedReciterId] = useState<ReciterId>(() => {
@@ -245,6 +253,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     }
   }, [selectedReciterId]);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [wordTimingSegments, setWordTimingSegments] = useState<WordTimingSegment[] | null>(null);
 
   // مودال‌ها و کشوهای دسته‌بندی‌شده
   const [showReciterModal, setShowReciterModal] = useState(false);
@@ -268,10 +277,20 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   // مسیر پخش: مستقیم یا پروکسی سرور (برای شبکه‌هایی که دامنهٔ منبع صوت در آن‌ها فیلتر/کند است)
   const forceRouteRef = useRef<'direct' | 'proxy' | null>(null);
   const lastRouteKeyRef = useRef('');
-  const currentRouteRef = useRef<{ viaProxy: boolean; host: AudioSource['host'] | null; sourceIndex: number | null }>({
+  const currentRouteRef = useRef<{
+    viaProxy: boolean;
+    host: AudioSource['host'] | null;
+    sourceIndex: number | null;
+    reciterId: ReciterId | null;
+    surahId: number | null;
+    verseNumber: number | null;
+  }>({
     viaProxy: false,
     host: null,
     sourceIndex: null,
+    reciterId: null,
+    surahId: null,
+    verseNumber: null,
   });
   const triedRoutesRef = useRef<{ key: string; routes: Set<string> }>({ key: '', routes: new Set() });
   const handleAudioErrorRef = useRef<() => void>(() => {});
@@ -279,6 +298,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   const isPlayingRef = useRef(autoPlay);
   const activeBlobUrlRef = useRef<string | null>(null);
   const currentRawUrlRef = useRef<string | null>(null);
+  const lastActiveWordKeyRef = useRef('');
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -342,6 +362,23 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   const currentPlayingVerseNumber = activeVerseNumber || (verses.length > 0 ? verses[0].verseNumber : 1);
   const currentSources = getSourcesForReciter(selectedReciterId);
   const currentAudioSource = currentSources[Math.min(sourceIndex, currentSources.length - 1)];
+
+  useEffect(() => {
+    let cancelled = false;
+    setWordTimingSegments(null);
+    lastActiveWordKeyRef.current = '';
+    onActiveWordChange?.(null);
+
+    if (selectedReciterId !== 'husary') return;
+
+    loadWordTimingSegments(selectedReciterId, currentSurah.id, currentPlayingVerseNumber).then((segments) => {
+      if (!cancelled) setWordTimingSegments(segments);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, onActiveWordChange]);
 
   // Media Session API — کنترل از قفل صفحه / اعلان
   useEffect(() => {
@@ -458,7 +495,14 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       }
 
       currentRawUrlRef.current = playableUrl;
-      currentRouteRef.current = { viaProxy: !!viaProxy, host: host ?? null, sourceIndex: matchedIndex };
+      currentRouteRef.current = {
+        viaProxy: !!viaProxy,
+        host: host ?? null,
+        sourceIndex: matchedIndex,
+        reciterId: selectedReciterId,
+        surahId: currentSurah.id,
+        verseNumber: currentPlayingVerseNumber,
+      };
 
       if (matchedIndex !== sourceIndex) {
         setWorkingSourceIndex(selectedReciterId, matchedIndex);
@@ -660,9 +704,33 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   };
 
   const handleTimeUpdate = () => {
-    if (audioRef.current && audioRef.current.duration) {
-      const progress = (audioRef.current.currentTime / audioRef.current.duration) * 100;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (audio.duration) {
+      const progress = (audio.currentTime / audio.duration) * 100;
       setAudioProgress(progress);
+    }
+
+    const route = currentRouteRef.current;
+    const activeRange = selectedReciterId === 'husary'
+      && route.reciterId === selectedReciterId
+      && route.surahId === currentSurah.id
+      && route.verseNumber === currentPlayingVerseNumber
+      && route.sourceIndex === 0
+      ? findActiveWordRange(
+          wordTimingSegments,
+          currentSurah.id,
+          currentPlayingVerseNumber,
+          audio.currentTime * 1000
+        )
+      : null;
+    const activeKey = activeRange
+      ? `${activeRange.surahId}:${activeRange.verseNumber}:${activeRange.wordStartIndex}:${activeRange.wordEndIndex}`
+      : '';
+    if (activeKey !== lastActiveWordKeyRef.current) {
+      lastActiveWordKeyRef.current = activeKey;
+      onActiveWordChange?.(activeRange);
     }
   };
 
@@ -673,6 +741,14 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     // ۱. بررسی فوری مجدد کش آفلاین برای قاری جاری
     const cached = await getCachedAudioBlobUrl(selectedReciterId, currentSurah.id, currentPlayingVerseNumber);
     if (cached && audioRef.current) {
+      currentRouteRef.current = {
+        viaProxy: false,
+        host: null,
+        sourceIndex: cached.sourceIndex,
+        reciterId: selectedReciterId,
+        surahId: currentSurah.id,
+        verseNumber: currentPlayingVerseNumber,
+      };
       const oldBlob = activeBlobUrlRef.current;
       activeBlobUrlRef.current = cached.blobUrl;
       audioRef.current.src = cached.blobUrl;

@@ -16,6 +16,7 @@ import { QuranService } from './services/quranService';
 import { initProgressStore } from './services/progress/progressStore';
 import { flushPageView, trackPageView } from './services/khatm/pageViewTracker';
 import { loadMushafLayoutPack } from './services/mushafLayoutService';
+import type { ActiveWordRange } from './services/recitationWordTimings';
 import { ALL_SURAHS, getJuzStartInfo } from './data/surahs';
 import { Surah, Verse, AppSettings, ViewMode } from './types';
 import { MushafPageData } from './types/mushafLayout';
@@ -124,6 +125,7 @@ export default function App() {
   // ترتیل صوتی و پلیر همگام
   const [isAudioPlayerOpen, setIsAudioPlayerOpen] = useState(false);
   const [activePlayingVerseNumber, setActivePlayingVerseNumber] = useState<number | null>(null);
+  const [activePlayingWordRange, setActivePlayingWordRange] = useState<ActiveWordRange | null>(null);
 
   // اسکرول خودکار صفحه (مطالعه پیوسته)
   const [isAutoScrollActive, setIsAutoScrollActive] = useState(false);
@@ -308,6 +310,7 @@ export default function App() {
   const handleOpenMemorization = () => {
     setIsAudioPlayerOpen(false);
     setActivePlayingVerseNumber(null);
+    setActivePlayingWordRange(null);
     setPreviousPage(activePage === 'home' ? 'home' : 'reader');
     setActivePage('memorization');
   };
@@ -315,6 +318,7 @@ export default function App() {
   const handleOpenStories = () => {
     setIsAudioPlayerOpen(false);
     setActivePlayingVerseNumber(null);
+    setActivePlayingWordRange(null);
     setPreviousPage(activePage === 'home' ? 'home' : 'reader');
     setActivePage('stories');
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -714,6 +718,7 @@ export default function App() {
       if (target) setCurrentSurah(target);
     }
     setActivePlayingVerseNumber(verseNumber);
+    setActivePlayingWordRange(null);
     setIsAudioPlayerOpen(true);
     recordUserActivity('listen');
   };
@@ -727,6 +732,7 @@ export default function App() {
     setCurrentSurah(nextSurah);
     setCurrentMushafPage(nextSurah.startPage || 1);
     setActivePlayingVerseNumber(1);
+    setActivePlayingWordRange(null);
   };
 
   // ناوبری سوره بعد و قبل با اسلاید لمسی در صفحه قرائت
@@ -934,6 +940,7 @@ export default function App() {
           darkMode={settings.darkMode}
           bookmarkedVerseIds={bookmarkedVerseIds}
           activePlayingVerseNumber={activePlayingVerseNumber}
+          activePlayingWordRange={activePlayingWordRange}
           isLoading={isLoadingVerses}
           loadError={loadVersesError}
           onRetry={handleRetryLoading}
@@ -973,6 +980,7 @@ export default function App() {
               ? `${currentSurah.id}:${activePlayingVerseNumber}`
               : null
           }
+          activePlayingWordRange={activePlayingWordRange}
           onPageChange={(p, surahId, verseNumber) => {
             trackPageView(p);
             setCurrentMushafPage(p);
@@ -998,14 +1006,17 @@ export default function App() {
           currentSurah={currentSurah}
           verses={verses}
           activeVerseNumber={activePlayingVerseNumber}
+          onActiveWordChange={setActivePlayingWordRange}
           autoPlay={true}
           onSelectVerseToPlay={(vNum) => {
             setActivePlayingVerseNumber(vNum);
+            setActivePlayingWordRange(null);
             setTimeout(() => requestQuranScrollToVerse(vNum), 60);
           }}
           onClose={() => {
             setIsAudioPlayerOpen(false);
             setActivePlayingVerseNumber(null);
+            setActivePlayingWordRange(null);
           }}
           onAutoAdvanceToNextSurah={handleAudioAutoAdvanceToNextSurah}
           onJumpToSurah={(surahId) => {
