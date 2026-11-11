@@ -43,10 +43,12 @@ interface WordTimingDataset {
 
 const timingIndexPromises: Partial<Record<ReciterId, Promise<Map<string, WordTimingSegment[]>>>> = {};
 
-async function loadTimingIndex(reciterId: 'husary' | 'minshawi'): Promise<Map<string, WordTimingSegment[]>> {
-  const file = reciterId === 'husary'
-    ? 'husary-64kbps.json'
-    : 'minshawi-murattal-128kbps.json';
+async function loadTimingIndex(reciterId: 'husary' | 'minshawi' | 'abdulbasit'): Promise<Map<string, WordTimingSegment[]>> {
+  const file = {
+    husary: 'husary-64kbps.json',
+    minshawi: 'minshawi-murattal-128kbps.json',
+    abdulbasit: 'abdul-basit-murattal-64kbps.json',
+  }[reciterId];
   if (!timingIndexPromises[reciterId]) {
     timingIndexPromises[reciterId] = fetch(`/data/word-timings/${file}`)
       .then((response) => {
@@ -70,7 +72,8 @@ async function loadTimingIndex(reciterId: 'husary' | 'minshawi'): Promise<Map<st
 
 export function hasWordTimingsForSource(reciterId: ReciterId, sourceIndex: number | null): boolean {
   return (reciterId === 'husary' && sourceIndex === 0)
-    || (reciterId === 'minshawi' && sourceIndex === 1);
+    || (reciterId === 'minshawi' && sourceIndex === 1)
+    || (reciterId === 'abdulbasit' && (sourceIndex === 0 || sourceIndex === 1));
 }
 
 export async function loadWordTimingSegments(
@@ -78,7 +81,7 @@ export async function loadWordTimingSegments(
   surahId: number,
   verseNumber: number
 ): Promise<WordTimingSegment[] | null> {
-  if (reciterId !== 'husary' && reciterId !== 'minshawi') return null;
+  if (reciterId !== 'husary' && reciterId !== 'minshawi' && reciterId !== 'abdulbasit') return null;
 
   try {
     const index = await loadTimingIndex(reciterId);

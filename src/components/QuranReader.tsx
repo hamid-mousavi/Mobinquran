@@ -140,7 +140,7 @@ export function renderArabicWithActiveWord(verse: Verse, activeRange: ActiveWord
       <span
         key={partIndex}
         aria-current={isActive ? 'true' : undefined}
-        className={isActive ? 'rounded-sm bg-amber-300/90 text-slate-950 shadow-[0_0_0_2px_rgba(252,211,77,0.35)]' : undefined}
+        className={isActive ? 'text-amber-700 dark:text-amber-300 transition-colors' : undefined}
       >
         {part}
       </span>

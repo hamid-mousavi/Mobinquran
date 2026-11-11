@@ -131,6 +131,7 @@ export interface AppSettings {
   darkMode: boolean;
   themeColor: 'emerald' | 'amber' | 'blue';
   defaultViewMode: ViewMode;
+  wordByWordHighlightEnabled?: boolean;
   lineHeight?: LineHeight;
 }
 

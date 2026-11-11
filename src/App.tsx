@@ -62,6 +62,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   darkMode: getInitialSystemDarkMode(),
   themeColor: 'emerald',
   defaultViewMode: 'verse-by-verse',
+  wordByWordHighlightEnabled: true,
   lineHeight: 'relaxed',
 };
 
@@ -940,7 +941,7 @@ export default function App() {
           darkMode={settings.darkMode}
           bookmarkedVerseIds={bookmarkedVerseIds}
           activePlayingVerseNumber={activePlayingVerseNumber}
-          activePlayingWordRange={activePlayingWordRange}
+          activePlayingWordRange={settings.wordByWordHighlightEnabled === false ? null : activePlayingWordRange}
           isLoading={isLoadingVerses}
           loadError={loadVersesError}
           onRetry={handleRetryLoading}
@@ -980,7 +981,7 @@ export default function App() {
               ? `${currentSurah.id}:${activePlayingVerseNumber}`
               : null
           }
-          activePlayingWordRange={activePlayingWordRange}
+          activePlayingWordRange={settings.wordByWordHighlightEnabled === false ? null : activePlayingWordRange}
           onPageChange={(p, surahId, verseNumber) => {
             trackPageView(p);
             setCurrentMushafPage(p);
@@ -1006,6 +1007,7 @@ export default function App() {
           currentSurah={currentSurah}
           verses={verses}
           activeVerseNumber={activePlayingVerseNumber}
+          wordByWordEnabled={settings.wordByWordHighlightEnabled !== false}
           onActiveWordChange={setActivePlayingWordRange}
           autoPlay={true}
           onSelectVerseToPlay={(vNum) => {

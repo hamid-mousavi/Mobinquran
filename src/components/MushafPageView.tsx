@@ -337,7 +337,7 @@ const MushafPageBody: React.FC<MushafPageBodyProps> = ({
                           aria-current={isPlayingWord ? 'true' : undefined}
                           className={`cursor-pointer rounded-md transition-colors ${
                             isPlayingWord
-                              ? 'bg-amber-300/90 text-slate-950 shadow-[0_0_0_2px_rgba(252,211,77,0.35)]'
+                              ? 'text-amber-700 dark:text-amber-300'
                               : isPlaying
                               ? 'bg-teal-400/35 dark:bg-teal-400/25'
                               : isSel

@@ -74,6 +74,7 @@ interface AudioPlayerBarProps {
   allSurahs?: { id: number; nameArabic: string; namePersian?: string; versesCount?: number }[];
   hasBottomNav?: boolean;
   autoPlay?: boolean;
+  wordByWordEnabled?: boolean;
   onActiveWordChange?: (range: ActiveWordRange | null) => void;
 }
 
@@ -210,6 +211,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   allSurahs = [],
   hasBottomNav = true,
   autoPlay = true,
+  wordByWordEnabled = true,
   onActiveWordChange,
 }) => {
   const [isPlaying, setIsPlaying] = useState(autoPlay);
@@ -305,6 +307,11 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
+  useEffect(() => {
+    lastActiveWordKeyRef.current = '';
+    if (!wordByWordEnabled) onActiveWordChange?.(null);
+  }, [wordByWordEnabled, onActiveWordChange]);
+
   // پخش فوری هنگام تپ روی آیکون پخش آیه
   useEffect(() => {
     if (activeVerseNumber !== null && autoPlay) {
@@ -370,7 +377,8 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     lastActiveWordKeyRef.current = '';
     onActiveWordChange?.(null);
 
-    if (selectedReciterId !== 'husary' && selectedReciterId !== 'minshawi') return;
+    if (!wordByWordEnabled) return;
+    if (selectedReciterId !== 'husary' && selectedReciterId !== 'minshawi' && selectedReciterId !== 'abdulbasit') return;
 
     loadWordTimingSegments(selectedReciterId, currentSurah.id, currentPlayingVerseNumber).then((segments) => {
       if (!cancelled) setWordTimingSegments(segments);
@@ -379,7 +387,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, onActiveWordChange]);
+  }, [currentSurah.id, currentPlayingVerseNumber, selectedReciterId, wordByWordEnabled, onActiveWordChange]);
 
   // Media Session API — کنترل از قفل صفحه / اعلان
   useEffect(() => {
@@ -714,7 +722,8 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     }
 
     const route = currentRouteRef.current;
-    const activeRange = hasWordTimingsForSource(selectedReciterId, route.sourceIndex)
+    const activeRange = wordByWordEnabled
+      && hasWordTimingsForSource(selectedReciterId, route.sourceIndex)
       && route.reciterId === selectedReciterId
       && route.surahId === currentSurah.id
       && route.verseNumber === currentPlayingVerseNumber

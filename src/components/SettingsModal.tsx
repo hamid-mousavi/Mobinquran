@@ -305,6 +305,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
+          {/* سوییچ هایلایت کلمه در حال قرائت */}
+          <div className="flex items-center justify-between p-3 rounded-xl border border-amber-300/70 dark:border-slate-800 bg-white/60 dark:bg-transparent">
+            <div>
+              <div className="font-semibold text-sm">کلمه‌به‌کلمه</div>
+              <div className="text-xs text-slate-400">هایلایت واژهٔ در حال قرائت برای قاری‌های پشتیبانی‌شده</div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.wordByWordHighlightEnabled !== false}
+                onChange={(e) => onUpdateSettings({ wordByWordHighlightEnabled: e.target.checked })}
+                className="sr-only peer"
+                aria-label="فعال‌سازی هایلایت کلمه‌به‌کلمه"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+            </label>
+          </div>
+
           {/* سوییچ نمایش ترجمه */}
           <div className="flex items-center justify-between p-3 rounded-xl border border-amber-300/70 dark:border-slate-800 bg-white/60 dark:bg-transparent">
             <div>
