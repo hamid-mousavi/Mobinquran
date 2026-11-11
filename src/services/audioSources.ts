@@ -502,7 +502,8 @@ export const getAudioSourceUrl = (
 const workingSourceIndices: Partial<Record<ReciterId, number>> = {};
 
 export const getWorkingSourceIndex = (reciterId: ReciterId): number => {
-  return workingSourceIndices[reciterId] ?? 0;
+  // زمان‌بندی واژه‌های منشاوی با نسخهٔ Murattal 128kbps آینهٔ Maqra منطبق است.
+  return workingSourceIndices[reciterId] ?? (reciterId === 'minshawi' ? 1 : 0);
 };
 
 export const setWorkingSourceIndex = (reciterId: ReciterId, index: number): void => {

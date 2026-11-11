@@ -125,6 +125,7 @@ export function renderArabicWithActiveWord(verse: Verse, activeRange: ActiveWord
     if (!part.replace(/[\u06D6-\u06ED]/gu, '').trim()) return part;
 
     const timingWordIndex = mapVisibleWordIndexToTimingIndex(
+      activeRange.reciterId,
       verse.surahId,
       verse.verseNumber,
       textWordIndex++

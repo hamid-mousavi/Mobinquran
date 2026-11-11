@@ -56,6 +56,7 @@ import {
 import { toPersianDigits } from '../utils/textNormalization';
 import {
   findActiveWordRange,
+  hasWordTimingsForSource,
   loadWordTimingSegments,
   type ActiveWordRange,
   type WordTimingSegment,
@@ -369,7 +370,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     lastActiveWordKeyRef.current = '';
     onActiveWordChange?.(null);
 
-    if (selectedReciterId !== 'husary') return;
+    if (selectedReciterId !== 'husary' && selectedReciterId !== 'minshawi') return;
 
     loadWordTimingSegments(selectedReciterId, currentSurah.id, currentPlayingVerseNumber).then((segments) => {
       if (!cancelled) setWordTimingSegments(segments);
@@ -713,12 +714,12 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     }
 
     const route = currentRouteRef.current;
-    const activeRange = selectedReciterId === 'husary'
+    const activeRange = hasWordTimingsForSource(selectedReciterId, route.sourceIndex)
       && route.reciterId === selectedReciterId
       && route.surahId === currentSurah.id
       && route.verseNumber === currentPlayingVerseNumber
-      && route.sourceIndex === 0
       ? findActiveWordRange(
+          selectedReciterId,
           wordTimingSegments,
           currentSurah.id,
           currentPlayingVerseNumber,

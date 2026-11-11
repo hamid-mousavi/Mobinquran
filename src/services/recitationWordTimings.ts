@@ -8,6 +8,7 @@ export type WordTimingSegment = readonly [
 ];
 
 export interface ActiveWordRange {
+  reciterId: ReciterId;
   surahId: number;
   verseNumber: number;
   wordStartIndex: number;
@@ -15,13 +16,17 @@ export interface ActiveWordRange {
 }
 
 export function mapVisibleWordIndexToTimingIndex(
+  reciterId: ReciterId,
   surahId: number,
   verseNumber: number,
   visibleWordIndex: number
 ): number {
-  // در رعد:۱ و حجر:۱، منبع زمان‌بندی حروف مقطعه را به چند واژهٔ صوتی شکسته است.
-  if ((surahId === 12 || surahId === 15) && verseNumber === 1 && visibleWordIndex > 0) {
-    return visibleWordIndex + 1;
+  // زمان‌بندی حصری و منشاوی در چند آیه، حروف مقطعه را جدا از متن نمایشی می‌شمارند.
+  if (verseNumber !== 1 || visibleWordIndex === 0) return visibleWordIndex;
+  if (reciterId === 'husary' && (surahId === 12 || surahId === 15)) return visibleWordIndex + 1;
+  if (reciterId === 'minshawi') {
+    if (surahId === 10) return visibleWordIndex + 2;
+    if (surahId === 14 || surahId === 15) return visibleWordIndex + 1;
   }
   return visibleWordIndex;
 }
@@ -36,11 +41,14 @@ interface WordTimingDataset {
   verses: VerseWordTiming[];
 }
 
-let husaryTimingIndexPromise: Promise<Map<string, WordTimingSegment[]>> | null = null;
+const timingIndexPromises: Partial<Record<ReciterId, Promise<Map<string, WordTimingSegment[]>>>> = {};
 
-async function loadHusaryTimingIndex(): Promise<Map<string, WordTimingSegment[]>> {
-  if (!husaryTimingIndexPromise) {
-    husaryTimingIndexPromise = fetch('/data/word-timings/husary-64kbps.json')
+async function loadTimingIndex(reciterId: 'husary' | 'minshawi'): Promise<Map<string, WordTimingSegment[]>> {
+  const file = reciterId === 'husary'
+    ? 'husary-64kbps.json'
+    : 'minshawi-murattal-128kbps.json';
+  if (!timingIndexPromises[reciterId]) {
+    timingIndexPromises[reciterId] = fetch(`/data/word-timings/${file}`)
       .then((response) => {
         if (!response.ok) throw new Error(`Word timing data request failed: ${response.status}`);
         return response.json() as Promise<WordTimingDataset>;
@@ -52,12 +60,17 @@ async function loadHusaryTimingIndex(): Promise<Map<string, WordTimingSegment[]>
         ])
       ))
       .catch((error) => {
-        husaryTimingIndexPromise = null;
+        delete timingIndexPromises[reciterId];
         throw error;
       });
   }
 
-  return husaryTimingIndexPromise;
+  return timingIndexPromises[reciterId]!;
+}
+
+export function hasWordTimingsForSource(reciterId: ReciterId, sourceIndex: number | null): boolean {
+  return (reciterId === 'husary' && sourceIndex === 0)
+    || (reciterId === 'minshawi' && sourceIndex === 1);
 }
 
 export async function loadWordTimingSegments(
@@ -65,10 +78,10 @@ export async function loadWordTimingSegments(
   surahId: number,
   verseNumber: number
 ): Promise<WordTimingSegment[] | null> {
-  if (reciterId !== 'husary') return null;
+  if (reciterId !== 'husary' && reciterId !== 'minshawi') return null;
 
   try {
-    const index = await loadHusaryTimingIndex();
+    const index = await loadTimingIndex(reciterId);
     return index.get(`${surahId}:${verseNumber}`) ?? null;
   } catch {
     return null;
@@ -76,6 +89,7 @@ export async function loadWordTimingSegments(
 }
 
 export function findActiveWordRange(
+  reciterId: ReciterId,
   segments: WordTimingSegment[] | null,
   surahId: number,
   verseNumber: number,
@@ -89,6 +103,7 @@ export function findActiveWordRange(
   if (!segment) return null;
 
   return {
+    reciterId,
     surahId,
     verseNumber,
     wordStartIndex: segment[0],

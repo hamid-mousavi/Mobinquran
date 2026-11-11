@@ -517,6 +517,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 </div>
 
                 <div className="p-2.5 rounded-xl border border-stone-100 dark:border-slate-800 bg-stone-50/70 dark:bg-slate-800/40">
+                  <div className="font-bold text-slate-900 dark:text-slate-100">زمان‌بندی واژه‌های تلاوت منشاوی</div>
+                  دادهٔ <a className="text-teal-700 dark:text-teal-300 underline" href="https://github.com/cpfair/quran-align" target="_blank" rel="noreferrer">quran-align از Collin Fair</a> برای فایل Minshawy_Murattal_128kbps در آینهٔ Maqra، تحت مجوز <a className="text-teal-700 dark:text-teal-300 underline" href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. بازه‌های زمانی نامعتبر حذف شده‌اند؛ این هم‌زمانی فقط با منبع صوتی Maqra فعال است.
+                </div>
+
+                <div className="p-2.5 rounded-xl border border-stone-100 dark:border-slate-800 bg-stone-50/70 dark:bg-slate-800/40">
                   <div className="font-bold text-slate-900 dark:text-slate-100">قلم‌های نرم‌افزاری</div>
                   فونت‌های وزیرمتن (صابر راستی‌کردار) و قلم قرآنی امیری تحت مجوز آزاد SIL OFL
                 </div>

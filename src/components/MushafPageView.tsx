@@ -318,8 +318,8 @@ const MushafPageBody: React.FC<MushafPageBodyProps> = ({
                     const verse = w.verse ? verseByKey.get(w.verse) : undefined;
                     const isSel = !!verse && selectedVerse?.id === verse.id;
                     const isPlaying = !!w.verse && w.verse === activeVerseKey;
-                    const timingWordIndex = verse && typeof w.p === 'number'
-                      ? mapVisibleWordIndexToTimingIndex(verse.surahId, verse.verseNumber, w.p - 1)
+                    const timingWordIndex = verse && activePlayingWordRange && typeof w.p === 'number'
+                      ? mapVisibleWordIndexToTimingIndex(activePlayingWordRange.reciterId, verse.surahId, verse.verseNumber, w.p - 1)
                       : -1;
                     const isPlayingWord = !!verse && !!activePlayingWordRange
                       && w.verse === activeWordVerseKey
